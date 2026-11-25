@@ -2,17 +2,26 @@
 #include "scalar_internal.h"
 // Conan::ImportEnd
 
-/*
- * Single entry point for every scalar reference row compiled into this build.
- * A trimmed build (a scalar body not compiled) also loses its row here, so the
- * registry can never advertise a body that is not linked.
- *
- * 本构建内全部 scalar 参考行的唯一注册入口：裁剪掉某个标量体时，对应行也消失，
- * 注册表不会宣称一个未链接的实现。
+/**
+ * @file
+ * @brief [en] Single entry point that registers every scalar row compiled into this build.
+ * @brief [zh] 注册本构建内全部 scalar 行的唯一入口。
+ * @since 0.1.0
  */
 
+/* A trimmed build (a scalar body not compiled) also loses its row here, so the
+ * registry can never advertise a body that is not linked.
+ *
+ * 裁剪掉某个标量体时，对应行也消失，注册表不会宣称一个未链接的实现。 */
+
+/**
+ * @brief [en] Register the scalar reference rows; idempotent, safe to call at every init.
+ * @brief [zh] 注册 scalar 参考行；幂等，可在每次初始化时调用。
+ * @since 0.1.0
+ */
 infr_status infr_kernel_register_scalar(void) {
     static const infr_kernel_desc builtins[] = {
+        {"fc", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_fc_f32},
         {"relu", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_relu_f32},
         {"relu", INFR_DTYPE_I8, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_relu_i8},
     };
