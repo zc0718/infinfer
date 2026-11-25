@@ -1,0 +1,36 @@
+{
+  "id": "k1_mlp3",
+  "source": "hand-written integer-LCG weights (no closed-source tool)",
+  "built_with": "numpy 2.5.4 float32",
+  "subset": [
+    "fc",
+    "relu"
+  ],
+  "input": {
+    "file": "input.bin",
+    "dtype": "fp32",
+    "shape": [
+      1,
+      16
+    ],
+    "sha256": "97b8b400b947500534b45ede342409bda700705c156c74fa77a734ed237507ae"
+  },
+  "blob": {
+    "file": "model.blob",
+    "sha256": "ae281d15caf3122983f122f8062da1bbe83103577328a9af262661e64ad6dbb6"
+  },
+  "expect": {
+    "file": "expect_fp32.bin",
+    "dtype": "fp32",
+    "shape": [
+      1,
+      4
+    ],
+    "sha256": "d573a606e64b881b201e4a5e23157134affd860197c04e801a61abb3221ed91a"
+  },
+  "tolerance": {
+    "kind": "float",
+    "max_rel": 1e-05,
+    "max_abs": 1e-06
+  }
+}
