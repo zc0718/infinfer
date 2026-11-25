@@ -4,24 +4,19 @@
 # parity stubs and the documentation table are all derived from it. A second
 # hand-written list anywhere in the tree is a defect.
 #
+# `kernels` are bodies that exist as kernels: they see (pointer, length, dtype,
+# quant) and nothing else (INV-3). `composed` are operators the graph layer builds
+# out of those kernels; they have no body of their own, so declaring them as
+# kernels would put cells in the census that can never be filled. Every entry in
+# `composed` has to name the kernels it uses, and a graph-level KAT has to exercise
+# it -- that is where conv2d is judged, not in a per-kernel parity test.
+#
 # dtype tokens: fp32 | int8 | int16 | u8 | i32
 # quant tokens: none | tensor | channel
 # tier tokens:  scalar | autovec | arm_neon | arm_m | rvv
 # tier/grad status: todo | done | na | no-grad
 schema: 1
 kernels:
-  conv2d:
-    tflite: [CONV_2D]
-    onnx: [{op: Conv, where: "group == 1"}]
-    dtype_quant: [[fp32, none], [int8, tensor], [int8, channel]]
-    tiers: { scalar: todo, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
-    grad: no-grad
-  dwconv2d:
-    tflite: [DEPTHWISE_CONV_2D]
-    onnx: [{op: Conv, where: "group == in_channels"}]
-    dtype_quant: [[fp32, none], [int8, tensor], [int8, channel]]
-    tiers: { scalar: todo, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
-    grad: no-grad
   relu:
     tflite: [RELU]
     onnx: [{op: Relu}]
@@ -34,3 +29,43 @@ kernels:
     dtype_quant: [[fp32, none]]
     tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
     grad: todo
+  add:
+    tflite: [ADD]
+    onnx: [{op: Add}]
+    dtype_quant: [[fp32, none]]
+    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    grad: todo
+  sum:
+    tflite: [SUM]
+    onnx: [{op: ReduceSum}]
+    dtype_quant: [[fp32, none]]
+    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    grad: todo
+  max:
+    tflite: [REDUCE_MAX]
+    onnx: [{op: ReduceMax}]
+    dtype_quant: [[fp32, none]]
+    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    grad: no-grad
+composed:
+  conv2d:
+    tflite: [CONV_2D]
+    onnx: [{op: Conv, where: "group == 1"}]
+    uses: [fc, add]
+    kat: pending
+  dwconv2d:
+    tflite: [DEPTHWISE_CONV_2D]
+    onnx: [{op: Conv, where: "group == in_channels"}]
+    uses: [fc, add]
+    kat: pending
+  max_pool2d:
+    tflite: [MAX_POOL_2D]
+    onnx: [{op: MaxPool}]
+    uses: [max]
+    kat: pending
+  mean:
+    tflite: [MEAN]
+    onnx: [{op: ReduceMean}]
+    uses: [sum]
+    kat: pending
+

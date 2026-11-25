@@ -41,6 +41,30 @@ infr_status infr_scalar_relu_i8(const void *const *inputs, void *const *outputs,
 infr_status infr_scalar_fc_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
                                const infr_quant *quant);
 
+/**
+ * @brief [en] Elementwise binary add over `element_count` floats (bias add).
+ * @brief [zh] 对 `element_count` 个 float 做逐元素二元加法（偏置相加）。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_add_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                const infr_quant *quant);
+
+/**
+ * @brief [en] Sum of `element_count` floats written to `outputs[0]`.
+ * @brief [zh] 把 `element_count` 个 float 求和写入 `outputs[0]`。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_sum_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                const infr_quant *quant);
+
+/**
+ * @brief [en] Maximum of `element_count` floats written to `outputs[0]`.
+ * @brief [zh] 把 `element_count` 个 float 的最大值写入 `outputs[0]`。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_max_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                const infr_quant *quant);
+
 /* The fc contract in one line: `inputs[0]` against `inputs[1]`, one float into
  * `outputs[0]`; the graph layer loops over rows, because INV-3 keeps shape out
  * of this signature.

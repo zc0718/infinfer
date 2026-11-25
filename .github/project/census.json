@@ -1,8 +1,11 @@
 {
   "schema": 1,
   "cells": {
+    "add/fp32/none/scalar": ["kernel_parity/add_scalar_fp32"],
     "fc/fp32/none/scalar": ["kernel_parity/fc_scalar_fp32"],
+    "max/fp32/none/scalar": ["kernel_parity/max_scalar_fp32"],
     "relu/fp32/none/scalar": ["kernel_parity/relu_scalar_fp32"],
-    "relu/int8/none/scalar": ["kernel_parity/relu_scalar_int8"]
+    "relu/int8/none/scalar": ["kernel_parity/relu_scalar_int8"],
+    "sum/fp32/none/scalar": ["kernel_parity/sum_scalar_fp32"]
   }
 }
