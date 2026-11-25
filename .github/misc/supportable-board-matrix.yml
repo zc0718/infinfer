@@ -21,7 +21,7 @@ targets:
       fpu: neon-vfpv4
       extra_cflags: []
       config_rel: platform/bench_config_ci_rk3506.json
-      remote_path: /tmp/fcpp_benchmark_myir_3506_a7/benchmark
+      remote_path: /tmp/infinfer_benchmark_myir_3506_a7/benchmark
       deploy_tool: ssh
       ssh_host: ""
       execution_route: ssh-board
@@ -46,7 +46,7 @@ targets:
       fpu: ""
       extra_cflags: []
       config_rel: platform/bench_config_ci_aarch64.json
-      remote_path: /tmp/fcpp_benchmark_orangepi_3b/benchmark
+      remote_path: /tmp/infinfer_benchmark_orangepi_3b/benchmark
       deploy_tool: ssh
       ssh_host: ""
       execution_route: ssh-board
@@ -71,7 +71,7 @@ targets:
       fpu: ""
       extra_cflags: []
       config_rel: platform/bench_config_ci_rk3588.json
-      remote_path: /tmp/fcpp_benchmark_orangepi_rk3588/benchmark
+      remote_path: /tmp/infinfer_benchmark_orangepi_rk3588/benchmark
       deploy_tool: ssh
       ssh_host: ""
       execution_route: ssh-board
@@ -96,7 +96,7 @@ targets:
       fpu: ""
       extra_cflags: []
       config_rel: platform/bench_config_ci_aarch64.json
-      remote_path: /tmp/fcpp_benchmark_orangepi_3_lts/benchmark
+      remote_path: /tmp/infinfer_benchmark_orangepi_3_lts/benchmark
       deploy_tool: ssh
       ssh_host: ""
       execution_route: ssh-board
@@ -121,7 +121,7 @@ targets:
       fpu: ""
       extra_cflags: []
       config_rel: platform/bench_config_ci_aarch64.json
-      remote_path: /tmp/fcpp_benchmark_raspberrypi_5/benchmark
+      remote_path: /tmp/infinfer_benchmark_raspberrypi_5/benchmark
       deploy_tool: ssh
       ssh_host: ""
       execution_route: ssh-board
@@ -146,7 +146,7 @@ targets:
       fpu: ""
       extra_cflags: []
       config_rel: platform/bench_config_ci_linux_x86_64.json
-      remote_path: /tmp/fcpp_benchmark_host/benchmark
+      remote_path: /tmp/infinfer_benchmark_host/benchmark
       deploy_tool: local
       ssh_host: ""
       execution_route: local-host
@@ -171,7 +171,7 @@ targets:
       fpu: none
       extra_cflags: []
       config_rel: platform/bench_config_ci_cortex_m0.json
-      remote_path: /tmp/fcpp_benchmark_m0/benchmark
+      remote_path: /tmp/infinfer_benchmark_m0/benchmark
       deploy_tool: jlink
       ssh_host: ""
       execution_route: jlink-serial
@@ -196,7 +196,7 @@ targets:
       fpu: none
       extra_cflags: []
       config_rel: platform/bench_config_ci_cortex_m3.json
-      remote_path: /tmp/fcpp_benchmark_m3/benchmark
+      remote_path: /tmp/infinfer_benchmark_m3/benchmark
       deploy_tool: openocd
       ssh_host: ""
       execution_route: openocd-serial
@@ -221,7 +221,7 @@ targets:
       fpu: fpv4-sp-d16
       extra_cflags: []
       config_rel: platform/bench_config_ci_cortex_m4.json
-      remote_path: /tmp/fcpp_benchmark_m4/benchmark
+      remote_path: /tmp/infinfer_benchmark_m4/benchmark
       deploy_tool: openocd
       ssh_host: ""
       execution_route: openocd-serial
@@ -246,7 +246,7 @@ targets:
       fpu: fpv5-d16
       extra_cflags: []
       config_rel: platform/bench_config_ci_cortex_m7.json
-      remote_path: /tmp/fcpp_benchmark_m7/benchmark
+      remote_path: /tmp/infinfer_benchmark_m7/benchmark
       deploy_tool: jlink
       ssh_host: ""
       execution_route: jlink-serial
@@ -271,7 +271,7 @@ targets:
       fpu: none
       extra_cflags: []
       config_rel: platform/bench_config_ci_cortex_m23.json
-      remote_path: /tmp/fcpp_benchmark_m23/benchmark
+      remote_path: /tmp/infinfer_benchmark_m23/benchmark
       deploy_tool: openocd
       ssh_host: ""
       execution_route: openocd-serial
@@ -296,7 +296,7 @@ targets:
       fpu: fpv5-sp-d16
       extra_cflags: []
       config_rel: platform/bench_config_ci_cortex_m33.json
-      remote_path: /tmp/fcpp_benchmark_m33/benchmark
+      remote_path: /tmp/infinfer_benchmark_m33/benchmark
       deploy_tool: openocd
       ssh_host: ""
       execution_route: openocd-serial

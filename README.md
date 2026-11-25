@@ -5,11 +5,11 @@ capabilities.
 
 ## Badges
 
-![License](https://img.shields.io/github/license/HeT-FTI/fcpp?color=blue&label=license)
+![License](https://img.shields.io/github/license/HeT-FTI/infinfer?color=blue&label=license)
 ![C++](https://img.shields.io/badge/C%2B%2B-17%2F20%2F23-blue?logo=c%2B%2B&logoColor=white)
 ![Modules](https://img.shields.io/badge/modules-C%2B%2B23%20experimental-purple?logo=c%2B%2B&logoColor=white)
-![CI](https://github.com/HeT-FTI/fcpp/actions/workflows/ci-orchestrator.yml/badge.svg)
-![Release](https://github.com/HeT-FTI/fcpp/actions/workflows/semver-release.yml/badge.svg)
+![CI](https://github.com/HeT-FTI/infinfer/actions/workflows/ci-orchestrator.yml/badge.svg)
+![Release](https://github.com/HeT-FTI/infinfer/actions/workflows/semver-release.yml/badge.svg)
 ![CMake](https://img.shields.io/badge/cmake-3.28%2B-orange?logo=cmake)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue?logo=python)
 ![Doxygen](https://img.shields.io/badge/docs-Doxygen-green?logo=doxygen&logoColor=white)

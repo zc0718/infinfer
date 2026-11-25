@@ -24,7 +24,9 @@ permissions:
   contents: read
   actions: write
 env:
-  HETAI_PLAN_ROOT: /home/fcpp/WorkProject/Plan
+  # Supplied by the self-hosted environment (repository variable), never a literal
+  # path: hard-coding one author's home directory is an identity leak.
+  HETAI_PLAN_ROOT: ${{ vars.HETAI_PLAN_ROOT }}
   BUILD_REGISTRY_API_URL: ${{ vars.BUILD_REGISTRY_API_URL }}
   CONAN_REMOTE_URL: ${{ vars.CONAN_REMOTE_URL }}
   HETAI_RUN_KEY: ${{ format('{0}-attempt-{1}', github.run_id, github.run_attempt) }}
