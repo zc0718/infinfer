@@ -1,0 +1,30 @@
+# One kernel = a name + the (dtype, quant) pairs it is instantiated for + per-tier
+# implementation status + whether a backward pass exists. This file is the single
+# source of legal combinations (INV-10): template instantiation, the census gate,
+# parity stubs and the documentation table are all derived from it. A second
+# hand-written list anywhere in the tree is a defect.
+#
+# dtype tokens: fp32 | int8 | int16 | u8 | i32
+# quant tokens: none | tensor | channel
+# tier tokens:  scalar | autovec | arm_neon | arm_m | rvv
+# tier/grad status: todo | done | na | no-grad
+schema: 1
+kernels:
+  conv2d:
+    tflite: [CONV_2D]
+    onnx: [{op: Conv, where: "group == 1"}]
+    dtype_quant: [[fp32, none], [int8, tensor], [int8, channel]]
+    tiers: { scalar: todo, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    grad: no-grad
+  dwconv2d:
+    tflite: [DEPTHWISE_CONV_2D]
+    onnx: [{op: Conv, where: "group == in_channels"}]
+    dtype_quant: [[fp32, none], [int8, tensor], [int8, channel]]
+    tiers: { scalar: todo, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    grad: no-grad
+  relu:
+    tflite: [RELU]
+    onnx: [{op: Relu}]
+    dtype_quant: [[fp32, none], [int8, none]]
+    tiers: { scalar: todo, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    grad: todo
