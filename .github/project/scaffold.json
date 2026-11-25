@@ -1,0 +1,6 @@
+{
+  "scaffold": "0.3.11",
+  "tolerated": [],
+  "replaced": [],
+  "owned_dirs": ["include/", "src/", "workspace/"]
+}

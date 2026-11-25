@@ -1,8 +1,8 @@
 {
-  "name": "fcpp",
+  "name": "infinfer",
   "version": "0.0.0-development",
   "private": true,
-  "description": "Node-side tooling for fcpp: commit lint gates and semantic-release (private, never published to npm).",
+  "description": "Node-side tooling for infinfer: commit lint gates and semantic-release (private, never published to npm).",
   "license": "Apache-2.0",
   "scripts": {
     "hooks:install": "pre-commit install --hook-type pre-commit --hook-type commit-msg --config .github/misc/.pre-commit-config.yaml",
