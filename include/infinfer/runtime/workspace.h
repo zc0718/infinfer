@@ -63,8 +63,12 @@ infr_status infr_workspace_init(infr_workspace *ws, void *buffer, size_t size_by
  * @param [out] out Receives the reservation; untouched on failure.
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments or a non-power-of-two
  *         alignment; INFR_ERR_BUFFER_TOO_SMALL when the capacity cannot hold the
- *         request (including alignment padding); INFR_ERR_NOT_IMPLEMENTED until the
- *         allocator lands.
+ *         request (including alignment padding).
+ * @note [en] Alignment applies to the absolute address of the returned pointer, not
+ *            to the offset inside the buffer: a misaligned base is padded to the next
+ *            multiple of `alignment`.
+ * @note [zh] 对齐针对返回指针的**绝对地址**，不是缓冲区内的偏移：基址不对齐时先补齐
+ *            到 `alignment` 的下一个倍数。
  * @note [en] Consecutive allocations are placed back to back in bytes: the second
  *            8-byte reservation from a 16-byte buffer starts at offset 8, not offset 32.
  * @note [zh] 连续分配按字节紧排：16 字节缓冲区里第二次 8 字节预留从偏移 8 开始，

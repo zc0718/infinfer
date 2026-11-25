@@ -3,18 +3,15 @@
 // Conan::ImportEnd
 
 /*
- * Contract stubs. Every function here answers with the truth as of 0.1.0:
- * the contract exists, the implementation does not. Returning INFR_OK from an
- * empty body is the defect this file refuses to reproduce (P0.5 case 3).
+ * Contract glue that is not a kernel body: status naming, activation-code
+ * validation, and the registry stubs (P2.1). Activation, quantize and workspace
+ * bodies live in src/kernel/scalar and src/runtime respectively; a body that is
+ * not implemented must report INFR_ERR_NOT_IMPLEMENTED, never INFR_OK.
  *
- * 契约桩。这里每个函数都如实回答 0.1.0 的事实：契约存在、实现未到。
- * 空实现返回 INFR_OK 正是本文件拒绝复现的缺陷（P0.5 第 3 个用例）。
+ * 非内核体的契约粘合：状态名、激活码校验、注册表桩（P2.1）。激活、量化与
+ * 工作区的实现在 src/kernel/scalar 与 src/runtime；未实现的体一律返回
+ * INFR_ERR_NOT_IMPLEMENTED，不返回 INFR_OK。
  */
-
-infr_act_f32_fn infr_activation_f32(infr_activation act) {
-    (void)act; /* No tier ships activation bodies yet; NULL is the honest answer. */
-    return NULL;
-}
 
 infr_status infr_activation_from_code(uint32_t code, infr_activation *out) {
     if (out == NULL) {
@@ -25,28 +22,6 @@ infr_status infr_activation_from_code(uint32_t code, infr_activation *out) {
     }
     *out = (infr_activation)code;
     return INFR_OK;
-}
-
-infr_status infr_quantize_i8(const float *in, int8_t *out, uint32_t n, const infr_quant *quant) {
-    if (in == NULL || out == NULL || quant == NULL) {
-        return INFR_ERR_INVALID_ARGUMENT;
-    }
-    if (quant->kind == INFR_QUANT_NONE) {
-        return INFR_ERR_INVALID_ARGUMENT;
-    }
-    (void)n; /* A quantizer that writes nothing must not claim success. */
-    return INFR_ERR_NOT_IMPLEMENTED;
-}
-
-infr_status infr_dequantize_i8(const int8_t *in, float *out, uint32_t n, const infr_quant *quant) {
-    if (in == NULL || out == NULL || quant == NULL) {
-        return INFR_ERR_INVALID_ARGUMENT;
-    }
-    if (quant->kind == INFR_QUANT_NONE) {
-        return INFR_ERR_INVALID_ARGUMENT;
-    }
-    (void)n; /* Same rule as infr_quantize_i8. */
-    return INFR_ERR_NOT_IMPLEMENTED;
 }
 
 infr_status infr_kernel_register(const infr_kernel_desc *kernel) {
