@@ -41,3 +41,5 @@ CMakeUserPresets.json
 # megalinter reports
 /megalinter-reports/
 mega-linter.log
+# docs/build.py writes its doxygen scratch here when run from the repo root
+/build_sub/

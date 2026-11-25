@@ -2,15 +2,24 @@
 #include "scalar_internal.h"
 // Conan::ImportEnd
 
-/*
- * Scalar relu: the reference definition of correctness for the `relu` cell
- * (INV-2). Both instances follow the generic kernel signature from kernel.h:
- * one input buffer, one output buffer, an element count, no shape or stride.
- *
- * 标量 relu：`relu` 格的正确性定义（INV-2）。两个实例都遵循 kernel.h 的通用
- * 内核签名：一个输入、一个输出、元素个数，没有 shape/stride。
+/**
+ * @file
+ * @brief [en] Scalar relu bodies: the reference definition of correctness for the `relu` cell (INV-2).
+ * @brief [zh] 标量 relu 体：`relu` 格的正确性定义（INV-2）。
+ * @since 0.1.0
  */
 
+/* Both instances follow the generic kernel signature from kernel.h: one input
+ * buffer, one output buffer, an element count, no shape or stride.
+ *
+ * 两个实例都遵循 kernel.h 的通用内核签名：一个输入、一个输出、元素个数，没有
+ * shape/stride。 */
+
+/**
+ * @brief [en] Unquantized fp32 relu over `element_count` floats.
+ * @brief [zh] 对 `element_count` 个 float 做非量化 fp32 relu。
+ * @since 0.1.0
+ */
 infr_status infr_scalar_relu_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
                                  const infr_quant *quant) {
     const float *in;

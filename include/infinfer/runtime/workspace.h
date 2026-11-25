@@ -37,9 +37,21 @@ extern "C" {
  * @since 0.1.0
  */
 typedef struct infr_workspace {
-    uint8_t *base;         /**< [en] Buffer start. [zh] 缓冲区起点。 */
-    size_t capacity_bytes; /**< [en] Total size in bytes. [zh] 缓冲区总字节数。 */
-    size_t used_bytes;     /**< [en] Bytes handed out so far. [zh] 已分配字节数。 */
+    /**
+     * @brief [en] Buffer start.
+     * @brief [zh] 缓冲区起点。
+     */
+    uint8_t *base;
+    /**
+     * @brief [en] Total size in bytes.
+     * @brief [zh] 缓冲区总字节数。
+     */
+    size_t capacity_bytes;
+    /**
+     * @brief [en] Bytes handed out so far.
+     * @brief [zh] 已分配字节数。
+     */
+    size_t used_bytes;
 } infr_workspace;
 
 /**

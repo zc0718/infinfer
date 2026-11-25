@@ -2,20 +2,26 @@
 #include <infinfer/runtime/workspace.h>
 // Conan::ImportEnd
 
-/*
- * Workspace contract, C++17 implementation behind a C ABI (PLAN 3.4: the runtime
- * leg is C++17; the header stays C11).
- *
- * The allocator is a byte-granular bump pointer. Alignment is applied to the
- * ABSOLUTE address of the reservation (a misaligned base is padded), and the
- * padding is counted in `used_bytes`. Offsets are bytes, never words -- that is
- * the defect `contract_workspace_bounds.cpp` pins.
- *
- * 工作区契约：C11 头 + C++17 实现（PLAN 3.4：编排层用 C++17）。
- * 分配器是按字节的 bump 指针；对齐作用于**绝对地址**，补齐字节计入 `used_bytes`。
- * 偏移一律按字节——这正是 `contract_workspace_bounds.cpp` 钉住的缺陷。
+/**
+ * @file
+ * @brief [en] Workspace contract: byte-granular bump allocator behind a C ABI, C++17 implementation.
+ * @brief [zh] 工作区契约：C ABI 背后的按字节 bump 分配器，C++17 实现。
+ * @since 0.1.0
  */
 
+/* Alignment is applied to the ABSOLUTE address of the reservation (a misaligned
+ * base is padded), and the padding is counted in `used_bytes`. Offsets are bytes,
+ * never words -- that is the defect `contract_workspace_bounds.cpp` pins.
+ *
+ * 对齐作用于保留区的**绝对地址**（基址不对齐就补齐），补齐字节计入
+ * `used_bytes`。偏移一律按字节、绝不按字——这正是 `contract_workspace_bounds.cpp`
+ * 钉住的缺陷。 */
+
+/**
+ * @brief [en] Bind a workspace to a caller-owned buffer; zero state is valid only after this call.
+ * @brief [zh] 把工作区绑定到调用方提供的缓冲；只有调用过它之后状态才算有效。
+ * @since 0.1.0
+ */
 infr_status infr_workspace_init(infr_workspace* ws, void* buffer, size_t size_bytes) {
     if (ws == nullptr) {
         return INFR_ERR_INVALID_ARGUMENT;
@@ -29,6 +35,11 @@ infr_status infr_workspace_init(infr_workspace* ws, void* buffer, size_t size_by
     return INFR_OK;
 }
 
+/**
+ * @brief [en] Reserve `size_bytes` with the requested alignment; never reuses a previous reservation.
+ * @brief [zh] 按请求的对齐保留 `size_bytes`；永不复用之前的保留区。
+ * @since 0.1.0
+ */
 infr_status infr_workspace_alloc(infr_workspace* ws, size_t size_bytes, size_t alignment, void** out) {
     if (ws == nullptr || out == nullptr) {
         return INFR_ERR_INVALID_ARGUMENT;
@@ -62,4 +73,9 @@ infr_status infr_workspace_alloc(infr_workspace* ws, size_t size_bytes, size_t a
     return INFR_OK;
 }
 
+/**
+ * @brief [en] Bytes handed out so far, padding included; zero for a null workspace.
+ * @brief [zh] 至今已分配的字节数（含补齐）；空工作区返回 0。
+ * @since 0.1.0
+ */
 size_t infr_workspace_used(const infr_workspace* ws) { return ws == nullptr ? 0 : ws->used_bytes; }

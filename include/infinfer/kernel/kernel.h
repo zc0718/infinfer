@@ -34,13 +34,31 @@ extern "C" {
  * @since 0.1.0
  */
 typedef enum infr_status {
-    INFR_OK = 0,                   /**< [en] Success. [zh] 成功。 */
-    INFR_ERR_INVALID_ARGUMENT = 1, /**< [en] A pointer, length or parameter is invalid. [zh] 指针、长度或参数非法。 */
-    INFR_ERR_UNSUPPORTED =
-        2, /**< [en] The requested combination is not declared in the matrix. [zh] 请求的组合未在矩阵中声明。 */
-    INFR_ERR_BUFFER_TOO_SMALL = 3, /**< [en] The destination cannot hold the result. [zh] 目标缓冲区容不下结果。 */
-    INFR_ERR_NOT_IMPLEMENTED =
-        4 /**< [en] The contract exists but the implementation does not. [zh] 契约存在但实现缺失。 */
+    /**
+     * @brief [en] Success.
+     * @brief [zh] 成功。
+     */
+    INFR_OK = 0,
+    /**
+     * @brief [en] A pointer, length or parameter is invalid.
+     * @brief [zh] 指针、长度或参数非法。
+     */
+    INFR_ERR_INVALID_ARGUMENT = 1,
+    /**
+     * @brief [en] The requested combination is not declared in the matrix.
+     * @brief [zh] 请求的组合未在矩阵中声明。
+     */
+    INFR_ERR_UNSUPPORTED = 2,
+    /**
+     * @brief [en] The destination cannot hold the result.
+     * @brief [zh] 目标缓冲区容不下结果。
+     */
+    INFR_ERR_BUFFER_TOO_SMALL = 3,
+    /**
+     * @brief [en] The contract exists but the implementation does not.
+     * @brief [zh] 契约存在但实现缺失。
+     */
+    INFR_ERR_NOT_IMPLEMENTED = 4
 } infr_status;
 
 /**
@@ -54,11 +72,31 @@ typedef enum infr_status {
  * @since 0.1.0
  */
 typedef enum infr_dtype {
-    INFR_DTYPE_F32 = 1, /**< [en] IEEE-754 binary32. [zh] IEEE-754 binary32。 */
-    INFR_DTYPE_I8 = 2,  /**< [en] Signed 8-bit integer. [zh] 有符号 8 位整数。 */
-    INFR_DTYPE_U8 = 3,  /**< [en] Unsigned 8-bit integer. [zh] 无符号 8 位整数。 */
-    INFR_DTYPE_I16 = 4, /**< [en] Signed 16-bit integer. [zh] 有符号 16 位整数。 */
-    INFR_DTYPE_I32 = 5  /**< [en] Signed 32-bit integer. [zh] 有符号 32 位整数。 */
+    /**
+     * @brief [en] IEEE-754 binary32.
+     * @brief [zh] IEEE-754 binary32。
+     */
+    INFR_DTYPE_F32 = 1,
+    /**
+     * @brief [en] Signed 8-bit integer.
+     * @brief [zh] 有符号 8 位整数。
+     */
+    INFR_DTYPE_I8 = 2,
+    /**
+     * @brief [en] Unsigned 8-bit integer.
+     * @brief [zh] 无符号 8 位整数。
+     */
+    INFR_DTYPE_U8 = 3,
+    /**
+     * @brief [en] Signed 16-bit integer.
+     * @brief [zh] 有符号 16 位整数。
+     */
+    INFR_DTYPE_I16 = 4,
+    /**
+     * @brief [en] Signed 32-bit integer.
+     * @brief [zh] 有符号 32 位整数。
+     */
+    INFR_DTYPE_I32 = 5
 } infr_dtype;
 
 /**
@@ -67,10 +105,21 @@ typedef enum infr_dtype {
  * @since 0.1.0
  */
 typedef enum infr_quant_kind {
-    INFR_QUANT_NONE = 0, /**< [en] Unquantized (float) arithmetic. [zh] 非量化（浮点）运算。 */
-    INFR_QUANT_PER_TENSOR =
-        1, /**< [en] One scale/zero point for the whole tensor. [zh] 整张量共用一组 scale/zero point。 */
-    INFR_QUANT_PER_CHANNEL = 2 /**< [en] One scale/zero point per channel. [zh] 每个通道各一组 scale/zero point。 */
+    /**
+     * @brief [en] Unquantized (float) arithmetic.
+     * @brief [zh] 非量化（浮点）运算。
+     */
+    INFR_QUANT_NONE = 0,
+    /**
+     * @brief [en] One scale/zero point for the whole tensor.
+     * @brief [zh] 整张量共用一组 scale/zero point。
+     */
+    INFR_QUANT_PER_TENSOR = 1,
+    /**
+     * @brief [en] One scale/zero point per channel.
+     * @brief [zh] 每个通道各一组 scale/zero point。
+     */
+    INFR_QUANT_PER_CHANNEL = 2
 } infr_quant_kind;
 
 /**
@@ -87,14 +136,41 @@ typedef enum infr_quant_kind {
  * @since 0.1.0
  */
 typedef struct infr_quant {
-    infr_quant_kind kind;        /**< [en] Declared scheme. [zh] 声明的量化方案。 */
-    float scale;                 /**< [en] Resolved scale. [zh] 已解析的 scale。 */
-    int32_t zero_point;          /**< [en] Resolved zero point. [zh] 已解析的 zero point。 */
-    const float *channel_scales; /**< [en] Per-channel scales, or NULL. [zh] 逐通道 scale，可为 NULL。 */
-    const int32_t *
-        channel_zero_points; /**< [en] Per-channel zeros, or NULL to reuse `zero_point`. [zh] 逐通道零点；NULL 表示复用 `zero_point`。 */
-    uint32_t channel_count; /**< [en] Declared channel count; 1 for per-tensor. [zh] 声明的通道数；逐张量时为 1。 */
-    uint32_t axis; /**< [en] Declared quantized axis; ignored for per-tensor. [zh] 声明的量化轴；逐张量时忽略。 */
+    /**
+     * @brief [en] Declared scheme.
+     * @brief [zh] 声明的量化方案。
+     */
+    infr_quant_kind kind;
+    /**
+     * @brief [en] Resolved scale.
+     * @brief [zh] 已解析的 scale。
+     */
+    float scale;
+    /**
+     * @brief [en] Resolved zero point.
+     * @brief [zh] 已解析的 zero point。
+     */
+    int32_t zero_point;
+    /**
+     * @brief [en] Per-channel scales, or NULL.
+     * @brief [zh] 逐通道 scale，可为 NULL。
+     */
+    const float *channel_scales;
+    /**
+     * @brief [en] Per-channel zeros, or NULL to reuse `zero_point`.
+     * @brief [zh] 逐通道零点；NULL 表示复用 `zero_point`。
+     */
+    const int32_t *channel_zero_points;
+    /**
+     * @brief [en] Declared channel count; 1 for per-tensor.
+     * @brief [zh] 声明的通道数；逐张量时为 1。
+     */
+    uint32_t channel_count;
+    /**
+     * @brief [en] Declared quantized axis; ignored for per-tensor.
+     * @brief [zh] 声明的量化轴；逐张量时忽略。
+     */
+    uint32_t axis;
 } infr_quant;
 
 /**
@@ -107,13 +183,41 @@ typedef struct infr_quant {
  * @since 0.1.0
  */
 typedef enum infr_tier {
-    INFR_TIER_SCALAR = 0,   /**< [en] Reference implementation. [zh] 参考实现。 */
-    INFR_TIER_AUTOVEC = 1,  /**< [en] Same C, left to the auto-vectorizer. [zh] 同源 C，交给自动向量化。 */
-    INFR_TIER_X86 = 2,      /**< [en] x86 SSE2/AVX2 intrinsics. [zh] x86 SSE2/AVX2 intrinsics。 */
-    INFR_TIER_ARM_NEON = 3, /**< [en] AArch32/AArch64 NEON. [zh] AArch32/AArch64 NEON。 */
-    INFR_TIER_ARM_M = 4,    /**< [en] Cortex-M DSP / MVE. [zh] Cortex-M DSP / MVE。 */
-    INFR_TIER_RVV = 5,      /**< [en] RISC-V Vector 1.0. [zh] RISC-V Vector 1.0。 */
-    INFR_TIER_VENDOR = 6 /**< [en] Optional vendor backend (CMSIS-NN and peers). [zh] 可选的厂商后端（CMSIS-NN 等）。 */
+    /**
+     * @brief [en] Reference implementation.
+     * @brief [zh] 参考实现。
+     */
+    INFR_TIER_SCALAR = 0,
+    /**
+     * @brief [en] Same C, left to the auto-vectorizer.
+     * @brief [zh] 同源 C，交给自动向量化。
+     */
+    INFR_TIER_AUTOVEC = 1,
+    /**
+     * @brief [en] x86 SSE2/AVX2 intrinsics.
+     * @brief [zh] x86 SSE2/AVX2 intrinsics。
+     */
+    INFR_TIER_X86 = 2,
+    /**
+     * @brief [en] AArch32/AArch64 NEON.
+     * @brief [zh] AArch32/AArch64 NEON。
+     */
+    INFR_TIER_ARM_NEON = 3,
+    /**
+     * @brief [en] Cortex-M DSP / MVE.
+     * @brief [zh] Cortex-M DSP / MVE。
+     */
+    INFR_TIER_ARM_M = 4,
+    /**
+     * @brief [en] RISC-V Vector 1.0.
+     * @brief [zh] RISC-V Vector 1.0。
+     */
+    INFR_TIER_RVV = 5,
+    /**
+     * @brief [en] Optional vendor backend (CMSIS-NN and peers).
+     * @brief [zh] 可选的厂商后端（CMSIS-NN 等）。
+     */
+    INFR_TIER_VENDOR = 6
 } infr_tier;
 
 /**
@@ -130,14 +234,46 @@ typedef enum infr_tier {
  * @since 0.1.0
  */
 typedef enum infr_activation {
-    INFR_ACT_NONE = 0,         /**< [en] Identity. [zh] 恒等。 */
-    INFR_ACT_RELU = 1,         /**< [en] max(x, 0). [zh] max(x, 0)。 */
-    INFR_ACT_RELU_N1_TO_1 = 2, /**< [en] Clip to [-1, 1]. [zh] 截断到 [-1, 1]。 */
-    INFR_ACT_RELU6 = 3,        /**< [en] Clip to [0, 6]. [zh] 截断到 [0, 6]。 */
-    INFR_ACT_TANH = 4,         /**< [en] Hyperbolic tangent. [zh] 双曲正切。 */
-    INFR_ACT_SIGN_BIT = 5,     /**< [en] Sign bit as float (TFLite sign-bit). [zh] 符号位转浮点（TFLite sign-bit）。 */
-    INFR_ACT_HARD_SWISH = 6,   /**< [en] x * relu6(x + 3) / 6. [zh] x * relu6(x + 3) / 6。 */
-    INFR_ACT_COUNT = 7         /**< [en] Number of codes (not an activation). [zh] 码值个数（不是激活）。 */
+    /**
+     * @brief [en] Identity.
+     * @brief [zh] 恒等。
+     */
+    INFR_ACT_NONE = 0,
+    /**
+     * @brief [en] max(x, 0).
+     * @brief [zh] max(x, 0)。
+     */
+    INFR_ACT_RELU = 1,
+    /**
+     * @brief [en] Clip to [-1, 1].
+     * @brief [zh] 截断到 [-1, 1]。
+     */
+    INFR_ACT_RELU_N1_TO_1 = 2,
+    /**
+     * @brief [en] Clip to [0, 6].
+     * @brief [zh] 截断到 [0, 6]。
+     */
+    INFR_ACT_RELU6 = 3,
+    /**
+     * @brief [en] Hyperbolic tangent.
+     * @brief [zh] 双曲正切。
+     */
+    INFR_ACT_TANH = 4,
+    /**
+     * @brief [en] Sign bit as float (TFLite sign-bit).
+     * @brief [zh] 符号位转浮点（TFLite sign-bit）。
+     */
+    INFR_ACT_SIGN_BIT = 5,
+    /**
+     * @brief [en] x * relu6(x + 3) / 6.
+     * @brief [zh] x * relu6(x + 3) / 6。
+     */
+    INFR_ACT_HARD_SWISH = 6,
+    /**
+     * @brief [en] Number of codes (not an activation).
+     * @brief [zh] 码值个数（不是激活）。
+     */
+    INFR_ACT_COUNT = 7
 } infr_activation;
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
@@ -224,11 +360,31 @@ typedef infr_status (*infr_kernel_fn)(const void *const *inputs, void *const *ou
  * @since 0.1.0
  */
 typedef struct infr_kernel_desc {
-    const char *name;      /**< [en] Matrix kernel key, e.g. "conv2d". [zh] 矩阵中的 kernel 键，如 "conv2d"。 */
-    infr_dtype dtype;      /**< [en] Element type. [zh] 元素类型。 */
-    infr_quant_kind quant; /**< [en] Quantization scheme. [zh] 量化方案。 */
-    infr_tier tier;        /**< [en] Implementation tier. [zh] 实现档位。 */
-    infr_kernel_fn fn;     /**< [en] Kernel body; must not be NULL. [zh] 内核主体，不得为 NULL。 */
+    /**
+     * @brief [en] Matrix kernel key, e.g. "conv2d".
+     * @brief [zh] 矩阵中的 kernel 键，如 "conv2d"。
+     */
+    const char *name;
+    /**
+     * @brief [en] Element type.
+     * @brief [zh] 元素类型。
+     */
+    infr_dtype dtype;
+    /**
+     * @brief [en] Quantization scheme.
+     * @brief [zh] 量化方案。
+     */
+    infr_quant_kind quant;
+    /**
+     * @brief [en] Implementation tier.
+     * @brief [zh] 实现档位。
+     */
+    infr_tier tier;
+    /**
+     * @brief [en] Kernel body; must not be NULL.
+     * @brief [zh] 内核主体，不得为 NULL。
+     */
+    infr_kernel_fn fn;
 } infr_kernel_desc;
 
 /**

@@ -4,14 +4,17 @@
 
 #include <math.h>
 
-/*
- * Scalar fused activations: the reference definition of correctness (INV-2).
- * Every other tier must be proven equivalent to these bodies by the parity
+/**
+ * @file
+ * @brief [en] Scalar fused activations: the reference definition of correctness (INV-2).
+ * @brief [zh] 标量融合激活：正确性的参考定义（INV-2）。
+ * @since 0.1.0
+ */
+
+/* Every other tier must be proven equivalent to these bodies by the parity
  * harness; none of them may redefine what an activation means.
  *
- * 融合激活的 scalar 参考实现：正确性的唯一定义（INV-2）。其它档位只能由 parity
- * 骨架证明等价，不得重定义语义。
- */
+ * 其它档位只能由 parity 骨架证明等价，不得重定义激活的语义。 */
 
 static void act_none_f32(const float *in, float *out, uint32_t n) {
     uint32_t i;
@@ -96,6 +99,11 @@ _Static_assert(sizeof(ACT_TABLE) / sizeof(ACT_TABLE[0]) == (size_t)INFR_ACT_COUN
                "an activation code without a row must fail the build, not the dispatch");
 #endif
 
+/**
+ * @brief [en] Resolve a fused-activation code to its fp32 scalar body, or NULL when the code is unknown.
+ * @brief [zh] 把融合激活码解析为对应的 fp32 标量体；未知码返回 NULL。
+ * @since 0.1.0
+ */
 infr_act_f32_fn infr_activation_f32(infr_activation act) {
     unsigned index = (unsigned)act;
     if (index >= (unsigned)INFR_ACT_COUNT) {

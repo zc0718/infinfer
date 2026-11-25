@@ -2,10 +2,14 @@
 #include <infinfer/kernel/kernel.h>
 // Conan::ImportEnd
 
-/*
- * Scalar quantize/dequantize: the reference definition of correctness (INV-2).
- *
- * Semantics pinned by the contract:
+/**
+ * @file
+ * @brief [en] Scalar quantize/dequantize: the reference definition of correctness (INV-2).
+ * @brief [zh] 标量量化/反量化：正确性的参考定义（INV-2）。
+ * @since 0.1.0
+ */
+
+/* Semantics pinned by the contract:
  *   quantize:   q = round(x / scale) + zero_point, clamped to the int8 range
  *   dequantize: x = (q - zero_point) * scale
  * Rounding is half away from zero; a request with INFR_QUANT_NONE or a
@@ -15,8 +19,10 @@
  * into `scale`/`zero_point` and calls these once per slice (INV-3: no shape in
  * kernel signatures).
  *
- * 量化/反量化的 scalar 参考实现：正确性的唯一定义（INV-2）。
- */
+ * 语义由契约钉死：量化 `q = round(x/scale) + zero_point` 并截断到 int8 范围；
+ * 反量化 `x = (q - zero_point) * scale`。舍入为“半远离零”；声明 INFR_QUANT_NONE
+ * 或 scale 非正时直接拒绝，而不是写入垃圾值。逐通道张量由图层把该通道的参数
+ * 解析到 `scale`/`zero_point` 后逐片调用（INV-3：内核签名里没有 shape）。 */
 
 static int quant_args_ok(const infr_quant *quant) {
     if (quant == NULL) {
@@ -42,6 +48,11 @@ static int8_t clamp_i8(int32_t value) {
     return (int8_t)value;
 }
 
+/**
+ * @brief [en] Quantize `n` floats to int8 with the given per-tensor parameters.
+ * @brief [zh] 用给定逐张量参数把 `n` 个 float 量化为 int8。
+ * @since 0.1.0
+ */
 infr_status infr_quantize_i8(const float *in, int8_t *out, uint32_t n, const infr_quant *quant) {
     uint32_t i;
     if (in == NULL || out == NULL || !quant_args_ok(quant)) {
@@ -55,6 +66,11 @@ infr_status infr_quantize_i8(const float *in, int8_t *out, uint32_t n, const inf
     return INFR_OK;
 }
 
+/**
+ * @brief [en] Dequantize `n` int8 values back to float with the given per-tensor parameters.
+ * @brief [zh] 用给定逐张量参数把 `n` 个 int8 反量化回 float。
+ * @since 0.1.0
+ */
 infr_status infr_dequantize_i8(const int8_t *in, float *out, uint32_t n, const infr_quant *quant) {
     uint32_t i;
     if (in == NULL || out == NULL || !quant_args_ok(quant)) {
