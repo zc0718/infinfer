@@ -36,6 +36,28 @@ jobs:
       - name: Compare scaffold files with the pinned release
         run: python3 .github/project/scaffold_gate.py
 
+  # Step 0b: project-owned gates (the annotation contract and the kernel census).
+  # They live here rather than in a template workflow so a red result names the
+  # file that broke it instead of a generic lint failure.
+  project-gates:
+    name: Project Gates
+    if: ${{ github.event_name != 'push' || github.event.commits[0].message != 'Initial commit' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install PyYAML
+        run: python3 -m pip install --quiet pyyaml
+
+      - name: Annotation rules (bilingual briefs, file blocks)
+        run: python3 .github/project/docannot_gate.py
+
+      - name: Kernel census (declared cells must name a test)
+        run: python3 .github/project/census_gate.py
+
   # Step 1: Call the metadata controller to analyze metadata.json
   controller:
     name: Analyze Metadata

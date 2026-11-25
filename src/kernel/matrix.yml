@@ -15,6 +15,11 @@
 # quant tokens: none | tensor | channel
 # tier tokens:  scalar | autovec | arm_neon | arm_m | rvv
 # tier/grad status: todo | done | na | no-grad
+#
+# `done` is a claim: the census gate requires a test name for every `done` cell and
+# turns red when one is missing. `todo` is a backlog item: it is reported as
+# pending and does not fail the gate (`--strict` promotes it at release time).
+# Only write `done` after the parity test exists and passes.
 schema: 1
 kernels:
   relu:
