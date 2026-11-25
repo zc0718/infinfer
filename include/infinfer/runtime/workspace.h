@@ -99,6 +99,35 @@ infr_status infr_workspace_alloc(infr_workspace *ws, size_t size_bytes, size_t a
  */
 size_t infr_workspace_used(const infr_workspace *ws);
 
+/**
+ * @brief [en] Snapshot of the cursor, for a later `infr_workspace_release`.
+ * @brief [zh] 游标快照，供之后的 `infr_workspace_release` 使用。
+ * @param [in] ws Workspace; NULL yields 0.
+ * @return The current `used_bytes`, or 0 for a NULL workspace.
+ * @note [en] A mark is only meaningful for the same workspace it came from: it is a
+ *            byte offset, not a reservation handle.
+ * @note [zh] mark 只对产生它的那个工作区有意义：它是一个字节偏移，不是保留区句柄。
+ * @since 0.1.0
+ */
+size_t infr_workspace_mark(const infr_workspace *ws);
+
+/**
+ * @brief [en] Give back everything allocated since `mark`, so scratch can be reused.
+ * @brief [zh] 归还 `mark` 之后分配的全部空间，以便临时缓冲被复用。
+ * @param [in,out] ws Workspace to rewind.
+ * @param [in] mark Value previously returned by `infr_workspace_mark` on `ws`.
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for a NULL workspace or a mark larger
+ *         than the current `used_bytes` (which would move the cursor forwards and
+ *         hand out memory that was already handed out).
+ * @note [en] This is what lets an L2 operator borrow scratch for a gather buffer and
+ *            return it before the next node runs: `EVAL` must not grow the workspace
+ *            as the graph executes (INV-8).
+ * @note [zh] 有了它，L2 算子可以借一块临时缓冲做 gather，并在下一个节点前还回去：
+ *            `EVAL` 不许随图的执行而长胖（INV-8）。
+ * @since 0.1.0
+ */
+infr_status infr_workspace_release(infr_workspace *ws, size_t mark);
+
 #ifdef __cplusplus
 }
 #endif

@@ -80,3 +80,28 @@ infr_status infr_workspace_alloc(infr_workspace* ws, size_t size_bytes, size_t a
  * @since 0.1.0
  */
 size_t infr_workspace_used(const infr_workspace* ws) { return ws == nullptr ? 0 : ws->used_bytes; }
+
+/**
+ * @brief [en] Cursor snapshot for a later release; zero for a null workspace.
+ * @brief [zh] 供之后 release 使用的游标快照；空工作区返回 0。
+ * @since 0.1.0
+ */
+size_t infr_workspace_mark(const infr_workspace* ws) { return ws == nullptr ? 0 : ws->used_bytes; }
+
+/**
+ * @brief [en] Rewind the cursor to `mark`, giving back scratch borrowed since then.
+ * @brief [zh] 把游标退回到 `mark`，归还此后借出的临时空间。
+ * @since 0.1.0
+ */
+infr_status infr_workspace_release(infr_workspace* ws, size_t mark) {
+    if (ws == nullptr) {
+        return INFR_ERR_INVALID_ARGUMENT;
+    }
+    /* A mark past the cursor would move it forwards: that hands out bytes which are
+     * already handed out, so it is refused instead of clamped. */
+    if (mark > ws->used_bytes) {
+        return INFR_ERR_INVALID_ARGUMENT;
+    }
+    ws->used_bytes = mark;
+    return INFR_OK;
+}
