@@ -26,5 +26,5 @@ kernels:
     tflite: [RELU]
     onnx: [{op: Relu}]
     dtype_quant: [[fp32, none], [int8, none]]
-    tiers: { scalar: todo, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
     grad: todo

@@ -235,8 +235,14 @@ typedef struct infr_kernel_desc {
  * @brief [en] Register one kernel row.
  * @brief [zh] 注册一行内核。
  * @param [in] kernel Descriptor; the registry copies it, the caller keeps ownership of `name`.
- * @return INFR_OK, INFR_ERR_INVALID_ARGUMENT, or INFR_ERR_NOT_IMPLEMENTED until the
- *         registry lands (PLAN P2.1).
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for a NULL/empty descriptor, a NULL body,
+ *         or a conflicting duplicate (same name x dtype x quant x tier, different body);
+ *         INFR_ERR_BUFFER_TOO_SMALL when the fixed-capacity table is full. Re-registering
+ *         the identical row is a no-op that returns INFR_OK.
+ * @note [en] Call at init time, single-threaded: the table is fixed-capacity static
+ *            storage (no dynamic allocation, MCU-friendly) and is not synchronised.
+ * @note [zh] 在初始化阶段单线程调用：表是定容量静态存储（不动态分配，适配 MCU），
+ *            不做并发同步。
  * @since 0.1.0
  */
 infr_status infr_kernel_register(const infr_kernel_desc *kernel);
@@ -253,6 +259,19 @@ infr_status infr_kernel_register(const infr_kernel_desc *kernel);
  * @since 0.1.0
  */
 const infr_kernel_desc *infr_kernel_find(const char *name, infr_dtype dtype, infr_quant_kind quant, infr_tier tier);
+
+/**
+ * @brief [en] Register every scalar kernel compiled into this library (idempotent).
+ * @brief [zh] 注册本库内已编译的全部 scalar 内核（幂等）。
+ * @return INFR_OK, or the first registration error (see infr_kernel_register).
+ * @note [en] Exposed so a consumer (and the parity harness) can obtain the reference
+ *            implementations without knowing internal symbol names. A build that
+ *            trims a scalar kernel also trims its row here.
+ * @note [zh] 供消费者（与 parity 骨架）拿到参考实现，无需知道内部符号名；裁剪掉
+ *            某个 scalar 内核时，这一行也一并消失。
+ * @since 0.1.0
+ */
+infr_status infr_kernel_register_scalar(void);
 
 /**
  * @brief [en] Stable, non-NULL name of a status code (safe in log format strings).

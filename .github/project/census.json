@@ -1,4 +1,7 @@
 {
   "schema": 1,
-  "cells": {}
+  "cells": {
+    "relu/fp32/none/scalar": ["kernel_parity/relu_scalar_fp32"],
+    "relu/int8/none/scalar": ["kernel_parity/relu_scalar_int8"]
+  }
 }
