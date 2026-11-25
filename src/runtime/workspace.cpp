@@ -2,7 +2,8 @@
 #include <infinfer/runtime/workspace.h>
 // Conan::ImportEnd
 
-/**
+/*!
+ * @ingroup group_runtime
  * @file
  * @brief [en] Workspace contract: byte-granular bump allocator behind a C ABI, C++17 implementation.
  * @brief [zh] 工作区契约：C ABI 背后的按字节 bump 分配器，C++17 实现。

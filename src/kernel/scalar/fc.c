@@ -2,7 +2,8 @@
 #include "scalar_internal.h"
 // Conan::ImportEnd
 
-/**
+/*!
+ * @ingroup group_scalar
  * @file
  * @brief [en] Scalar fully-connected body: one dot product per call, the reference for the `fc` cell (INV-2).
  * @brief [zh] 标量全连接体：一次调用一次点积，`fc` 格的正确性定义（INV-2）。

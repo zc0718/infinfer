@@ -18,6 +18,11 @@ conventions actually state (`.github/skills/_shared/code-conventions.md`):
      Doxygen then reports "Reached end of file while still inside a comment").
      Document members with a preceding `/** @brief [en] ... / @brief [zh] ... */`
      block instead.
+  D5 a file-level block (the one carrying `@file`) opens with `/*!` and carries
+     `@ingroup`: `docs/build.py` version-filters every block that starts with
+     `/**` by reading its `@since`, so a file block written that way disappears
+     as soon as a newer version is built. `/*!` matches neither the version
+     filter nor the language splitter, which is exactly what a file block needs.
 
   D5 (below) is the ratchet: a file may be exempted only with a written reason and
   what removes it, so the exemption cannot quietly become permanent.
@@ -40,6 +45,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SCAN_DIRS = ("include", "src")
 SUFFIXES = {".h", ".hpp", ".c", ".cpp"}
 BLOCK = re.compile(r"/\*\*(?![<])(.*?)\*/", re.S)
+FILE_BLOCK = re.compile(r"/\*!(.*?)\*/", re.S)
+NO_FILE = re.compile(r"/\*")
 INLINE = re.compile(r"/\*\*<(.*?)\*/", re.S)
 BRIEF_EN = re.compile(r"@brief\s*\[en\]")
 BRIEF_ZH = re.compile(r"@brief\s*\[zh\]")
@@ -125,6 +132,24 @@ def audit(root):
             offset = sum(len(item) + 1 for item in text.split("\n")[: line - 1])
             if brace_depth(text, offset) <= 0:
                 problems.append(f"D2 {where}: Doxygen block lacks @since <version>")
+    for path, block, line in scan(files, FILE_BLOCK):
+        rel = pathlib.Path(path).relative_to(root).as_posix()
+        where = f"{rel}:{line}"
+        if "@file" not in block:
+            problems.append(
+                f"D5 {where}: a /*! block without @file dodges the version filter; "
+                "use /** for symbol docs")
+            continue
+        if "@ingroup" not in block:
+            problems.append(f"D5 {where}: file block must carry @ingroup")
+        if not BRIEF_EN.search(block) or not BRIEF_ZH.search(block):
+            problems.append(f"D1 {where}: Doxygen block lacks @brief [en] or @brief [zh]")
+    for path, block, line in scan(files, BLOCK):
+        rel = pathlib.Path(path).relative_to(root).as_posix()
+        if "@file" in block:
+            problems.append(
+                f"D5 {rel}:{line}: a @file block must open with /*!, not /** "
+                "(the version filter would drop it)")
     for path, block, line in scan(files, INLINE):
         rel = pathlib.Path(path).relative_to(root).as_posix()
         if re.search(r"\[(?:en|zh)\]", block):
@@ -166,6 +191,15 @@ def selftest():
         ("a member block without @since is accepted", "src/ok2.c",
          "/**\n * @brief [en] t\n * @brief [zh] 型\n * @since 0.1.0\n */\ntypedef struct s {\n    /**\n     * @brief [en] field\n     * @brief [zh] 字段\n     */\n    int f;\n} s;\n",
          None),
+        ("a /*! file block with @ingroup is accepted", "src/ok3.c",
+         "/*!\n * @ingroup group_x\n * @file\n * @brief [en] f\n * @brief [zh] 文\n * @since 0.1.0\n */\nvoid f(void) {}\n",
+         None),
+        ("D5 a /** file block is red", "src/d5.c",
+         "/**\n * @file\n * @brief [en] f\n * @brief [zh] 文\n * @since 0.1.0\n */\nvoid f(void) {}\n",
+         "D5 src/d5.c:1: a @file block must open with /*!, not /**"),
+        ("D5 a /*! block without @ingroup is red", "src/d5b.c",
+         "/*!\n * @file\n * @brief [en] f\n * @brief [zh] 文\n * @since 0.1.0\n */\nvoid f(void) {}\n",
+         "D5 src/d5b.c:1: file block must carry @ingroup"),
     )
     failures = 0
     for name, rel, body, expected in cases:

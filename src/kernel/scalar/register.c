@@ -2,7 +2,8 @@
 #include "scalar_internal.h"
 // Conan::ImportEnd
 
-/**
+/*!
+ * @ingroup group_scalar
  * @file
  * @brief [en] Single entry point that registers every scalar row compiled into this build.
  * @brief [zh] 注册本构建内全部 scalar 行的唯一入口。

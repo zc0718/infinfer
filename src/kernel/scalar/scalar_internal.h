@@ -3,7 +3,8 @@
 #include <infinfer/kernel/kernel.h>
 // Conan::ImportEnd
 
-/**
+/*!
+ * @ingroup group_scalar
  * @file
  * @brief [en] Internal contract between the scalar reference bodies and the registry: not public API.
  * @brief [zh] scalar 参考体与注册表之间的内部契约，不是公开 API。

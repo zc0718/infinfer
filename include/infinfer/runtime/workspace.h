@@ -12,7 +12,8 @@
 extern "C" {
 #endif
 
-/**
+/*!
+ * @ingroup group_runtime
  * @file workspace.h
  *
  * @brief [en] The reusable tensor region (`EVAL` mode): one caller-owned buffer,

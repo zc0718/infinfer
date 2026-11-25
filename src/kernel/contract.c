@@ -4,7 +4,8 @@
 
 #include <string.h>
 
-/**
+/*!
+ * @ingroup group_contract
  * @file
  * @brief [en] Contract glue that is not a kernel body: activation-code validation, the registry, status naming.
  * @brief [zh] 不是内核体的契约粘合：激活码校验、注册表、状态名。

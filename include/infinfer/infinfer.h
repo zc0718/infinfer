@@ -9,7 +9,8 @@
 extern "C" {
 #endif
 
-/**
+/*!
+ * @ingroup group_api
  * @file infinfer.h
  *
  * @brief [en] The single public include for the infinfer C API. It pulls in every

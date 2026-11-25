@@ -4,7 +4,8 @@
 
 #include <math.h>
 
-/**
+/*!
+ * @ingroup group_scalar
  * @file
  * @brief [en] Scalar fused activations: the reference definition of correctness (INV-2).
  * @brief [zh] 标量融合激活：正确性的参考定义（INV-2）。

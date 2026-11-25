@@ -2,7 +2,8 @@
 #include <infinfer/kernel/kernel.h>
 // Conan::ImportEnd
 
-/**
+/*!
+ * @ingroup group_scalar
  * @file
  * @brief [en] Scalar quantize/dequantize: the reference definition of correctness (INV-2).
  * @brief [zh] 标量量化/反量化：正确性的参考定义（INV-2）。

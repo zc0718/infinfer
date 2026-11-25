@@ -1,0 +1,86 @@
+/*!
+ * @page doc_modules Modules
+ *
+ * @par [en] The module groups: one per layer of the architecture, so the site can be read by area
+ *      rather than by file.
+ * | Group | What is in it | Folder |
+ * |-------|---------------|--------|
+ * | \ref group_api "The C surface" | the single aggregate header a C consumer includes | `include/infinfer` |
+ * | \ref group_kernel "The kernel contract" | what a kernel is, the dtype/quant/tier vocabulary, the registry | `include/infinfer/kernel` |
+ * | \ref group_runtime "The graph runtime" | tensor regions, later the graph, dispatch and backend assembly | `include/infinfer/runtime` |
+ * | \ref group_contract "Contract glue" | status naming, activation-code validation, the registry itself | `src/kernel` |
+ * | \ref group_scalar "The reference bodies" | the scalar implementations that define correctness (INV-2) | `src/kernel/scalar` |
+ * @par [zh] 模块分组：按架构分层分组，于是站点能按领域读，而不是按文件读。
+ * | 分组 | 里面是什么 | 目录 |
+ * |------|-----------|------|
+ * | \ref group_api "C 表面" | C 消费方包含的那一个聚合头 | `include/infinfer` |
+ * | \ref group_kernel "内核契约" | 内核是什么、dtype/quant/tier 词表、注册表 | `include/infinfer/kernel` |
+ * | \ref group_runtime "图运行时" | 张量区，后续是图、派发与后端装配 | `include/infinfer/runtime` |
+ * | \ref group_contract "契约粘合" | 状态名、激活码校验、注册表本体 | `src/kernel` |
+ * | \ref group_scalar "参考体" | 定义正确性的标量实现（INV-2） | `src/kernel/scalar` |
+ * @note [en] Why a file block is opened with the bang form instead of the star-star form: the docs
+ *      builder splits a file into blank-line-separated blocks and version-filters every block that
+ *      opens with star-star, reading its `@since` and dropping it when the target version is older.
+ *      A file block must survive every version (it says which file this is), so it opens with the
+ *      bang form, which neither the version filter nor the language splitter matches. `@defgroup`
+ *      here is what makes a group exist; the `@ingroup` inside a file block is what puts the file
+ *      in it.
+ * @note [zh] 文件块为什么用 bang 形式而不是 star-star 形式：文档构建器先按空行把文件切成块，再
+ *      把每个以 star-star 开头的块做版本过滤——读它的 `@since`，目标版本更旧就整块丢掉。文件块
+ *      必须在每个版本里都在（它说明这是哪个文件），所以用 bang 形式：版本过滤与语言切分都不
+ *      匹配它。`@defgroup` 负责让分组存在，文件块里的 `@ingroup` 负责把文件放进去。
+ *
+ * @since 0.1.0
+ */
+
+/*!
+ * @defgroup group_api The C surface
+ *
+ * @par [en] The aggregate header a C consumer includes; it pulls in every public contract header.
+ * @par [zh] C 消费方包含的聚合头，它引入全部公开契约头。
+ *
+ * @since 0.1.0
+ */
+
+/*!
+ * @defgroup group_kernel The kernel contract
+ *
+ * @par [en] What a kernel is (a pure function over pointer, length, dtype and quantization), the
+ *      closed dtype/quant/tier vocabulary, and the registry that resolves a name to a body.
+ * @par [zh] 内核是什么（只认指针、长度、dtype 与量化参数的纯函数）、封闭的 dtype/quant/tier
+ *      词表，以及把名字解析成实现体的注册表。
+ *
+ * @since 0.1.0
+ */
+
+/*!
+ * @defgroup group_runtime The graph runtime
+ *
+ * @par [en] The tensor regions and the layer above the kernels. `workspace` is the reusable leg;
+ *      `activation` and `state` join it when the execution modes do.
+ * @par [zh] 张量区以及内核之上的一层。`workspace` 是可复用的那条腿；`activation` 与 `state`
+ *      随执行模式一起加入。
+ *
+ * @since 0.1.0
+ */
+
+/*!
+ * @defgroup group_contract Contract glue
+ *
+ * @par [en] The parts of the contract that are not kernel bodies: status naming, activation-code
+ *      validation, and the fixed-capacity registry itself.
+ * @par [zh] 契约里不是内核体的部分：状态名、激活码校验，以及定容量注册表本体。
+ *
+ * @since 0.1.0
+ */
+
+/*!
+ * @defgroup group_scalar The reference bodies
+ *
+ * @par [en] The scalar implementations. INV-2 makes them the only definition of correctness; every
+ *      other tier is proven equivalent to them by the parity harness, never by review.
+ * @par [zh] 标量实现。INV-2 规定它们是正确性的唯一定义；其它档位一律由 parity 骨架证明等价，
+ *      不靠人工评审。
+ *
+ * @since 0.1.0
+ */

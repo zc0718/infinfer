@@ -18,7 +18,8 @@
 extern "C" {
 #endif
 
-/**
+/*!
+ * @ingroup group_kernel
  * @file kernel.h
  *
  * @brief [en] Kernel contract: a kernel is a pure function over (pointer, length, dtype, quant);
