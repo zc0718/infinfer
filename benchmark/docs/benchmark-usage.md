@@ -1,0 +1,305 @@
+# Benchmark 模块使用教程
+
+## 1. 适用对象
+
+本文面向两类开发者：
+
+- 嵌入式工程师：编写或维护 benchmark 用例，关注 C/C++ 入口、板端运行和结果解释。
+- CI / DevOps 工程师：构建 benchmark ELF、传输产物、触发上板测试和生成报告。
+
+## 2. 本机准备
+
+进入仓库：
+
+```bash
+cd /path/to/<repo>
+git status -sb
+```
+
+进入 benchmark 模块：
+
+```bash
+cd benchmark
+```
+
+基础工具：
+
+```bash
+python3 --version
+conan --version
+cmake --version
+ninja --version
+```
+
+板端调试服务器还应具备：
+
+```bash
+picocom -b 115200 /dev/ttyACM0
+ssh -V
+scp -V
+rsync --version
+tar --version
+```
+
+## 3. Benchmark 配置
+
+Linux armv7 RK3506 推荐配置：
+
+```json
+{
+  "target_os": "Linux",
+  "target_cpu": "cortex-a7",
+  "float_abi": "hard",
+  "fpu": "neon-vfpv4",
+  "extra_cflags": [],
+  "compiler_version": "11",
+  "toolchain_package_version": "11.3.rel1",
+  "deploy_tool": "ssh",
+  "remote_path": "/tmp/<pkg>_benchmark/benchmark",
+  "ssh_host": "root@<board-ip>",
+  "timeout": 30
+}
+```
+
+`platform/` 下的配置随模板维护，派生项目不要修改。项目自有的板卡配置放在 `benchmark/configs/` 下，例如：
+
+```text
+benchmark/configs/bench_config_rk3506.json
+```
+
+运行时用 `--config` 指定该文件。CI 临时配置可由 CI 脚本生成，不要求提交到仓库。
+
+### OrangePi RK3588 CI 预留
+
+`linux-orangepi-rk3588-A76` 是独立于 OrangePi 3B、OrangePi 3 LTS 和 Raspberry Pi 5 的
+板级目标。它固定使用 `Linux/armv8`、`target_cpu=cortex-a76`、
+`aarch64-linux-gnu`、`ELF64/AArch64` 和 `arm-toolchain/11.3.rel1`，bundle 路径使用
+独立的 `orangepi-rk3588-a76` route。该目标已启用但不属于普通 `default` 选择；在
+`all` 或显式 `selected` 矩阵中会构建并传输 bundle。
+
+该预留的 watcher 执行态为 `blocked`：CI 成功仅代表 package、ELF 和 bundle 合同成功，
+不代表已连接或运行 OrangePi。89 侧必须先受控登记共享 catalog、inventory、SSH route 和
+目标板运行前置条件，随后才能将该 route 切换为可执行状态。
+
+### Cortex-M3 / M4 / M7 / M23 / M33 受控 CI 配置
+
+每块 Cortex-M 板均使用独立 target，不能以重复的 matrix 块或泛用 `armv7` / `armv8_32`
+标识代替物理板：
+
+| target_key | MCU | Conan build arch | watcher profile_arch | ABI |
+| --- | --- | --- | --- | --- |
+| `baremetal-cortex-m3` | STM32F205 | `cortex-m3` | `cortex-m3` | soft / 无 FPU |
+| `baremetal-cortex-m4` | GD32F470 | `cortex-m4` | `cortex-m4` | hard / `fpv4-sp-d16` |
+| `baremetal-cortex-m7` | STM32F767IG | `cortex-m7d` | `cortex-m7` | hard / `fpv5-d16` |
+| `baremetal-cortex-m23` | GD32L233 | `armv8_32` | `cortex-m23` | soft / 无 FPU |
+| `baremetal-cortex-m33` | STM32U575 | `armv8_32` | `cortex-m33` | hard / `fpv5-sp-d16` |
+
+上述 target 固定使用 `arm-toolchain/11.3.rel1`（compiler major `11`）。M7 的
+`cortex-m7d` 仅用于区分 Conan 构建 ABI；交付给 watcher 的物理核心字段仍必须是
+`target_cpu=cortex-m7` 和 `profile_arch=cortex-m7`。
+
+CI 使用对应的 `platform/bench_config_ci_cortex_m*.json`。不要将 ST-Link、CMSIS-DAP、
+WCH-Link 或 J-Link 的唯一序列号写入仓库或 CI 配置；它由 71.89 watcher inventory
+独占管理。
+
+所有 Cortex-M 成功 bundle 必须同时具备：
+
+```text
+artifacts/benchmark-<target>-11.3.rel1.elf
+artifacts/benchmark-<target>-11.3.rel1.bin   # 或 .hex
+artifacts/benchmark-info.json
+board-transfer.files
+board-transfer.json
+```
+
+`benchmark-info.json` 的 ELF 路径/哈希、`board-transfer.json.artifact_contract`、
+实际 ELF 及 flash sidecar 必须一致。CI 只构建和投递 bundle，不会自行选择 71.89 的
+物理 probe 或解除 watcher 的 route 阻塞状态。M4、M23 与 M33 当前均为
+`watcher_execution_state=blocked`：CI 成功只表示构建、严格 V3 合同和 bundle 成功，
+不表示已刷写、已运行或已取得 benchmark 结果。M23 还须等待 WCH-Link 的受支持驱动或
+已实测替代 SWD probe；M4/M33 须先由固件所有者冻结 Base Firmware、Slot 擦写策略与
+UART 启动协议。
+
+## 4. 本机构建验证
+
+只构建，不部署：
+
+```bash
+cd /path/to/<repo>/benchmark
+python3 script/run_bench.py --config platform/bench_config_linux.json --no-flash
+```
+
+成功后应出现：
+
+```text
+build/Release/benchmark
+```
+
+注意：
+
+- `--no-flash` 不应要求串口设备。
+- `pyserial` 只在裸机串口采集阶段需要。
+- 如果报 `<pkg>/<version>` 找不到，说明本机 Conan cache/remote 尚未准备好目标包。
+
+## 5. CI 构建产物检查
+
+CI 产物目录：
+
+```bash
+RUN_ID=<run_id>
+RUN_DIR=/path/to/<repo>_board_ci/$RUN_ID/build/<org>/<repo>/linux-armv7-11.3.rel1
+```
+
+检查文件：
+
+```bash
+find "$RUN_DIR" -maxdepth 2 -type f | sort
+jq . "$RUN_DIR/result.json"
+jq . "$RUN_DIR/artifacts/benchmark-info.json"
+```
+
+检查 ELF：
+
+```bash
+file "$RUN_DIR/artifacts/benchmark-linux-armv7-11.3.rel1"
+readelf -h "$RUN_DIR/artifacts/benchmark-linux-armv7-11.3.rel1" | sed -n '1,80p'
+readelf -l "$RUN_DIR/artifacts/benchmark-linux-armv7-11.3.rel1" | sed -n '/Requesting program interpreter/p'
+sha256sum "$RUN_DIR/artifacts/benchmark-linux-armv7-11.3.rel1"
+```
+
+预期：
+
+```text
+ELF 32-bit LSB executable, ARM, EABI5
+hard-float ABI
+interpreter /lib/ld-linux-armhf.so.3
+```
+
+## 6. 板端预检
+
+串口进入板端：
+
+```bash
+sudo picocom -b 115200 /dev/ttyACM0
+```
+
+板端执行：
+
+```bash
+uname -a
+uname -m
+test -e /lib/ld-linux-armhf.so.3 && echo interp_present=yes || echo interp_present=no
+command -v base64 || true
+command -v sha256sum || true
+command -v ldd || true
+```
+
+预期：
+
+```text
+armv7l
+interp_present=yes
+```
+
+如果 `ldd` 不存在，可以用：
+
+```bash
+/lib/ld-linux-armhf.so.3 --list /tmp/<pkg>_benchmark/benchmark
+```
+
+## 7. SSH 部署运行
+
+板端网络可达时：
+
+```bash
+ssh root@<board-ip> 'mkdir -p /tmp/<pkg>_benchmark'
+scp "$RUN_DIR/artifacts/benchmark-linux-armv7-11.3.rel1" root@<board-ip>:/tmp/<pkg>_benchmark/benchmark
+ssh root@<board-ip> 'chmod +x /tmp/<pkg>_benchmark/benchmark && /tmp/<pkg>_benchmark/benchmark'
+```
+
+如果板端地址不可达，尝试：
+
+```bash
+ssh root@<board-ip> 'uname -a'
+```
+
+## 8. 串口部署运行
+
+板端网络不可达时，可以使用串口 base64 传输。
+
+本机生成 base64：
+
+```bash
+base64 "$RUN_DIR/artifacts/benchmark-linux-armv7-11.3.rel1" > /tmp/<pkg>-benchmark.b64
+```
+
+板端执行：
+
+```bash
+mkdir -p /tmp/<pkg>_benchmark
+cat > /tmp/<pkg>_benchmark/benchmark.b64 <<'EOF'
+# 粘贴 /tmp/<pkg>-benchmark.b64 内容
+EOF
+base64 -d /tmp/<pkg>_benchmark/benchmark.b64 > /tmp/<pkg>_benchmark/benchmark
+chmod +x /tmp/<pkg>_benchmark/benchmark
+sha256sum /tmp/<pkg>_benchmark/benchmark
+/lib/ld-linux-armhf.so.3 --list /tmp/<pkg>_benchmark/benchmark
+/tmp/<pkg>_benchmark/benchmark
+echo $?
+```
+
+为避免与 `oven_CXX` 等其他项目冲突，本项目统一使用：
+
+```text
+/tmp/<pkg>_benchmark
+```
+
+## 9. 结果判断
+
+通过条件：
+
+- ELF 架构是 ARM 32-bit hard-float。
+- 板端存在 `/lib/ld-linux-armhf.so.3`。
+- 动态依赖可解析。
+- benchmark 退出码为 `0`。
+- 输出包含 `BENCHMARK_START` 和 `BENCHMARK_END`。
+- 输出包含且仅包含一个 `UNIT|ns_per_call`。
+- 每个 case 都有对应的 `REPEAT|...` 和 `RESULT|...` 行。
+- 原始协议使用整数 `ns/call`；`benchmark-report.md` 统一换算为 `ms/call`，
+  并在新增板块中给出公式和标准化 log。不得混用 Base Firmware banner 中的 ms/µs。
+
+失败阶段分类：
+
+| 阶段 | 判定 |
+| --- | --- |
+| 产物未收到 | run 目录或 benchmark ELF 不存在 |
+| ELF 架构不符 | `file/readelf` 不是 ARM hard-float |
+| 无法传到板端 | SSH 不通且串口不可用 |
+| 板端权限问题 | 无法 chmod 或执行 |
+| 解释器/动态库问题 | 缺 `/lib/ld-linux-armhf.so.3`、`libc.so.6`、`libm.so.6` |
+| benchmark 运行失败 | 退出码非 0 或输出协议不完整 |
+
+## 10. 生成报告
+
+每个需要 benchmark 的 run 根目录应生成：
+
+```text
+/path/to/<repo>_board_ci/<run_id>/benchmark-report.md
+```
+
+报告内容按照 `benchmark-report-spec.md` 执行。
+
+最小必填信息：
+
+- run_id
+- repo
+- target_key
+- toolchain_version
+- benchmark-info.json 摘要
+- ELF 静态检查
+- 板端环境
+- 部署路径
+- 运行命令
+- stdout/stderr
+- 退出码
+- 结论

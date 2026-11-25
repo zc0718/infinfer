@@ -1,0 +1,10 @@
+# Managed by Conan and overwritten on install; remove these two lines to keep your edits, but then the plugin cannot update requirements.
+
+requirements:
+  - "gtest/1.16.0"
+  - "pybind11/3.0.1"
+  # - "dlib/19.24.2"
+  - "zlib/1.3.1"
+  - "pcre2/10.44"
+  - "eigen/3.4.0"
+  - "etl/20.47.1"

@@ -1,0 +1,66 @@
+# MegaLinter config; version is pinned in run-megalinter.sh (v10.2.0).
+FILTER_REGEX_INCLUDE: "(include|src)/"
+
+ENABLE: "C,CPP"
+DISABLE: "SPELL"
+
+ENABLE_LINTERS:
+  - REPOSITORY_BETTERLEAKS
+  - REPOSITORY_SEMGREP
+  - REPOSITORY_CHECKOV
+  - REPOSITORY_DEVSKIM
+
+DISABLE_LINTERS:
+  - C_CPPLINT
+  - CPP_CPPLINT
+  # clang-tidy is owned by the native required gate
+  - C_CLANG_TIDY
+  - CPP_CLANG_TIDY
+
+COPYPASTE_JSCPD_ARGUMENTS:
+  - "--pattern"
+  - "include/**/*,src/**/*"
+
+REPOSITORY_BETTERLEAKS_ARGUMENTS:
+  - "-c"
+  - ".github/misc/.gitleaks.toml"
+  - "--verbose"
+
+REPOSITORY_SEMGREP_ARGUMENTS:
+  - "--include"
+  - "include/"
+  - "--include"
+  - "src/"
+
+REPOSITORY_CHECKOV_CONFIG_FILE: ".github/misc/.checkov.yml"
+
+REPOSITORY_CHECKOV_ARGUMENTS:
+  # no `-d .`: the checkov descriptor already scans the repo root, duplicating findings
+  - "--skip-path"
+  - "include/"
+  - "--skip-path"
+  - "src/"
+  - "--skip-path"
+  - "test_package/test/"
+  - "--skip-path"
+  - "test_package/main.cpp"
+  # Avoid scanning MegaLinter's own report output from a previous run
+  - "--skip-path"
+  - "megalinter-reports/"
+
+REPOSITORY_DEVSKIM_ARGUMENTS:
+  - "--include-globs"
+  - "**/include/**,**/src/**"
+
+# use the FLAT <LINTER>_CONFIG_FILE key; the nested form is silently ignored
+C_CLANG_FORMAT_CONFIG_FILE: ".github/misc/.clang-format-c"
+CPP_CLANG_FORMAT_CONFIG_FILE: ".github/misc/.clang-format-cpp"
+# cppcheck `exhaustive` removes the `information: analysis limited` diagnostic instead of suppressing a rule; both descriptors run cppcheck.
+C_CPPCHECK_ARGUMENTS: "--check-level=exhaustive"
+CPP_CPPCHECK_ARGUMENTS: "--check-level=exhaustive"
+
+# `.h` belongs to the C family, so the C++ linter must not claim it and apply the left-aligned C++ style.
+CPP_CLANG_FORMAT_FILTER_REGEX_EXCLUDE: "(^|/)[^/]+\\.h$"
+
+SARIF_REPORTER: true
+MARKDOWN_SUMMARY_REPORTER: true

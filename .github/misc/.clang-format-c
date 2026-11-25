@@ -1,0 +1,16 @@
+# C family (.c and .h) — project convention: .h/.c are C (see .github/skills/_shared/code-conventions.md).
+# No `Language: C` key: only LLVM 23+ accepts it, while MegaLinter's bundled clang-format may be older.
+# The native gate uses clang-format 23.1.0; MegaLinter v10.2.0 may bundle a different release.
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+MaxEmptyLinesToKeep: 3
+
+# Keep the 2-blank-line module split rule intact (MaxEmptyLinesToKeep >= 2)
+# Close docstring re-format
+ReflowComments: false
+SortIncludes: false
+BreakBeforeBraces: Attach
+PointerAlignment: Right

@@ -1,0 +1,164 @@
+name: MegaLinter
+
+# Called by ci-orchestrator.yml on the :shield: gitmoji; the gitmoji logic lives in the controller
+
+on:
+  workflow_call:
+    inputs:
+      validate_all_codebase:
+        description: 'Whether to validate all source code or just the diff'
+        required: false
+        type: string
+        default: 'false'
+
+env:
+  # Strict gate mode: never auto-fix in CI, lint failures fail the job.
+  APPLY_FIXES: none
+
+concurrency:
+  group: ${{ github.ref }}-${{ github.workflow }}-security
+  cancel-in-progress: true
+
+jobs:
+  quality-gates:
+    name: Quality Gates
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          # system packages derive from conandata.yml; extend the mapping for new deps whose headers land in src/
+          DEPS=$(python3 - <<'PY'
+          import yaml
+          reqs = yaml.safe_load(open('conandata.yml'))['requirements']
+          mapping = {'zlib': 'zlib1g-dev', 'pcre2': 'libpcre2-dev', 'eigen': 'libeigen3-dev'}
+          pkgs = {mapping[r.split('/')[0]] for r in reqs if r.split('/')[0] in mapping}
+          print(' '.join(sorted(pkgs)))
+          PY
+          )
+          sudo apt-get install -y clang-tidy $DEPS
+          # apt clang-format 18 lacks the "Language: C" section (< 19) -- pin the pip build
+          python3 -m pip install --only-binary :all: clang-format==23.1.0
+
+      # ETL is header-only with no apt package: fetch the version declared in conandata.yml
+      - name: Install ETL headers (version from conandata.yml)
+        run: |
+          ETL_VER=$(python3 -c "import yaml; d=yaml.safe_load(open('conandata.yml')); print([r for r in d['requirements'] if r.startswith('etl/')][0].split('/')[1])")
+          curl --proto '=https' --proto-redir '=https' -sSL -o /tmp/etl.zip "https://github.com/ETLCPP/etl/archive/refs/tags/${ETL_VER}.zip"
+          unzip -q /tmp/etl.zip -d /tmp/etl-src
+          echo "ETL_INC=/tmp/etl-src/etl-${ETL_VER}/include" >> "$GITHUB_ENV"
+
+      # required: formatting clean; `.h` routes to C and `.hpp` to C++, and the command body lives in gates.py.
+      - name: clang-format gate
+        run: python3 .github/misc/gates.py format
+
+      # required: clang-tidy warnings fail, only include|src diagnostics count, standards come from metadata.json, and eigen is auto-detected.
+      - name: clang-tidy gate
+        run: python3 .github/misc/gates.py tidy
+
+      # required: layering guard -- a scope may not include what its rules forbid
+      - name: include-guard gate
+        run: python3 .github/misc/gates.py guard
+
+      # Required gate: secrets scan with pinned binary version
+      - name: gitleaks gate
+        run: |
+          curl --proto '=https' --proto-redir '=https' -sSL -o /tmp/gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
+          tar xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks detect -c .github/misc/.gitleaks.toml --no-banner
+
+  megalinter:
+    name: MegaLinter
+    runs-on: ubuntu-latest
+    # MegaLinter only reads; commit statuses need statuses: write.
+    permissions:
+      contents: read
+      statuses: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Check Grafana API reporter secrets
+        id: check_grafana
+        run: |
+          if [[ -n "$API_URL" && -n "$API_USER" && -n "$API_PASS" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Grafana reporter configured; GitHub Status remains the default"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Grafana reporter not configured; using GitHub Status + artifact"
+          fi
+        env:
+          API_URL: ${{ secrets.API_REPORTER_URL }}
+          API_USER: ${{ secrets.API_REPORTER_BASIC_AUTH_USERNAME }}
+          API_PASS: ${{ secrets.API_REPORTER_BASIC_AUTH_PASSWORD }}
+
+      - name: Free runner disk
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/chromium
+          df -h /
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22.18'
+
+      - name: MegaLinter
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_STATUS_REPORTER: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+          API_AVAILABLE: ${{ steps.check_grafana.outputs.available }}
+          API_REPORTER_URL: ${{ secrets.API_REPORTER_URL }}
+          API_REPORTER_BASIC_AUTH_USERNAME: ${{ secrets.API_REPORTER_BASIC_AUTH_USERNAME }}
+          API_REPORTER_BASIC_AUTH_PASSWORD: ${{ secrets.API_REPORTER_BASIC_AUTH_PASSWORD }}
+          API_REPORTER_METRICS_URL: ${{ secrets.API_REPORTER_METRICS_URL }}
+          API_REPORTER_METRICS_BASIC_AUTH_USERNAME: ${{ secrets.API_REPORTER_METRICS_BASIC_AUTH_USERNAME }}
+          API_REPORTER_METRICS_BASIC_AUTH_PASSWORD: ${{ secrets.API_REPORTER_METRICS_BASIC_AUTH_PASSWORD }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f .env' EXIT
+          {
+            echo "MEGALINTER_CONFIG=.github/misc/.mega-linter.yml"
+            echo "VALIDATE_ALL_CODEBASE=${{ inputs.validate_all_codebase }}"
+            echo "APPLY_FIXES=none"
+            echo "GITHUB_TOKEN=$GITHUB_TOKEN"
+            echo "GITHUB_SHA=$GITHUB_SHA"
+            echo "GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-}"
+            echo "GITHUB_HEAD_REF=${GITHUB_HEAD_REF:-}"
+            echo "GITHUB_REF_NAME=${GITHUB_REF_NAME:-}"
+            echo "GITHUB_STATUS_REPORTER=$GITHUB_STATUS_REPORTER"
+            echo "GITHUB_COMMENT_REPORTER=false"
+            if [ "$API_AVAILABLE" = "true" ]; then
+              echo "API_REPORTER=true"
+              echo "API_REPORTER_URL=$API_REPORTER_URL"
+              echo "API_REPORTER_BASIC_AUTH_USERNAME=$API_REPORTER_BASIC_AUTH_USERNAME"
+              echo "API_REPORTER_BASIC_AUTH_PASSWORD=$API_REPORTER_BASIC_AUTH_PASSWORD"
+              echo "API_REPORTER_METRICS_URL=$API_REPORTER_METRICS_URL"
+              echo "API_REPORTER_METRICS_BASIC_AUTH_USERNAME=$API_REPORTER_METRICS_BASIC_AUTH_USERNAME"
+              echo "API_REPORTER_METRICS_BASIC_AUTH_PASSWORD=$API_REPORTER_METRICS_BASIC_AUTH_PASSWORD"
+              echo "API_REPORTER_DEBUG=false"
+            fi
+          } > .env
+          bash .github/misc/run-megalinter.sh
+
+      - name: Archive production artifacts
+        if: success() || failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: MegaLinter reports
+          include-hidden-files: "true"
+          path: |
+            megalinter-reports
+            mega-linter.log

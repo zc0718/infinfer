@@ -1,0 +1,82 @@
+name: Template Bootstrap
+
+# Runs on the single `Initial commit` push GitHub creates from this template, which every other pipeline skips.
+
+# Commits `.agents/skills` as a byte-identical copy because a fresh clone cannot contain a symlink and Windows checks one out as text; skillkit validate rejects drift.
+
+# Drops `CHANGELOG.md`: the template's release history links to this repository, and semantic-release recreates it on the instance's first release.
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - '.github/misc/labels.yml'
+  pull_request:
+    paths:
+      - '.github/misc/labels.yml'
+
+jobs:
+  skills-view:
+    # Positive guard: an ordinary edit of labels.yml must never create a commit.
+    if: >-
+      github.event_name == 'push' &&
+      (github.event.created == true || startsWith(github.event.before, '0000000000'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v7
+      -
+        name: Materialize the .agents view
+        run: python3 .github/skills/_shared/skillkit/cli.py sync --view-mode copy
+      -
+        name: Drop the template's release history
+        # --ignore-unmatch keeps a re-run harmless; semantic-release recreates the file on the first release.
+        run: git rm -q --ignore-unmatch CHANGELOG.md
+      -
+        name: Commit the preparation
+        run: |
+          git add -f .agents/skills
+          if git diff --cached --quiet; then
+            echo "::notice::the instance is already prepared (skills view in place, no template changelog)"
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m 'chore(:wrench:): prepare the instance after template instantiation'
+          if ! git push; then
+            echo "::warning::could not push the preparation (is 'contents: write' allowed?); run"
+            echo "::warning::'python3 .github/skills/_shared/skillkit/cli.py sync --view-mode copy' once and commit the result"
+          fi
+
+  labeler:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      -
+        name: Instantiation signal
+        if: github.event_name == 'push'
+        env:
+          # Untrusted payload values stay out of the script text.
+          CREATED: ${{ github.event.created }}
+          BEFORE: ${{ github.event.before }}
+          FIRST_MESSAGE: ${{ github.event.commits[0].message }}
+        run: |
+          # Which signal identified the template push; keeps the guard above honest.
+          echo "created=$CREATED"
+          echo "before=$BEFORE"
+          echo "first=$FIRST_MESSAGE"
+      -
+        name: Checkout
+        uses: actions/checkout@v7
+      -
+        name: Run Labeler
+        uses: crazy-max/ghaction-github-labeler@548a7c3603594ec17c819e1239f281a3b801ab4d
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          yaml-file: .github/misc/labels.yml
+          dry-run: ${{ github.event_name == 'pull_request' }}

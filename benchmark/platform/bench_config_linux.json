@@ -1,0 +1,18 @@
+{
+  "_comment": "A-core Linux 目标示例配置（如 RK3506 / RV1106 / RK3588）。不要直接修改本文件；复制到项目自有目录后用 --config 指定。",
+
+  "target_os":                 "Linux",
+  "target_cpu":                "cortex-a7",
+  "float_abi":                 "hard",
+  "fpu":                       "neon-vfpv4",
+  "extra_cflags":              [],
+  "compiler_version":          "11",
+  "toolchain_package_version": "11.3.rel1",
+
+  "deploy_tool":               "adb",
+  "remote_path":               "/root/benchmark",
+
+  "ssh_host":                  "root@192.168.1.100",
+
+  "timeout":                   30
+}

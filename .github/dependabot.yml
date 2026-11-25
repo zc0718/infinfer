@@ -1,0 +1,32 @@
+# Dependabot stays quiet by default: open-pull-requests-limit 0 disables version updates while security updates still arrive; maintainers bump pins by hand here too.
+version: 2
+updates:
+  # One grouped PR for all GitHub Actions bumps, on the 3rd of each month.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: cron
+      timezone: Asia/Shanghai
+      cronjob: "0 0 3 * *"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 0
+    labels:
+      - ":bricks: infrastructure"
+
+  # One grouped PR for all npm dev-tooling bumps (semantic-release, commitlint, ajv).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: cron
+      timezone: Asia/Shanghai
+      cronjob: "0 0 3 * *"
+    groups:
+      dev-tooling:
+        patterns:
+          - "*"
+    open-pull-requests-limit: 0
+    labels:
+      - ":bricks: infrastructure"

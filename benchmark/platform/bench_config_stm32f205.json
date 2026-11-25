@@ -1,0 +1,26 @@
+{
+  "_comment": "Board configuration maintained with the template. Copy it to a project-owned path and pass --config; do not edit it in a derived project.",
+
+  "target_mcu":        "cortex-m3",
+  "float_abi":         "soft",
+  "fpu":               "none",
+  "algo_flash_origin": "0x08030000",
+  "algo_ram_origin":   "0x20002000",
+  "compiler_version":          "14",
+  "toolchain_package_version": "11.3.rel1",
+  "extra_cflags":              [],
+
+  "flash_tool":        "openocd",
+  "openocd_interface": "interface/stlink.cfg",
+  "openocd_target":    "target/stm32f2x.cfg",
+
+  "jlink_device":      "",
+  "jlink_speed":       "4000",
+
+  "pyocd_target":      "",
+  "pyocd_probe":       "",
+
+  "serial_port":       "/dev/ttyUSB0",
+  "serial_baud":       115200,
+  "timeout":           30
+}
