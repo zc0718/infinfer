@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include <cstddef>
+#include <climits>
 #include <cstdint>
 #include <limits>
 #include <vector>
@@ -147,4 +148,51 @@ TEST(KernelParityReluNeon, Fp32MatchesScalarBitwise) {
                 << "element " << i << " of " << length;
         }
     }
+}
+
+TEST(KernelParityReluNeon, Int8MatchesScalarBitwise) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_arm_neon());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("relu", INFR_DTYPE_I8, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+    const infr_kernel_desc* row =
+        infr_kernel_find("relu", INFR_DTYPE_I8, INFR_QUANT_NONE, INFR_TIER_ARM_NEON);
+    ASSERT_NE(nullptr, scalar) << "relu/int8/none/scalar is not registered";
+    if (row == nullptr) {
+        GTEST_SKIP() << "no NEON in this build: the arm_neon row is absent by design";
+    }
+
+    // int8 relu is a pure integer maximum: no NaN, no negative zero, so this is judged
+    // bitwise. The edges worth pinning are the ones a signed-byte comparison can get
+    // wrong: INT8_MIN (the value that overflows if a body widens to int and negates),
+    // -1 (must become 0, not stay), 0 (stays 0) and INT8_MAX.
+    const std::uint32_t lengths[] = {0U, 1U, 3U, 15U, 16U, 17U, 32U, 33U, 64U};
+    std::vector<std::int8_t> in(64);
+    for (std::size_t i = 0; i < in.size(); ++i) {
+        in[i] = static_cast<std::int8_t>(static_cast<int>((i * 37U) % 255U) - 127);
+    }
+    in[0] = INT8_MIN;
+    in[1] = -1;
+    in[2] = 0;
+    in[3] = INT8_MAX;
+
+    for (std::uint32_t n : lengths) {
+        std::vector<std::int8_t> want(n == 0U ? 1U : n, 0);
+        std::vector<std::int8_t> got(n == 0U ? 1U : n, 0);
+        const void* inputs[1] = {in.data()};
+        void* want_out[1] = {want.data()};
+        void* got_out[1] = {got.data()};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, nullptr));
+        ASSERT_EQ(INFR_OK, row->fn(inputs, got_out, n, nullptr));
+        for (std::uint32_t i = 0; i < n; ++i) {
+            EXPECT_EQ(static_cast<int>(want[i]), static_cast<int>(got[i]))
+                << "element " << i << " of " << n;
+        }
+    }
+
+    std::int8_t out = 0;
+    const void* no_input[1] = {nullptr};
+    void* out_ptr[1] = {&out};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(no_input, out_ptr, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(no_input, out_ptr, 4U, nullptr));
 }

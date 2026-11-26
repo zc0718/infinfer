@@ -46,10 +46,10 @@ kernels:
       scalar: done
       autovec: todo
       # Per-pair: two declared pairs, one built -- a flat `done` would claim int8/none.
-      x86: { fp32/none: done, int8/none: todo }
-      arm_neon: { fp32/none: done, int8/none: todo }
+      x86: { fp32/none: done, int8/none: done }
+      arm_neon: { fp32/none: done, int8/none: done }
       arm_m: todo
-      rvv: { fp32/none: done, int8/none: todo }
+      rvv: { fp32/none: done, int8/none: done }
     grad: todo
   fc:
     tflite: [FULLY_CONNECTED]

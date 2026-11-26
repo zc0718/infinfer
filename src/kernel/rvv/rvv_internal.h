@@ -71,4 +71,14 @@ infr_status infr_rvv_scale_f32(const void *const *inputs, void *const *outputs, 
 infr_status infr_rvv_sum_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
                              const infr_quant *quant);
 
+/**
+ * @brief [en] int8 relu: `v > 0 ? v : 0` over one vector block, bitwise identical.
+ * @brief [zh] int8 relu：一个向量块上的 `v > 0 ? v : 0`，逐位相同。
+ * @note [en] Integer maximum, unlike the fp32 row in this tier (see `relu.c`).
+ * @note [zh] 整数取大，与本档位的 fp32 行不同（见 `relu.c`）。
+ * @since 0.1.0
+ */
+infr_status infr_rvv_relu_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                             const infr_quant *quant);
+
 #endif /* INFR_SRC_KERNEL_RVV_INTERNAL_H */

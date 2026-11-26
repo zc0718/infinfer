@@ -67,8 +67,17 @@
     "relu/fp32/none/x86": [
       "kernel_parity/relu_x86_fp32"
     ],
+    "relu/int8/none/arm_neon": [
+      "kernel_parity/relu_arm_neon_i8"
+    ],
+    "relu/int8/none/rvv": [
+      "kernel_parity/relu_rvv_i8"
+    ],
     "relu/int8/none/scalar": [
       "kernel_parity/relu_scalar_int8"
+    ],
+    "relu/int8/none/x86": [
+      "kernel_parity/relu_x86_i8"
     ],
     "scale/fp32/none/arm_neon": [
       "kernel_parity/scale_arm_neon_fp32"
