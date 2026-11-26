@@ -40,7 +40,14 @@ kernels:
     tflite: [RELU]
     onnx: [{op: Relu}]
     dtype_quant: [[fp32, none], [int8, none]]
-    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    # Per-pair (gaps G-51): the NEON row is the fp32 select; int8/none has no NEON
+    # row yet. A flat `done` would claim it.
+    tiers:
+      scalar: done
+      autovec: todo
+      arm_neon: { fp32/none: done, int8/none: todo }
+      arm_m: todo
+      rvv: todo
     grad: todo
   fc:
     tflite: [FULLY_CONNECTED]
@@ -95,7 +102,9 @@ kernels:
     tflite: [REDUCE_MAX]
     onnx: [{op: ReduceMax}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    # Flat on purpose: the kernel declares one pair, so a kernel-level `done` claims
+    # exactly that one pair and nothing else.
+    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: todo }
     grad: no-grad
 composed:
   conv2d:

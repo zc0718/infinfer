@@ -7,6 +7,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <vector>
 
 #include <gtest/gtest-spi.h> /* EXPECT_NONFATAL_FAILURE: the harness must be provably able to fail. */
 
@@ -99,4 +101,47 @@ TEST(KernelParityRelu, HarnessDetectsDrift) {
     const int8_t drifted_i[3] = {1, 2, 4};
     EXPECT_NONFATAL_FAILURE(infr_test::expect_i8_buffers_equal(want_i, drifted_i, 3, "drifted int8"),
                             "[drifted int8] element 2");
+}
+
+TEST(KernelParityReluNeon, Fp32MatchesScalarBitwise) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_arm_neon());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("relu", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+    const infr_kernel_desc* neon =
+        infr_kernel_find("relu", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_ARM_NEON);
+    ASSERT_NE(nullptr, scalar) << "relu/fp32/none/scalar is not registered";
+    if (neon == nullptr) {
+        GTEST_SKIP() << "no NEON in this build: the arm_neon row is absent by design";
+    }
+
+    // Bitwise, unlike the fp32 dot product: a select writes the same bits it read,
+    // so the tolerance question does not arise. The values include the two edges a
+    // `max` spelling would get wrong -- NaN (must become 0.0) and -0.0 (must become
+    // +0.0, since `-0.0 > 0` is false).
+    const std::uint32_t lengths[] = {0U, 1U, 3U, 4U, 5U, 7U, 16U, 17U, 64U};
+    std::vector<float> in(64);
+    for (std::size_t i = 0; i < in.size(); ++i) {
+        // Deterministic LCG: the same bytes on every target, no library RNG.
+        const std::uint32_t state = (static_cast<std::uint32_t>(i) * 1664525U) + 1013904223U;
+        in[i] = static_cast<float>(static_cast<std::int32_t>((state >> 8) % 2001U) - 1000) / 100.0F;
+    }
+    in[0] = -0.0F;
+    in[1] = std::numeric_limits<float>::quiet_NaN();
+    in[2] = -1.5F;
+    in[3] = 0.0F;
+
+    for (std::uint32_t length : lengths) {
+        std::vector<float> want(length, 0.0F);
+        std::vector<float> got(length, 0.0F);
+        const void* inputs[1] = {in.data()};
+        void* want_out[1] = {want.data()};
+        void* got_out[1] = {got.data()};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, length, nullptr));
+        ASSERT_EQ(INFR_OK, neon->fn(inputs, got_out, length, nullptr));
+        for (std::uint32_t i = 0; i < length; ++i) {
+            EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i]))
+                << "element " << i << " of " << length;
+        }
+    }
 }

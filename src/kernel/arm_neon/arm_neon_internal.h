@@ -22,3 +22,19 @@
  */
 infr_status infr_arm_neon_fc_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
                                  const infr_quant *quant);
+
+/**
+ * @brief [en] fp32 relu over four lanes: `x > 0 ? x : 0`, bitwise identical to the reference.
+ * @brief [zh] 四车道 fp32 relu：`x > 0 ? x : 0`，与参考实现逐位相同。
+ * @since 0.1.0
+ */
+infr_status infr_arm_neon_relu_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                   const infr_quant *quant);
+
+/**
+ * @brief [en] fp32 maximum over four lanes: first occurrence wins, NaN declined, empty refused.
+ * @brief [zh] 四车道 fp32 最大值：首次出现者胜、NaN 不被选中、空集拒绝。
+ * @since 0.1.0
+ */
+infr_status infr_arm_neon_max_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                  const infr_quant *quant);

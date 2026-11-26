@@ -25,11 +25,17 @@
     "fc/int8/tensor/scalar": [
       "kernel_parity/fc_int8_tensor"
     ],
+    "max/fp32/none/arm_neon": [
+      "kernel_parity/max_arm_neon_fp32"
+    ],
     "max/fp32/none/scalar": [
       "kernel_parity/max_scalar_fp32"
     ],
     "quantize/fp32/tensor/scalar": [
       "kernel_parity/quantize_scalar_fp32"
+    ],
+    "relu/fp32/none/arm_neon": [
+      "kernel_parity/relu_arm_neon_fp32"
     ],
     "relu/fp32/none/scalar": [
       "kernel_parity/relu_scalar_fp32"
