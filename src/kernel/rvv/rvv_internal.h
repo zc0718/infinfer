@@ -100,4 +100,16 @@ infr_status infr_rvv_quantize_f32(const void *const *inputs, void *const *output
 infr_status infr_rvv_dequantize_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
                                    const infr_quant *quant);
 
+/**
+ * @brief [en] int16 dot product with an int64 accumulator, bitwise identical to the reference.
+ * @brief [zh] int64 累加的 int16 点积，与参考实现逐位相同。
+ * @note [en] i16 -> i32 (multiply) -> i64 (accumulate): `vwmacc` would accumulate in int32, the
+ *            width this kernel exists to avoid (gaps G-52).
+ * @note [zh] i16 -> i32（乘）-> i64（累加）：`vwmacc` 会累加进 int32，而那正是本内核要避开的宽度
+ *            （gaps G-52）。
+ * @since 0.1.0
+ */
+infr_status infr_rvv_fc_i16(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                            const infr_quant *quant);
+
 #endif /* INFR_SRC_KERNEL_RVV_INTERNAL_H */

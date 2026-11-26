@@ -86,3 +86,15 @@ infr_status infr_arm_neon_relu_i8(const void *const *inputs, void *const *output
  */
 infr_status infr_arm_neon_dequantize_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
                                         const infr_quant *quant);
+
+/**
+ * @brief [en] int16 dot product with an int64 accumulator, bitwise identical to the reference.
+ * @brief [zh] int64 累加的 int16 点积，与参考实现逐位相同。
+ * @note [en] `vmlal_s16` accumulates in int32 and would wrap where the reference does not, so every
+ *            product is widened to int64 before the add (gaps G-52).
+ * @note [zh] `vmlal_s16` 累加进 int32，会在参考实现不回绕的输入上回绕，所以每个乘积在相加前扩到
+ *            int64（gaps G-52）。
+ * @since 0.1.0
+ */
+infr_status infr_arm_neon_fc_i16(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                 const infr_quant *quant);

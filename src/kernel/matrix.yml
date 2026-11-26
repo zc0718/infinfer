@@ -69,9 +69,9 @@ kernels:
       # Per-pair (gaps G-51): the NEON row is the fp32 dot product. The quantized
       # pairs stay open -- int8 has a DSP path on Cortex-M and no NEON row yet, and a
       # flat `done` here would claim them.
-      arm_neon: { fp32/none: done, int8/tensor: todo, int16/tensor: todo }
+      arm_neon: { fp32/none: done, int8/tensor: todo, int16/tensor: done }
       arm_m: { fp32/none: todo, int8/tensor: done, int16/tensor: done }
-      rvv: { fp32/none: done, int8/tensor: todo, int16/tensor: todo }
+      rvv: { fp32/none: done, int8/tensor: todo, int16/tensor: done }
     grad: todo
   quantize:
     tflite: [QUANTIZE]

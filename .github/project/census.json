@@ -37,6 +37,12 @@
     "fc/int16/tensor/arm_m": [
       "KernelParityFcArmM/Int16MatchesScalarBitwise"
     ],
+    "fc/int16/tensor/arm_neon": [
+      "KernelParityFcNeon/Int16MatchesScalarBitwise"
+    ],
+    "fc/int16/tensor/rvv": [
+      "KernelParityRvv/FcInt16MatchesScalarBitwise"
+    ],
     "fc/int16/tensor/scalar": [
       "KernelParityFcInt16/ScalarInt16MatchesDefinition"
     ],

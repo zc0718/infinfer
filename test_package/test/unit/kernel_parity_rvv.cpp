@@ -405,3 +405,57 @@ TEST(KernelParityRvv, DequantizeInt8MatchesScalarBitwise) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, nullptr));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, nullptr));
 }
+
+// Census cell: fc/int16/tensor/rvv.
+//
+// Same criterion and same corpus as the arm_neon case: integer addition is
+// associative, so the tier must reproduce the reference's int64 total exactly.
+// The 2^34 corpus is what separates an int64 accumulator from an int32 one --
+// and RVV's `vwmacc` is the obvious instruction that would accumulate in int32.
+TEST(KernelParityRvv, FcInt16MatchesScalarBitwise) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_rvv());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* row =
+        infr_kernel_find("fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_RVV);
+    ASSERT_NE(nullptr, scalar) << "fc/int16/tensor/scalar is not registered";
+    if (row == nullptr) {
+        GTEST_SKIP() << kNoVector;
+    }
+
+    const std::uint32_t lengths[] = {0U, 1U, 3U, 7U, 8U, 9U, 15U, 16U, 17U, 64U};
+    std::vector<std::int16_t> x(64);
+    std::vector<std::int16_t> w(64);
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        x[i] = static_cast<std::int16_t>(static_cast<int>((i * 733U) % 65533U) - 32766);
+        w[i] = static_cast<std::int16_t>(static_cast<int>((i * 911U + 7U) % 65533U) - 32766);
+    }
+    for (int i = 0; i < 64; ++i) {
+        x[i] = 16384;
+        w[i] = 16384;
+    }
+    x[0] = INT16_MIN;
+    w[0] = INT16_MIN;
+
+    infr_quant quant = {};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 1.0F;
+    quant.zero_point = 0;
+    quant.requant_multiplier = 1.0F / 2097152.0F;
+    const void* inputs[2] = {x.data(), w.data()};
+    for (std::uint32_t n : lengths) {
+        std::int16_t want = 0;
+        std::int16_t got = 0;
+        void* want_out[1] = {&want};
+        void* got_out[1] = {&got};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, &quant));
+        ASSERT_EQ(INFR_OK, row->fn(inputs, got_out, n, &quant));
+        EXPECT_EQ(static_cast<int>(want), static_cast<int>(got)) << "length " << n;
+    }
+
+    std::int16_t out = 0;
+    void* out_ptr[1] = {&out};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, nullptr));
+}
