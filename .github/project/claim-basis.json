@@ -10,9 +10,9 @@
       "host": "zc Linux, QEMU 8.2.2",
       "date": "2026-11-26",
       "chains": {
-        "k0_actquant": "PASS on all eight targets",
-        "k1_mlp3": "PASS on all eight targets",
-        "k2_conv_micro": "PASS on all eight targets"
+        "k0_actquant": "PASS on all eight targets, plus six compile-option variant cells",
+        "k1_mlp3": "PASS on all eight targets, plus six compile-option variant cells",
+        "k2_conv_micro": "PASS on all eight targets, plus six compile-option variant cells"
       },
       "targets": [
         "m3-an385",
@@ -30,7 +30,39 @@
       "toolchain": {
         "arm": "arm-toolchain/11.3.rel1 (resolved by declared version probe from the Conan cache)",
         "riscv": "rv-toolchain/14.3.rel1 (resolved by declared version probe; xpack reports GCC 14.2.0)",
-        "arm_linux": "arm-toolchain/11.3.rel1 for aarch64-none-linux-gnu and arm-none-linux-gnueabihf (resolved by declared version probe; qemu-user needs no sysroot because the ELFs are static)"
+        "arm_linux": "arm-toolchain/11.3.rel1 for aarch64-none-linux-gnu and arm-none-linux-gnueabihf (resolved by declared version probe; qemu-user needs no sysroot because the ELFs are static)",
+        "provenance": "toolchains.json + toolchain_gate.py: our own code surfaces may only resolve the house packages; the three template-owned places that still apt-install compilers are declared debt with a removal condition and are re-checked by T3"
+      },
+      "variants": {
+        "aarch64-linux": [
+          {
+            "id": "os",
+            "opt": "-Os"
+          },
+          {
+            "id": "no-autovec",
+            "flags": [
+              "-fno-tree-vectorize"
+            ]
+          },
+          {
+            "id": "no-simd",
+            "flags": [
+              "-march=armv8-a+nosimd"
+            ],
+            "assert": "no SIMD mnemonics in our objects"
+          }
+        ],
+        "armv7hf-linux": [
+          {
+            "id": "neon-vfpv4",
+            "flags": [
+              "-mfpu=neon-vfpv4"
+            ],
+            "assert": "readelf -A reports Tag_FP_arch: VFPv4 and Advanced SIMD with Fused-MAC"
+          }
+        ],
+        "_note": "a variant is a compile-option cell on an existing board, not a new board; each one must prove its flag reached the artifact (check_artifact), so 'it compiled and passed' cannot stand in for 'the capability is covered'"
       }
     }
   ]

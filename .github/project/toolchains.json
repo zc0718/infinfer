@@ -1,0 +1,88 @@
+{
+  "_comment": [
+    "Which compilers may build this project, and where the tree still names ones that may not.",
+    "INV-7 says a board enters the matrix only if the house toolchain builds it, so 'which compiler' is a contract, not a detail: the same source compiled by two foundations produces two sets of evidence that cannot be compared.",
+    "This file is the data half; toolchain_gate.py is the teeth half. T1 scans the surface we own for third-party compiler names, T2 refuses a debt entry without why/exit, T3 refuses a stale debt entry (the literal it claims is no longer in the file).",
+    "哪些编译器可以构建本工程，以及树里还在指名哪些不行的。INV-7 规定'板子进矩阵的前提是 house 工具链能构建它'，所以'用哪个编译器'是合同而不是细节：同一份源码由两套地基编出来，是两套无法互相比较的证据。",
+    "本文件是数据那一半，toolchain_gate.py 是牙齿那一半：T1 扫我们自己的面里有没有第三方编译器名，T2 拒收没有 why/exit 的债务条目，T3 拒收已失效的债务条目（它声称的字面量在文件里已不存在）。",
+    "T1 只扫**代码面**（.py/.sh/.json/.yml/.c/.h/.cpp）：规矩是「我们的脚本不许调用第三方编译器」，而文档/笔记**可以**提这些名字——本文件和 gaps.md 就在讨论禁令本身。"
+  ],
+  "house": {
+    "arm-toolchain/11.3.rel1": {
+      "targets": [
+        "arm-none-eabi",
+        "aarch64-none-linux-gnu",
+        "arm-none-linux-gnueabihf"
+      ],
+      "resolved_by": "declared version probe against the Conan cache (workspace/qa/kat/run_kat.py: find_tool)",
+      "why": "the four Cortex-M boards, the two ARM Linux userspace boards and every ARM variant are built by it"
+    },
+    "rv-toolchain/14.3.rel1": {
+      "targets": [
+        "riscv-none-elf"
+      ],
+      "resolved_by": "same probe mechanism; xpack reports GCC 14.2.0",
+      "why": "PLAN 3.3 pins the RV mainline to 14.3.rel1 (ratified RVV 1.0 headers need GCC >= 13)"
+    }
+  },
+  "third_party": [
+    "aarch64-linux-gnu-gcc",
+    "arm-linux-gnueabihf-gcc",
+    "riscv64-linux-gnu-gcc",
+    "riscv64-unknown-elf-gcc",
+    "gcc-aarch64-linux-gnu",
+    "gcc-arm-none-eabi"
+  ],
+  "owned_surface": [
+    "workspace",
+    ".github/project"
+  ],
+  "skip_dirs": [
+    {
+      "path": "workspace/qa/kat/build",
+      "why": "generated objects and ELFs: build output, not a surface anyone maintains"
+    },
+    {
+      "path": "workspace/qa/qemu/build",
+      "why": "same"
+    },
+    {
+      "path": "workspace/qa/prep/generated",
+      "why": "headers generated from the model blobs at build time"
+    },
+    {
+      "path": "workspace/referential_repos",
+      "why": "vendored upstream sources used for parity (tflite-micro / CMSIS-NN / XNNPACK / llama.cpp …): their CI is not our surface and we never run it, so their compiler names are not a drift we own"
+    }
+  ],
+  "text_suffixes": [
+    ".py",
+    ".json",
+    ".sh",
+    ".c",
+    ".h",
+    ".cpp",
+    ".yml",
+    ".yaml"
+  ],
+  "debt": [
+    {
+      "path": ".github/workflows/cross-compile.yml",
+      "contains": "gcc-aarch64-linux-gnu",
+      "why": "template-owned workflow: its cross-compile job apt-installs gcc-aarch64-linux-gnu / gcc-arm-none-eabi, so the CI cross-compile leg and the local KAT matrix are two different foundations (apt 13.x vs house 11.3.rel1)",
+      "exit": "authorised scaffold edit: build through the house toolchain (conan install -pr armv8 / -pr armv7hf) and drop the apt step; or delete the job once the KAT matrix covers the same ground"
+    },
+    {
+      "path": ".github/misc/cross_compile_check.py",
+      "contains": "aarch64-linux-gnu-gcc",
+      "why": "template-owned helper: its toolchain table hardcodes apt package names and compiler binaries",
+      "exit": "authorised scaffold edit: resolve from the Conan cache by version probe, the same way run_kat.py does"
+    },
+    {
+      "path": "benchmark/script/run_bench.py",
+      "contains": "/usr/bin/riscv64-linux-gnu-gcc",
+      "why": "template-owned benchmark driver: it reaches for system cross compilers when it runs the on-board bench",
+      "exit": "authorised scaffold edit, or keep it and state in the release notes that the bench path (never the shipped library) uses a host compiler"
+    }
+  ]
+}
