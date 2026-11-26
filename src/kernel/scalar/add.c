@@ -5,8 +5,8 @@
 /*!
  * @ingroup group_scalar
  * @file
- * @brief [en] Scalar elementwise binary add: the reference for the `add` cell (INV-2), used for bias.
- * @brief [zh] 标量逐元素二元加法：`add` 格的参考实现（INV-2），偏置相加用它。
+ * @brief [en] Scalar elementwise binary add: the reference for the `add` cell, used for bias.
+ * @brief [zh] 标量逐元素二元加法：`add` 格的参考实现，偏置相加用它。
  * @since 0.1.0
  */
 

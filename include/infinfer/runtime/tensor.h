@@ -16,10 +16,10 @@
  * @brief [zh] L2 张量描述符：把 rank、dims、dtype、quant 放在一起，步长由 dims
  *            推导而不单独存储。
  * @note [en] Shape lives here and nowhere else. Kernels take (pointer, length) only
- *            (INV-3), so the moment an operator needs to know "how wide is a row"
+ *, so the moment an operator needs to know "how wide is a row"
  *            it has to come through this header -- that is what keeps shape out of
  *            the L1 signatures.
- * @note [zh] shape 只活在这里。kernel 只收（指针、长度）(INV-3)，所以算子一旦需
+ * @note [zh] shape 只活在这里。kernel 只收（指针、长度），所以算子一旦需
  *            要知道"一行有多宽"，就必须经过本头——这正是 L1 签名里没有 shape 的
  *            原因。
  * @note [en] Dims are row-major, outermost first: a 4-D tensor is N,H,W,C and the
@@ -151,9 +151,9 @@ infr_status infr_shape_offset(const infr_shape *shape, const uint32_t *index, ui
  *         shape, or an unknown dtype.
  * @note [en] The view borrows the buffer: it neither copies nor owns it, which is
  *            what lets the same memory be an input and an output of two different
- *            nodes (PLAN INV-8, the workspace leg).
+ *            nodes.
  * @note [zh] 视图只借用缓冲区：不复制也不拥有，这正是同一块内存能同时是不同节点的
- *            输入与输出的原因（PLAN INV-8 的 workspace 一条腿）。
+ *            输入与输出的原因。
  * @since 0.1.0
  */
 infr_status infr_tensor_init(infr_tensor *tensor, void *data, infr_dtype dtype, const infr_shape *shape);

@@ -5,8 +5,8 @@
 /*!
  * @ingroup group_scalar
  * @file
- * @brief [en] Scalar relu bodies: the reference definition of correctness for the `relu` cell (INV-2).
- * @brief [zh] 标量 relu 体：`relu` 格的正确性定义（INV-2）。
+ * @brief [en] Scalar relu bodies: the reference definition of correctness for the `relu` cell.
+ * @brief [zh] 标量 relu 体：`relu` 格的正确性定义。
  * @since 0.1.0
  */
 

@@ -66,10 +66,10 @@ typedef enum infr_status {
  * @brief [en] Element types a kernel may be instantiated for.
  * @brief [zh] 内核可被实例化的元素类型。
  * @note [en] The set is closed on purpose: the legal dtype x quant pairs live in
- *            `src/kernel/matrix.yml`, and the census gate rejects a pair declared
- *            there without a test case.
+ *            `src/kernel/matrix.yml`, and a pair declared there without a test
+ *            case is a defect rather than a detail.
  * @note [zh] 该集合刻意封闭：合法的 dtype x quant 组合只声明在
- *            `src/kernel/matrix.yml`，census 门禁会拒绝没有用例的声明。
+ *            `src/kernel/matrix.yml`，声明了却没有用例就是缺陷。
  * @since 0.1.0
  */
 typedef enum infr_dtype {
@@ -177,9 +177,9 @@ typedef struct infr_quant {
 /**
  * @brief [en] Implementation tier a kernel belongs to (matrix.yml `tiers` keys).
  * @brief [zh] 内核所属的实现档位（对应 matrix.yml 的 `tiers` 键）。
- * @note [en] INV-2: `scalar` is the only definition of correctness; every other
+ * @note [en] The `scalar` body is the only definition of correctness; every other
  *            tier is proven equivalent by the parity harness, never by review.
- * @note [zh] INV-2：只有 `scalar` 是正确性的定义；其它档位一律由 parity
+ * @note [zh] 只有 `scalar` 是正确性的定义；其它档位一律由 parity
  *            骨架证明等价，不靠人工评审。
  * @since 0.1.0
  */
@@ -342,9 +342,9 @@ infr_status infr_dequantize_i8(const int8_t *in, float *out, uint32_t n, const i
  * @brief [en] A kernel body: arrays of input/output pointers plus an element count.
  * @brief [zh] 内核主体：输入/输出指针数组加元素个数。
  * @note [en] No shape, no stride, no batch: layout is the graph layer's
- *            responsibility (INV-3). A kernel that needs a channel index gets it
+ *            responsibility. A kernel that needs a channel index gets it
  *            by being called once per channel slice.
- * @note [zh] 没有 shape、没有 stride、没有 batch：布局是图层的职责（INV-3）。
+ * @note [zh] 没有 shape、没有 stride、没有 batch：布局是图层的职责。
  *            需要通道下标的内核由图层按通道切片多次调用。
  * @since 0.1.0
  */
@@ -354,10 +354,10 @@ typedef infr_status (*infr_kernel_fn)(const void *const *inputs, void *const *ou
 /**
  * @brief [en] One row of the kernel registry: name x dtype x quant x tier -> body.
  * @brief [zh] 内核注册表的一行：名字 x dtype x quant x tier -> 实现。
- * @note [en] `name` must match a kernel key in `src/kernel/matrix.yml`; the
- *            census gate cross-checks the two and fails on either side's orphans.
- * @note [zh] `name` 必须与 `src/kernel/matrix.yml` 的 kernel 键一致；census
- *            门禁双向核对，任一侧出现孤儿行都会报红。
+ * @note [en] `name` must match a kernel key in `src/kernel/matrix.yml`; the two
+ *            lists are cross-checked, so an orphan on either side is a defect.
+ * @note [zh] `name` 必须与 `src/kernel/matrix.yml` 的 kernel 键一致；两份清单
+ *            双向核对，任一侧出现孤儿行都是缺陷。
  * @since 0.1.0
  */
 typedef struct infr_kernel_desc {

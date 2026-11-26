@@ -15,24 +15,24 @@
  * @brief [en] L2 operator semantics: the operators the graph layer assembles out
  *            of registered kernels.
  * @brief [zh] L2 算子语义：图层用已注册的 kernel 组合出来的算子。
- * @note [en] A convolution is not a kernel. INV-3 forbids shape in a kernel
+ * @note [en] A convolution is not a kernel: shape has no place in a kernel
  *            signature, and a convolution needs kernel extent, stride and padding
  *            before it can do any arithmetic -- so it lives here, where shape is
  *            allowed, and is built from the registered `fc` dot product plus the
  *            registered `add` for the bias. `matrix.yml` records that dependency
  *            in its `composed` section, and that is the only place the composition
  *            is written down.
- * @note [zh] 卷积不是 kernel。INV-3 禁止 kernel 签名里出现 shape，而卷积必须先知道
+ * @note [zh] 卷积不是 kernel：kernel 签名里不出现 shape，而卷积必须先知道
  *            核大小、步长与填充才能算第一个乘加——所以它住在这里（这里允许 shape），
  *            由已注册的 `fc` 点积和已注册的 `add`（加偏置）组合而成。`matrix.yml`
  *            的 `composed` 段记录了这个依赖，那是这份组合唯一的书面来源。
  * @note [en] Every operator here is shape-explicit and allocation-free: the caller
  *            brings the tensors and a workspace, and the operator returns the
  *            workspace cursor to where it found it. That is what keeps `EVAL` from
- *            growing as a graph executes (INV-8).
+ *            growing as a graph executes.
  * @note [zh] 这里的每个算子都显式吃 shape、且不分配内存：调用方带来张量与工作区，
  *            算子在返回前把工作区游标退回原处。这正是 `EVAL` 不会随图的执行而长胖
- *            的原因（INV-8）。
+ *            的原因。
  * @note [en] Supported subset, stated so it fails loudly instead of silently
  *            degrading: fp32 only, unquantized only, batch 1, rank 4 NHWC input and
  *            output, filter in OHWI order, `groups` either 1 or `in_channels`.

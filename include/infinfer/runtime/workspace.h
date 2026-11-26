@@ -20,10 +20,10 @@ extern "C" {
  *            byte-granular bump allocation, no heap.
  * @brief [zh] 可复用张量区（`EVAL` 模式）：调用方持有的单块缓冲区、按字节的
  *            指针式分配、不碰堆。
- * @note [en] INV-8 keeps the three tensor legs apart: `workspace` (reuse),
+ * @note [en] The three tensor legs are kept apart: `workspace` (reuse),
  *            `activation` (retain for backward) and `state` (persist). This header
  *            defines the reusable leg only.
- * @note [zh] INV-8 把三类张量区分开：`workspace`（复用）、`activation`（为反向
+ * @note [zh] 三类张量是分开的：`workspace`（复用）、`activation`（为反向
  *            保留）、`state`（持久）。本头只定义"复用"这条腿。
  * @note [en] Offsets are bytes, never words. The reference defect this contract
  *            exists to make testable is an offset table that mixed the two units.
@@ -121,9 +121,9 @@ size_t infr_workspace_mark(const infr_workspace *ws);
  *         hand out memory that was already handed out).
  * @note [en] This is what lets an L2 operator borrow scratch for a gather buffer and
  *            return it before the next node runs: `EVAL` must not grow the workspace
- *            as the graph executes (INV-8).
+ *            as the graph executes.
  * @note [zh] 有了它，L2 算子可以借一块临时缓冲做 gather，并在下一个节点前还回去：
- *            `EVAL` 不许随图的执行而长胖（INV-8）。
+ *            `EVAL` 不许随图的执行而长胖。
  * @since 0.1.0
  */
 infr_status infr_workspace_release(infr_workspace *ws, size_t mark);

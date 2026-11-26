@@ -5,20 +5,20 @@
 /*!
  * @ingroup group_scalar
  * @file
- * @brief [en] Scalar reductions (sum, max): the reference bodies for the reduction cells (INV-2).
- * @brief [zh] 标量归约（求和、取最大）：归约格的参考实现（INV-2）。
+ * @brief [en] Scalar reductions (sum, max): the reference bodies for the reduction cells.
+ * @brief [zh] 标量归约（求和、取最大）：归约格的参考实现。
  * @since 0.1.0
  */
 
 /* A reduction collapses `element_count` elements into exactly one value in
  * `outputs[0]`, which is what makes it shape-free: pooling, global average and
- * bias accumulation all reach it through (pointer, length) alone (INV-3).
+ * bias accumulation all reach it through (pointer, length) alone.
  *
  * The accumulation order is ascending and fixed; that order *is* the reference
  * definition, and any other tier has to reproduce it.
  *
  * 归约把 `element_count` 个元素压成 `outputs[0]` 里的**一个**值，这正是它不依赖
- * shape 的原因：池化、全局平均、偏置累加都只用（指针、长度）到达它（INV-3）。
+ * shape 的原因：池化、全局平均、偏置累加都只用（指针、长度）到达它。
  * 累加顺序固定为升序；该顺序**就是**参考定义，其它档位必须复现。
  */
 

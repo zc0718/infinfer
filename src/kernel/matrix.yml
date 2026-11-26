@@ -1,11 +1,11 @@
 # One kernel = a name + the (dtype, quant) pairs it is instantiated for + per-tier
 # implementation status + whether a backward pass exists. This file is the single
-# source of legal combinations (INV-10): template instantiation, the census gate,
+# source of legal combinations: template instantiation, the census gate,
 # parity stubs and the documentation table are all derived from it. A second
 # hand-written list anywhere in the tree is a defect.
 #
 # `kernels` are bodies that exist as kernels: they see (pointer, length, dtype,
-# quant) and nothing else (INV-3). `composed` are operators the graph layer builds
+# quant) and nothing else. `composed` are operators the graph layer builds
 # out of those kernels; they have no body of their own, so declaring them as
 # kernels would put cells in the census that can never be filled. Every entry in
 # `composed` has to name the kernels it uses, and a graph-level KAT has to exercise

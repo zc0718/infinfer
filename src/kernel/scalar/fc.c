@@ -5,12 +5,12 @@
 /*!
  * @ingroup group_scalar
  * @file
- * @brief [en] Scalar fully-connected body: one dot product per call, the reference for the `fc` cell (INV-2).
- * @brief [zh] 标量全连接体：一次调用一次点积，`fc` 格的正确性定义（INV-2）。
+ * @brief [en] Scalar fully-connected body: one dot product per call, the reference for the `fc` cell.
+ * @brief [zh] 标量全连接体：一次调用一次点积，`fc` 格的正确性定义。
  * @since 0.1.0
  */
 
-/* INV-3 fixes what this body may see: two buffers and an element count, never a
+/* What this body may see is fixed: two buffers and an element count, never a
  * shape. So one call produces **one** output element -- the dot product of the
  * input vector with one weight row -- and the graph layer (L2) loops over rows.
  * Kernel call count is an L2 decision; keeping shape out of the signature is what
@@ -20,7 +20,7 @@
  * sequences (relu already exists; add arrives with the first model that needs
  * it). A fused variant would have to duplicate both definitions.
  *
- * INV-3 规定本体只能看到两个缓冲与一个元素个数、绝无 shape：因此一次调用**只
+ * 本体只能看到两个缓冲与一个元素个数、绝无 shape：因此一次调用**只
  * 产出一个**输出元素（输入向量与一行权重的点积），逐行循环属于图层（L2）的职责。
  * 把 shape 挡在签名外，才能让同一个本体既服务 16 宽的行、也服务 512 宽的行。
  *

@@ -14,12 +14,12 @@
  * contract is (inputs, outputs, length, quant) with no room for a scalar, and widening
  * it for one operator would change every tier's signature. A one-element input tensor
  * is the smallest thing that fits the existing contract, and it composes with the same
- * pointer-length rule everything else uses (INV-3).
+ * pointer-length rule everything else uses.
  *
  * 为什么因子放在 `inputs[1][0]` 而不是函数参数：kernel 契约是
  * （inputs, outputs, length, quant），没有标量的位置；为了一个算子去拓宽它，等于改
  * 所有档位的签名。单元素的输入张量是能塞进既有契约的最小表示，且与其它 kernel 一样
- * 遵守"指针 + 长度"这条规则（INV-3）。 */
+ * 遵守"指针 + 长度"这条规则。 */
 
 /**
  * @brief [en] y[i] = a[i] * factor, where factor is `inputs[1][0]`.

@@ -74,8 +74,8 @@ infr_status infr_scalar_scale_f32(const void *const *inputs, void *const *output
                                   const infr_quant *quant);
 
 /* The fc contract in one line: `inputs[0]` against `inputs[1]`, one float into
- * `outputs[0]`; the graph layer loops over rows, because INV-3 keeps shape out
+ * `outputs[0]`; the graph layer loops over rows, because shape stays outside
  * of this signature.
  *
  * fc 的契约一句话：`inputs[0]` 对 `inputs[1]`，一个 float 写进 `outputs[0]`；
- * 逐行循环在图层，因为 INV-3 把 shape 挡在签名之外。 */
+ * 逐行循环在图层，因为 shape 被挡在签名之外。 */

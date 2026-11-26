@@ -5,8 +5,8 @@
 /*!
  * @ingroup group_scalar
  * @file
- * @brief [en] Scalar quantize/dequantize: the reference definition of correctness (INV-2).
- * @brief [zh] 标量量化/反量化：正确性的参考定义（INV-2）。
+ * @brief [en] Scalar quantize/dequantize: the reference definition of correctness.
+ * @brief [zh] 标量量化/反量化：正确性的参考定义。
  * @since 0.1.0
  */
 
@@ -17,13 +17,12 @@
  * non-positive scale is rejected instead of writing garbage.
  *
  * For per-channel tensors the graph layer resolves the channel's parameters
- * into `scale`/`zero_point` and calls these once per slice (INV-3: no shape in
- * kernel signatures).
+ * into `scale`/`zero_point` and calls these once per slice.
  *
  * 语义由契约钉死：量化 `q = round(x/scale) + zero_point` 并截断到 int8 范围；
  * 反量化 `x = (q - zero_point) * scale`。舍入为“半远离零”；声明 INFR_QUANT_NONE
  * 或 scale 非正时直接拒绝，而不是写入垃圾值。逐通道张量由图层把该通道的参数
- * 解析到 `scale`/`zero_point` 后逐片调用（INV-3：内核签名里没有 shape）。 */
+ * 解析到 `scale`/`zero_point` 后逐片调用。 */
 
 static int quant_args_ok(const infr_quant *quant) {
     if (quant == NULL) {

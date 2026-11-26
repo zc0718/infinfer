@@ -192,7 +192,7 @@ infr_status infr_conv2d_f32(const infr_tensor* input, const infr_tensor* filter,
     }
 
     /* Borrow scratch and hand it back on every path: `EVAL` must not grow with the
-     * number of nodes executed (INV-8). */
+     * number of nodes executed. */
     const size_t mark = infr_workspace_mark(workspace);
     void* window_raw = nullptr;
     void* acc_raw = nullptr;
