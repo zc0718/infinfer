@@ -95,11 +95,6 @@
       "exit": "drop the entry once the orchestrator step is upstreamed to fcpp v0.4+ and the template's check honours `tolerated`"
     },
     {
-      "path": ".github/misc/supportable-board-matrix.yml",
-      "why": "12 benchmark remote paths still carried the upstream project prefix (IDENTITY_LEAK, gaps G-24)",
-      "exit": "none needed after this commit: the values are project-owned from here on; remove the entry only if upstream renames them the same way"
-    },
-    {
       "path": ".github/workflows/hetai-package-matrix.yml",
       "why": "HETAI_PLAN_ROOT pointed at the upstream author's machine path /home/fcpp/WorkProject/Plan (IDENTITY_LEAK, gaps G-24)",
       "exit": "none needed after this commit: the value now comes from the `vars.HETAI_PLAN_ROOT` repository variable, matching the two sibling env vars"
