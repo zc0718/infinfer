@@ -95,10 +95,14 @@ static const infr_act_f32_fn ACT_TABLE[INFR_ACT_COUNT] = {
     act_hard_swish_f32,   /* INFR_ACT_HARD_SWISH */
 };
 
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
+/* A plain compile-time assertion now: the reference bodies are C11 like every other
+ * translation unit here, because the C99 requirement was retracted (gaps G-56). The
+ * header keeps its guard -- that one is for consumers; this one is for us.
+ *
+ * 现在就是一条普通的编译期断言：参考体与项目其它编译单元一样是 C11，因为 C99 要求
+ * 已撤回（gaps G-56）。头文件那个守卫保留——那个服务消费方，这个只服务我们自己。 */
 _Static_assert(sizeof(ACT_TABLE) / sizeof(ACT_TABLE[0]) == (size_t)INFR_ACT_COUNT,
                "an activation code without a row must fail the build, not the dispatch");
-#endif
 
 /**
  * @brief [en] Resolve a fused-activation code to its fp32 scalar body, or NULL when the code is unknown.

@@ -288,6 +288,13 @@ typedef enum infr_activation {
     INFR_ACT_COUNT = 7
 } infr_activation;
 
+/* Install-only guard: this header is the ABI, so a C99 consumer must be able to
+ * include it even though the library itself is built as C11. `header_dialect_gate`
+ * holds that property; without the guard the include would not even parse.
+ *
+ * 装机头专用守卫：本头就是 ABI，因此即使是 C99 消费者也必须能 include 它，尽管库
+ * 本身按 C11 构建。该属性由 `header_dialect_gate` 守住；没有守卫，他们连 include
+ * 都过不去。 */
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(INFR_ACT_COUNT == 7, "activation codes are contract; extend the enum and the switch together");
 #endif
