@@ -196,3 +196,41 @@ TEST(KernelParityFcInt8, RejectsUnresolvedQuantization) {
     unquantized.requant_multiplier = 1.0F;
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, outputs, 1, &unquantized));
 }
+
+TEST(KernelParityFcArmM, Int8MatchesScalarBitwise) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_arm_m());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* dsp =
+        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_ARM_M);
+    ASSERT_NE(nullptr, scalar) << "fc/int8/tensor/scalar is not registered";
+    if (dsp == nullptr) {
+        GTEST_SKIP() << "no DSP extension in this build: the arm_m row is absent by design";
+    }
+
+    infr_quant quant{};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 0.5F;
+    quant.zero_point = -7;
+    quant.requant_multiplier = 0.125F;
+
+    // Odd lengths exercise the scalar tail; negative values exercise the signed lane
+    // packing, which is where a hand-written DSP path usually breaks.
+    std::uint8_t x[17];
+    std::uint8_t w[17];
+    for (int i = 0; i < 17; ++i) {
+        x[i] = static_cast<std::uint8_t>((i * 37) % 256);
+        w[i] = static_cast<std::uint8_t>((i * 91 + 13) % 256);
+    }
+    for (std::uint32_t n = 1U; n <= 17U; ++n) {
+        std::int8_t want = 0;
+        std::int8_t got = 0;
+        const void* inputs[2] = {x, w};
+        void* want_out[1] = {&want};
+        void* got_out[1] = {&got};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, &quant));
+        ASSERT_EQ(INFR_OK, dsp->fn(inputs, got_out, n, &quant));
+        EXPECT_EQ(static_cast<int>(want), static_cast<int>(got)) << "inner dimension " << n;
+    }
+}

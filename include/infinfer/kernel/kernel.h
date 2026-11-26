@@ -458,6 +458,22 @@ const infr_kernel_desc *infr_kernel_find(const char *name, infr_dtype dtype, inf
 infr_status infr_kernel_register_scalar(void);
 
 /**
+ * @brief [en] Register the Cortex-M DSP tier rows this build actually contains.
+ * @brief [zh] 注册本次构建真正包含的 Cortex-M DSP 档位行。
+ * @return [en] INFR_OK when every row registered (including the empty case).
+ * @return [zh] 全部登记成功时返回 INFR_OK（空集也算成功）。
+ * @note [en] On a target without `__ARM_FEATURE_DSP` this registers nothing and returns
+ *            INFR_OK: the tier is a capability of the build, not of the API, so a caller
+ *            does not have to know which core it runs on before asking. `infr_kernel_find`
+ *            then reports the absence, which is the fact a graph resolves against.
+ * @note [zh] 目标不带 `__ARM_FEATURE_DSP` 时它什么都不登记并返回 INFR_OK：档位是构建的
+ *            能力而不是 API 的能力，因此调用方不必先知道自己跑在哪个核上。缺席由
+ *            `infr_kernel_find` 如实报出，那正是图层据以解析的事实。
+ * @since 0.1.0
+ */
+infr_status infr_kernel_register_arm_m(void);
+
+/**
  * @brief [en] Stable, non-NULL name of a status code (safe in log format strings).
  * @brief [zh] 状态码的稳定非空名称（可安全用于日志格式串）。
  * @param status [en] Status code.
