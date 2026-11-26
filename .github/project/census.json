@@ -5,13 +5,13 @@
       "KernelParityAddNeon/Fp32MatchesScalarBitwise"
     ],
     "add/fp32/none/rvv": [
-      "kernel_parity/add_rvv_fp32"
+      "KernelParityRvv/AddFp32MatchesScalarBitwise"
     ],
     "add/fp32/none/scalar": [
       "KernelParityAdd/ScalarFp32MatchesDoubleReference"
     ],
     "add/fp32/none/x86": [
-      "kernel_parity/add_x86_fp32"
+      "KernelParityX86/AddFp32MatchesScalarBitwise"
     ],
     "dequantize/int8/tensor/scalar": [
       "KernelParityQuant/ScalarDequantizeMatchesDefinition"
@@ -20,13 +20,13 @@
       "KernelParityFcNeon/Fp32MatchesScalarWithinAFloatWindow"
     ],
     "fc/fp32/none/rvv": [
-      "kernel_parity/fc_rvv_fp32_window"
+      "KernelParityRvv/FcFp32MatchesScalarWithinAFloatWindow"
     ],
     "fc/fp32/none/scalar": [
       "KernelParityFc/ScalarFp32MatchesDoubleReference"
     ],
     "fc/fp32/none/x86": [
-      "kernel_parity/fc_x86_fp32_window"
+      "KernelParityX86/FcFp32MatchesScalarWithinAFloatWindow"
     ],
     "fc/int16/tensor/arm_m": [
       "KernelParityFcArmM/Int16MatchesScalarBitwise"
@@ -35,7 +35,7 @@
       "KernelParityFcInt16/ScalarInt16MatchesDefinition"
     ],
     "fc/int16/tensor/x86": [
-      "kernel_parity/fc_x86_i16"
+      "KernelParityX86/FcInt16MatchesScalarBitwise"
     ],
     "fc/int8/tensor/arm_m": [
       "KernelParityFcArmM/Int8MatchesScalarBitwise"
@@ -44,19 +44,19 @@
       "KernelParityFcInt8/ScalarInt8MatchesDefinition"
     ],
     "fc/int8/tensor/x86": [
-      "kernel_parity/fc_x86_i8"
+      "KernelParityX86/FcInt8MatchesScalarBitwise"
     ],
     "max/fp32/none/arm_neon": [
       "KernelParityMaxNeon/Fp32MatchesScalarBitwise"
     ],
     "max/fp32/none/rvv": [
-      "kernel_parity/max_rvv_fp32"
+      "KernelParityRvv/MaxFp32MatchesScalarBitwise"
     ],
     "max/fp32/none/scalar": [
       "KernelParityMax/ScalarFp32MatchesDefinition"
     ],
     "max/fp32/none/x86": [
-      "kernel_parity/max_x86_fp32"
+      "KernelParityX86/MaxFp32MatchesScalarBitwise"
     ],
     "quantize/fp32/tensor/scalar": [
       "KernelParityQuant/ScalarQuantizeMatchesDefinition"
@@ -65,49 +65,49 @@
       "KernelParityReluNeon/Fp32MatchesScalarBitwise"
     ],
     "relu/fp32/none/rvv": [
-      "kernel_parity/relu_rvv_fp32"
+      "KernelParityRvv/ReluFp32MatchesScalarBitwise"
     ],
     "relu/fp32/none/scalar": [
       "KernelParityRelu/ScalarFp32MatchesDefinition"
     ],
     "relu/fp32/none/x86": [
-      "kernel_parity/relu_x86_fp32"
+      "KernelParityX86/ReluFp32MatchesScalarBitwise"
     ],
     "relu/int8/none/arm_neon": [
       "KernelParityReluNeon/Int8MatchesScalarBitwise"
     ],
     "relu/int8/none/rvv": [
-      "kernel_parity/relu_rvv_i8"
+      "KernelParityRvv/ReluInt8MatchesScalarBitwise"
     ],
     "relu/int8/none/scalar": [
       "KernelParityRelu/ScalarInt8MatchesDefinition"
     ],
     "relu/int8/none/x86": [
-      "kernel_parity/relu_x86_i8"
+      "KernelParityX86/ReluInt8MatchesScalarBitwise"
     ],
     "scale/fp32/none/arm_neon": [
       "KernelParityScaleNeon/Fp32MatchesScalarBitwise"
     ],
     "scale/fp32/none/rvv": [
-      "kernel_parity/scale_rvv_fp32"
+      "KernelParityRvv/ScaleFp32MatchesScalarBitwise"
     ],
     "scale/fp32/none/scalar": [
       "KernelParityScale/ScalarFp32MatchesDoubleReference"
     ],
     "scale/fp32/none/x86": [
-      "kernel_parity/scale_x86_fp32"
+      "KernelParityX86/ScaleFp32MatchesScalarBitwise"
     ],
     "sum/fp32/none/arm_neon": [
       "KernelParitySumNeon/Fp32WithinTheFloatWindow"
     ],
     "sum/fp32/none/rvv": [
-      "kernel_parity/sum_rvv_fp32_window"
+      "KernelParityRvv/SumFp32WithinTheFloatWindow"
     ],
     "sum/fp32/none/scalar": [
       "KernelParitySum/ScalarFp32MatchesDoubleReference"
     ],
     "sum/fp32/none/x86": [
-      "kernel_parity/sum_x86_fp32_window"
+      "KernelParityX86/SumFp32WithinTheFloatWindow"
     ]
   }
 }

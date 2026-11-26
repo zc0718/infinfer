@@ -74,7 +74,7 @@ const std::uint32_t kLengths[] = {0U, 1U, 3U, 4U, 5U, 7U, 16U, 17U, 64U, 257U};
 
 }  // namespace
 
-TEST(kernel_parity, add_rvv_fp32) {
+TEST(KernelParityRvv, AddFp32MatchesScalarBitwise) {
     Pair pair = {};
     if (!resolve_pair("add", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -105,7 +105,7 @@ TEST(kernel_parity, add_rvv_fp32) {
     }
 }
 
-TEST(kernel_parity, scale_rvv_fp32) {
+TEST(KernelParityRvv, ScaleFp32MatchesScalarBitwise) {
     Pair pair = {};
     if (!resolve_pair("scale", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -141,7 +141,7 @@ TEST(kernel_parity, scale_rvv_fp32) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, pair.scalar->fn(no_factor, out_ptr, 4U, nullptr));
 }
 
-TEST(kernel_parity, relu_rvv_fp32) {
+TEST(KernelParityRvv, ReluFp32MatchesScalarBitwise) {
     Pair pair = {};
     if (!resolve_pair("relu", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -170,7 +170,7 @@ TEST(kernel_parity, relu_rvv_fp32) {
     }
 }
 
-TEST(kernel_parity, max_rvv_fp32) {
+TEST(KernelParityRvv, MaxFp32MatchesScalarBitwise) {
     Pair pair = {};
     if (!resolve_pair("max", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -201,7 +201,7 @@ TEST(kernel_parity, max_rvv_fp32) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, pair.scalar->fn(inputs, out_ptr, 0U, nullptr));
 }
 
-TEST(kernel_parity, fc_rvv_fp32_window) {
+TEST(KernelParityRvv, FcFp32MatchesScalarWithinAFloatWindow) {
     Pair pair = {};
     if (!resolve_pair("fc", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -225,7 +225,7 @@ TEST(kernel_parity, fc_rvv_fp32_window) {
     }
 }
 
-TEST(kernel_parity, sum_rvv_fp32_window) {
+TEST(KernelParityRvv, SumFp32WithinTheFloatWindow) {
     Pair pair = {};
     if (!resolve_pair("sum", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -249,7 +249,7 @@ TEST(kernel_parity, sum_rvv_fp32_window) {
     }
 }
 
-TEST(kernel_parity, relu_rvv_i8) {
+TEST(KernelParityRvv, ReluInt8MatchesScalarBitwise) {
     EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
     EXPECT_EQ(INFR_OK, infr_kernel_register_rvv());
     const infr_kernel_desc* scalar =

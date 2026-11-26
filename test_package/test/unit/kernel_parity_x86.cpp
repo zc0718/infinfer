@@ -50,11 +50,11 @@ const infr_kernel_desc* tier_row(const char* name, infr_tier tier) {
 }
 
 // Registers both tiers and returns the pair, or nullptr with a skip when this build has no
-// vector extension -- the RVV row is a capability of the build, so its absence is a skip
+// vector extension -- the x86 row is a capability of the build, so its absence is a skip
 // and not a failure.
 struct Pair {
     const infr_kernel_desc* scalar;
-    const infr_kernel_desc* rvv;
+    const infr_kernel_desc* vector;
 };
 
 // Reports whether this build has the tier, and fills both rows. The skip itself has to be
@@ -64,9 +64,9 @@ bool resolve_pair(const char* name, Pair* out) {
     EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
     EXPECT_EQ(INFR_OK, infr_kernel_register_x86());
     out->scalar = tier_row(name, INFR_TIER_SCALAR);
-    out->rvv = tier_row(name, INFR_TIER_X86);
+    out->vector = tier_row(name, INFR_TIER_X86);
     EXPECT_NE(nullptr, out->scalar) << name << "/fp32/none/scalar is not registered";
-    return out->rvv != nullptr;
+    return out->vector != nullptr;
 }
 
 constexpr const char* kNoVector = "no SSE2 in this build: the x86 row is absent by design";
@@ -75,7 +75,7 @@ const std::uint32_t kLengths[] = {0U, 1U, 3U, 4U, 5U, 7U, 16U, 17U, 64U, 257U};
 
 }  // namespace
 
-TEST(kernel_parity, add_x86_fp32) {
+TEST(KernelParityX86, AddFp32MatchesScalarBitwise) {
     Pair pair = {};
     if (!resolve_pair("add", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -98,7 +98,7 @@ TEST(kernel_parity, add_x86_fp32) {
         void* want_out[1] = {want.data()};
         void* got_out[1] = {got.data()};
         ASSERT_EQ(INFR_OK, pair.scalar->fn(inputs, want_out, n, nullptr));
-        ASSERT_EQ(INFR_OK, pair.rvv->fn(inputs, got_out, n, nullptr));
+        ASSERT_EQ(INFR_OK, pair.vector->fn(inputs, got_out, n, nullptr));
         for (std::uint32_t i = 0; i < n; ++i) {
             EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i]))
                 << "element " << i << " of " << n;
@@ -106,7 +106,7 @@ TEST(kernel_parity, add_x86_fp32) {
     }
 }
 
-TEST(kernel_parity, scale_x86_fp32) {
+TEST(KernelParityX86, ScaleFp32MatchesScalarBitwise) {
     Pair pair = {};
     if (!resolve_pair("scale", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -126,7 +126,7 @@ TEST(kernel_parity, scale_x86_fp32) {
             void* want_out[1] = {want.data()};
             void* got_out[1] = {got.data()};
             ASSERT_EQ(INFR_OK, pair.scalar->fn(inputs, want_out, n, nullptr));
-            ASSERT_EQ(INFR_OK, pair.rvv->fn(inputs, got_out, n, nullptr));
+            ASSERT_EQ(INFR_OK, pair.vector->fn(inputs, got_out, n, nullptr));
             for (std::uint32_t i = 0; i < n; ++i) {
                 EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i]))
                     << "element " << i << " of " << n << " with factor " << factor;
@@ -138,11 +138,11 @@ TEST(kernel_parity, scale_x86_fp32) {
     std::vector<float> out(4, 0.0F);
     const void* no_factor[2] = {a.data(), nullptr};
     void* out_ptr[1] = {out.data()};
-    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, pair.rvv->fn(no_factor, out_ptr, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, pair.vector->fn(no_factor, out_ptr, 4U, nullptr));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, pair.scalar->fn(no_factor, out_ptr, 4U, nullptr));
 }
 
-TEST(kernel_parity, relu_x86_fp32) {
+TEST(KernelParityX86, ReluFp32MatchesScalarBitwise) {
     Pair pair = {};
     if (!resolve_pair("relu", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -163,7 +163,7 @@ TEST(kernel_parity, relu_x86_fp32) {
         void* want_out[1] = {want.data()};
         void* got_out[1] = {got.data()};
         ASSERT_EQ(INFR_OK, pair.scalar->fn(inputs, want_out, n, nullptr));
-        ASSERT_EQ(INFR_OK, pair.rvv->fn(inputs, got_out, n, nullptr));
+        ASSERT_EQ(INFR_OK, pair.vector->fn(inputs, got_out, n, nullptr));
         for (std::uint32_t i = 0; i < n; ++i) {
             EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i]))
                 << "element " << i << " of " << n;
@@ -171,7 +171,7 @@ TEST(kernel_parity, relu_x86_fp32) {
     }
 }
 
-TEST(kernel_parity, max_x86_fp32) {
+TEST(KernelParityX86, MaxFp32MatchesScalarBitwise) {
     Pair pair = {};
     if (!resolve_pair("max", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -191,18 +191,18 @@ TEST(kernel_parity, max_x86_fp32) {
         void* want_out[1] = {&want};
         void* got_out[1] = {&got};
         ASSERT_EQ(INFR_OK, pair.scalar->fn(inputs, want_out, n, nullptr));
-        ASSERT_EQ(INFR_OK, pair.rvv->fn(inputs, got_out, n, nullptr));
+        ASSERT_EQ(INFR_OK, pair.vector->fn(inputs, got_out, n, nullptr));
         EXPECT_EQ(infr_test::float_bits(want), infr_test::float_bits(got)) << "length " << n;
     }
 
     float out = 0.0F;
     const void* inputs[1] = {a.data()};
     void* out_ptr[1] = {&out};
-    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, pair.rvv->fn(inputs, out_ptr, 0U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, pair.vector->fn(inputs, out_ptr, 0U, nullptr));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, pair.scalar->fn(inputs, out_ptr, 0U, nullptr));
 }
 
-TEST(kernel_parity, fc_x86_fp32_window) {
+TEST(KernelParityX86, FcFp32MatchesScalarWithinAFloatWindow) {
     Pair pair = {};
     if (!resolve_pair("fc", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -218,7 +218,7 @@ TEST(kernel_parity, fc_x86_fp32_window) {
         void* want_out[1] = {&want};
         void* got_out[1] = {&got};
         ASSERT_EQ(INFR_OK, pair.scalar->fn(inputs, want_out, n, nullptr));
-        ASSERT_EQ(INFR_OK, pair.rvv->fn(inputs, got_out, n, nullptr));
+        ASSERT_EQ(INFR_OK, pair.vector->fn(inputs, got_out, n, nullptr));
         if (n == 0U) {
             EXPECT_EQ(infr_test::float_bits(0.0F), infr_test::float_bits(got));
         }
@@ -226,7 +226,7 @@ TEST(kernel_parity, fc_x86_fp32_window) {
     }
 }
 
-TEST(kernel_parity, sum_x86_fp32_window) {
+TEST(KernelParityX86, SumFp32WithinTheFloatWindow) {
     Pair pair = {};
     if (!resolve_pair("sum", &pair)) {
         GTEST_SKIP() << kNoVector;
@@ -242,7 +242,7 @@ TEST(kernel_parity, sum_x86_fp32_window) {
         void* want_out[1] = {&want};
         void* got_out[1] = {&got};
         ASSERT_EQ(INFR_OK, pair.scalar->fn(inputs, want_out, n, nullptr));
-        ASSERT_EQ(INFR_OK, pair.rvv->fn(inputs, got_out, n, nullptr));
+        ASSERT_EQ(INFR_OK, pair.vector->fn(inputs, got_out, n, nullptr));
         if (n == 0U) {
             EXPECT_EQ(infr_test::float_bits(0.0F), infr_test::float_bits(got));
         }
@@ -250,7 +250,7 @@ TEST(kernel_parity, sum_x86_fp32_window) {
     }
 }
 
-TEST(kernel_parity, relu_x86_i8) {
+TEST(KernelParityX86, ReluInt8MatchesScalarBitwise) {
     EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
     EXPECT_EQ(INFR_OK, infr_kernel_register_x86());
     const infr_kernel_desc* scalar =
@@ -297,7 +297,7 @@ TEST(kernel_parity, relu_x86_i8) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(no_input, out_ptr, 4U, nullptr));
 }
 
-TEST(kernel_parity, fc_x86_i8) {
+TEST(KernelParityX86, FcInt8MatchesScalarBitwise) {
     EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
     EXPECT_EQ(INFR_OK, infr_kernel_register_x86());
     const infr_kernel_desc* scalar =
@@ -357,7 +357,7 @@ TEST(kernel_parity, fc_x86_i8) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, &unresolved));
 }
 
-TEST(kernel_parity, fc_x86_i16) {
+TEST(KernelParityX86, FcInt16MatchesScalarBitwise) {
     EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
     EXPECT_EQ(INFR_OK, infr_kernel_register_x86());
     const infr_kernel_desc* scalar =
