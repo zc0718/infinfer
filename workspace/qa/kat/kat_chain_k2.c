@@ -5,7 +5,9 @@
 #include <infinfer/infinfer.h>
 
 #include "kat_chain_k2.h"
+#include "blob_graph.h"
 #include "generated/kat_k2_model.h"
+#include "generated/kat_k2_blob.h"
 // Conan::ImportEnd
 
 /*!
@@ -246,6 +248,29 @@ int kat_k2_run(kat_k2_result *result) {
         result->out[oc] = acc + kat_k2_fc_b[oc];
     }
     K2_STAGE_CUT(12);
+
+    /* Second pass: the **same bytes** the host gtest reads, driven by the blob's own
+     * node table. The hand-written path above is the independent re-spelling, so
+     * requiring the two to be bitwise equal on every target is the whole point of
+     * this chain -- and it is the evidence a host-only test cannot give.
+     *
+     * 第二遍：与宿主 gtest 读的**同一批字节**，由 blob 自己的节点表驱动。上面手写的路径
+     * 就是独立重述，所以要求两者在每个目标上逐位相等，正是这条链的意义——也是只跑宿主的
+     * 测试给不出的证据。 */
+    {
+        static float arena[4096];
+        kat_blob_view view;
+        int blob_status;
+        blob_status = kat_blob_run(kat_k2_blob, KAT_K2_BLOB_LEN, kat_k2_input,
+                                   (uint32_t)(K2_IN_H * K2_IN_W * K2_IN_C), arena,
+                                   (uint32_t)(sizeof arena / sizeof arena[0]), &workspace, &view);
+        if (blob_status != KAT_BLOB_OK) {
+            return blob_status;
+        }
+        if (view.out_len != K2_FC_OC || memcmp(view.out, result->out, K2_FC_OC * sizeof(float)) != 0) {
+            return KAT_BLOB_ERR_MISMATCH;
+        }
+    }
 
     /* The scratch has to be back where it started: a graph whose operators leak
      * workspace runs out of memory after enough layers, not after one. */

@@ -53,7 +53,7 @@ CHAINS_NEEDING_CPP = {"k2"}
 CHAIN_SOURCES = {
     "k0": [HERE / "kat_chain.c"],
     "k1": [HERE / "kat_chain_k1.c"],
-    "k2": [HERE / "kat_chain_k2.c"],
+    "k2": [HERE / "kat_chain_k2.c", HERE / "blob_graph.c"],
     "k3": [HERE / "kat_chain_k3.c"],
 }
 CHAIN_FLAGS = {"k0": [], "k1": ["-DKAT_CHAIN_K1"], "k2": ["-DKAT_CHAIN_K2"], "k3": ["-DKAT_CHAIN_K3"]}
@@ -248,10 +248,21 @@ def variants_of(board):
 
 
 def emit_k2_model_header():
+    """Both k2 generated headers: the weights/input the hand-written chain bakes in,
+    and the blob image the executor parses.
+
+    They come from one file apiece and one file only -- the blob -- so a model change
+    cannot land on one path and miss the other. 两个头都只从一个来源（blob）生成，
+    所以模型改动不可能只落在一条路径上。
+    """
     run([sys.executable, ROOT / "workspace/qa/prep/emit_k2_model_header.py",
          ROOT / "test_package/resources/kat/k2_conv_micro/model.blob",
          ROOT / "test_package/resources/kat/k2_conv_micro/input.bin",
          GENERATED / "kat_k2_model.h"])
+    run([sys.executable, ROOT / "workspace/qa/prep/emit_blob_image.py",
+         "--name", "kat_k2_blob",
+         ROOT / "test_package/resources/kat/k2_conv_micro/model.blob",
+         GENERATED / "kat_k2_blob.h"])
 
 
 def build_host_emit(cc, chain):
