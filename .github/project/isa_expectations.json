@@ -126,6 +126,12 @@
         "measured": 30,
         "what": "int16 dot: widening multiply then int64 accumulate"
       },
+      "src/kernel/arm_neon/fc_i8.c": {
+        "tier": "arm_neon",
+        "min_packed": 1,
+        "measured": 13,
+        "what": "int8 dot: vmull_s8 + vpadalq_s16, int32 accumulate"
+      },
       "src/kernel/arm_neon/quant.c": {
         "tier": "arm_neon",
         "min_packed": 1,
@@ -179,6 +185,12 @@
         "min_packed": 1,
         "measured": 19,
         "what": "int16 dot: e16m1 -> e32m2 -> e64m4, exact int64 lanes"
+      },
+      "src/kernel/rvv/fc_i8.c": {
+        "tier": "rvv",
+        "min_packed": 1,
+        "measured": 16,
+        "what": "int8 dot: e8m1 -> e16m2 then vwmacc into int32"
       },
       "src/kernel/rvv/quant.c": {
         "tier": "rvv",

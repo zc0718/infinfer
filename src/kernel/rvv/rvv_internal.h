@@ -112,4 +112,16 @@ infr_status infr_rvv_dequantize_i8(const void *const *inputs, void *const *outpu
 infr_status infr_rvv_fc_i16(const void *const *inputs, void *const *outputs, uint32_t element_count,
                             const infr_quant *quant);
 
+/**
+ * @brief [en] int8 dot product with an int32 accumulator (widen to int16, then `vwmacc`).
+ * @brief [zh] int32 累加的 int8 点积（先加宽到 int16，再 `vwmacc`）。
+ * @note [en] `vmacc.vv` on int8 lanes would wrap immediately; the product of two int8 values is
+ *            exact in int16, which is what makes the widening form both correct and cheap.
+ * @note [zh] 在 int8 车道上 `vmacc.vv` 会立刻回绕；两个 int8 的乘积在 int16 里是精确的，这正是
+ *            加宽写法既正确又便宜的原因。
+ * @since 0.1.0
+ */
+infr_status infr_rvv_fc_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                           const infr_quant *quant);
+
 #endif /* INFR_SRC_KERNEL_RVV_INTERNAL_H */

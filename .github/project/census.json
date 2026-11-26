@@ -52,6 +52,12 @@
     "fc/int8/tensor/arm_m": [
       "KernelParityFcArmM/Int8MatchesScalarBitwise"
     ],
+    "fc/int8/tensor/arm_neon": [
+      "KernelParityFcNeon/Int8MatchesScalarBitwise"
+    ],
+    "fc/int8/tensor/rvv": [
+      "KernelParityRvv/FcInt8MatchesScalarBitwise"
+    ],
     "fc/int8/tensor/scalar": [
       "KernelParityFcInt8/ScalarInt8MatchesDefinition"
     ],

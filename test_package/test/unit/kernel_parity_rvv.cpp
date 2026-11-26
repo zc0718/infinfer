@@ -459,3 +459,56 @@ TEST(KernelParityRvv, FcInt16MatchesScalarBitwise) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, nullptr));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, nullptr));
 }
+
+// Census cell: fc/int8/tensor/rvv.
+//
+// `vmacc.vv` on int8 lanes is the instruction that looks right and wraps
+// immediately, so the body widens to int16 first: the product of two int8 values
+// is exact there, and `vwmacc` then accumulates into the reference's int32.
+TEST(KernelParityRvv, FcInt8MatchesScalarBitwise) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_rvv());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* row =
+        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_RVV);
+    ASSERT_NE(nullptr, scalar) << "fc/int8/tensor/scalar is not registered";
+    if (row == nullptr) {
+        GTEST_SKIP() << kNoVector;
+    }
+
+    const std::uint32_t lengths[] = {0U, 1U, 3U, 7U, 8U, 9U, 15U, 16U, 17U, 64U, 257U};
+    std::vector<std::int8_t> x(257);
+    std::vector<std::int8_t> w(257);
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        x[i] = static_cast<std::int8_t>(static_cast<int>((i * 37U) % 255U) - 127);
+        w[i] = static_cast<std::int8_t>(static_cast<int>((i * 91U + 7U) % 255U) - 127);
+    }
+    x[0] = INT8_MIN;
+    w[0] = INT8_MIN;
+    x[1] = INT8_MAX;
+    w[1] = INT8_MIN;
+    x[2] = -1;
+    w[2] = INT8_MIN;
+
+    infr_quant quant = {};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 1.0F;
+    quant.zero_point = 3;
+    quant.requant_multiplier = 1.0e-3F; /* the corpus accumulates to ~1e5, so 1e-3 keeps the result in range while staying sensitive */
+    const void* inputs[2] = {x.data(), w.data()};
+    for (std::uint32_t n : lengths) {
+        std::int8_t want = 0;
+        std::int8_t got = 0;
+        void* want_out[1] = {&want};
+        void* got_out[1] = {&got};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, &quant));
+        ASSERT_EQ(INFR_OK, row->fn(inputs, got_out, n, &quant));
+        EXPECT_EQ(static_cast<int>(want), static_cast<int>(got)) << "length " << n;
+    }
+
+    std::int8_t out = 0;
+    void* out_ptr[1] = {&out};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, nullptr));
+}

@@ -48,7 +48,9 @@ kernels:
       # Per-pair: two declared pairs, one built -- a flat `done` would claim int8/none.
       x86: { fp32/none: done, int8/none: done }
       arm_neon: { fp32/none: done, int8/none: done }
-      arm_m: todo
+      # Per-pair: the DSP extension does have 8-bit SIMD ops (`USAD8`/`SEL` class), so int8 has a
+      # real lever and stays `todo`; fp32 has none on a nofp profile (gaps G-79).
+      arm_m: { fp32/none: na, int8/none: todo }
       rvv: { fp32/none: done, int8/none: done }
     grad: todo
   fc:
@@ -58,8 +60,13 @@ kernels:
     # Per-pair on purpose (gaps G-51): the DSP path is the dot product, and it
     # exists for both quantized element types -- int8 with packed lanes, int16
     # natively (`SMLALD` into a 64-bit accumulator), which is the shape the
-    # extension was designed for. fp32/arm_m is `todo`, not `na` -- it is
-    # unbuilt, and on this profile it has no FPU to be built on.
+      # extension was designed for.
+      #
+      # fp32/arm_m is `na`, decided 2026-11-26 (gaps G-79): the board profiles in
+      # this matrix build with the `thumb/v7e-m/nofp` multilib, so fp32 there is
+      # soft-float and a hand-written body has no instruction to reach for. The one
+      # lever the M7 has is scalar FMA, and using it changes the rounding of a
+      # reduction -- a different function, not a faster implementation of this one.
     tiers:
       scalar: done
       autovec: na
@@ -69,9 +76,9 @@ kernels:
       # Per-pair (gaps G-51): the NEON row is the fp32 dot product. The quantized
       # pairs stay open -- int8 has a DSP path on Cortex-M and no NEON row yet, and a
       # flat `done` here would claim them.
-      arm_neon: { fp32/none: done, int8/tensor: todo, int16/tensor: done }
-      arm_m: { fp32/none: todo, int8/tensor: done, int16/tensor: done }
-      rvv: { fp32/none: done, int8/tensor: todo, int16/tensor: done }
+      arm_neon: { fp32/none: done, int8/tensor: done, int16/tensor: done }
+      arm_m: { fp32/none: na, int8/tensor: done, int16/tensor: done }
+      rvv: { fp32/none: done, int8/tensor: done, int16/tensor: done }
     grad: todo
   quantize:
     tflite: [QUANTIZE]
@@ -80,7 +87,7 @@ kernels:
     # `arm_neon` stays `todo` on purpose: the reference divides, and AArch32 NEON has no IEEE
     # float divide, so a reciprocal body would be a different function -- and the claim is per
     # tier, not per build. See src/kernel/arm_neon/quant.c and gaps G-77.
-    tiers: { scalar: done, autovec: na, arm_neon: todo, arm_m: todo, rvv: done }
+    tiers: { scalar: done, autovec: na, arm_neon: todo, arm_m: na, rvv: done }
     grad: no-grad
     grad_why: >-
       quantisation is a step function, so a derivative needs a straight-through estimator,
@@ -90,7 +97,7 @@ kernels:
     tflite: [DEQUANTIZE]
     onnx: [{op: DequantizeLinear}]
     dtype_quant: [[int8, tensor]]
-    tiers: { scalar: done, autovec: na, arm_neon: done, arm_m: todo, rvv: done }
+    tiers: { scalar: done, autovec: na, arm_neon: done, arm_m: na, rvv: done }
     grad: no-grad
     grad_why: >-
       the same step function in reverse: attributing a gradient to a quantised code is the
@@ -99,19 +106,19 @@ kernels:
     tflite: [ADD]
     onnx: [{op: Add}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: todo, rvv: done }
+    tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: na, rvv: done }
     grad: todo
   sum:
     tflite: [SUM]
     onnx: [{op: ReduceSum}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: todo, rvv: done }
+    tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: na, rvv: done }
     grad: todo
   scale:
     tflite: [MUL]
     onnx: [{op: Mul, where: "one operand is a scalar"}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: todo, rvv: done }
+    tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: na, rvv: done }
     grad: todo
   max:
     tflite: [REDUCE_MAX]
@@ -119,7 +126,7 @@ kernels:
     dtype_quant: [[fp32, none]]
     # Flat on purpose: the kernel declares one pair, so a kernel-level `done` claims
     # exactly that one pair and nothing else.
-    tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: todo, rvv: done }
+    tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: na, rvv: done }
     grad: no-grad
     grad_why: >-
       this reduce-max returns the value, not the index, so a subgradient has no target to

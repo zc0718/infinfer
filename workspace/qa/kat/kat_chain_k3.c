@@ -127,17 +127,34 @@ static void build_corpus(void) {
     g_factor = 1.75f;
 }
 
-/* The quantised dot product is compared under two parameter sets: one that keeps the result inside
- * the dtype (so the verdict is about arithmetic) and one that saturates it (so the verdict is also
- * about the clamp). The saturation corners themselves are pinned exactly by the host unit tests
+/* Two parameter sets per dtype: one that keeps the result inside the dtype (so the verdict is about
+ * arithmetic) and one that saturates it (so the verdict is also about the clamp). The saturation
+ * corners themselves are pinned exactly by the host unit tests
  * (`KernelParityFcInt8/AppliesMultiplierAndZeroPointThenClamps`); what this adds is that both tiers
  * saturate **the same way** on the same target.
  *
- * 量化点积用两组参数比较：一组让结果落在 dtype 内（判的是算术），一组直接饱和（判的还有钳位）。
- * 饱和角本身由宿主单测精确钉住（`KernelParityFcInt8/...`）；这里补的是两个档位在**同一目标上**
- * **以同样方式**饱和。 */
-static const float k3_multipliers[] = {1.0e-6f, 1.0e6f};
-#define K3_MULT_COUNT (sizeof k3_multipliers / sizeof k3_multipliers[0])
+ * The first multiplier is chosen from the corpus, not by taste. This chain's int8 dot accumulates
+ * 0..63,344 and the int16 one 0..1.35e10, so 1e-3 and 1e-8 map those ranges onto the int8/int16
+ * ranges with resolution. The earlier value of 1e-6 for **both** made the comparison blind: a
+ * structural error of 168,962 in the int8 accumulator still rounded to the same byte (3), which is
+ * how a deliberately broken arm_neon body first passed here. A comparison that cannot see a 169k
+ * difference is not a comparison.
+ *
+ * 每种 dtype 两组参数：一组让结果落在 dtype 内（判算术），一组直接饱和（判钳位）。饱和角本身由宿主
+ * 单测精确钉住（`KernelParityFcInt8/...`）；这里补的是两个档位在**同一目标上以同样方式**饱和。
+ * 第一个乘数是**按语料量出来的**，不是随手取的：本链 int8 点积累积到 0..63,344、int16 到 0..1.35e10，
+ * 1e-3 与 1e-8 把这些范围映射进 int8/int16 且保有分辨率。原先两者都用 1e-6，比较是**瞎的**：
+ * int8 累积器上 168,962 的结构性误差仍然舍入到同一个字节（3）——这正是我故意写坏的 arm_neon
+ * 体第一次在这里通过的原因。看不出 16.9 万差异的比较不算比较。 */
+static const float k3_multipliers_int8[2] = {1.0e-3f, 1.0e6f};
+static const float k3_multipliers_int16[2] = {1.0e-8f, 1.0e6f};
+#define K3_MULT_COUNT 2u
+
+static float k3_multiplier_for(infr_dtype dtype, unsigned pass) {
+    /* fp32 conversions (`quantize`) take the fp32 row of the int8 table: their scales are applied to
+     * O(1) inputs, not to an accumulator, so 1e-3 and 1e6 bracket the useful range the same way. */
+    return (dtype == INFR_DTYPE_I16) ? k3_multipliers_int16[pass] : k3_multipliers_int8[pass];
+}
 
 static void fill_quant(infr_quant *q, float multiplier) {
     q->kind = INFR_QUANT_PER_TENSOR;
@@ -189,9 +206,7 @@ static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, cons
                           : 1u;
     unsigned pass;
     for (pass = 0; pass < passes; ++pass) {
-        /* The quantised cells read multiplier and zero point; `K3_MULT_COUNT` is the same table for
-         * all of them, so scale and zero point follow the pass index. */
-        fill_quant(&q, k3_multipliers[pass]);
+        fill_quant(&q, k3_multiplier_for(cell->dtype, pass));
 
         switch (cell->call) {
         case KAT_K3_CALL_BINARY:

@@ -98,3 +98,16 @@ infr_status infr_arm_neon_dequantize_i8(const void *const *inputs, void *const *
  */
 infr_status infr_arm_neon_fc_i16(const void *const *inputs, void *const *outputs, uint32_t element_count,
                                  const infr_quant *quant);
+
+/**
+ * @brief [en] int8 dot product with an int32 accumulator, bitwise identical to the reference.
+ * @brief [zh] int32 累加的 int8 点积，与参考实现逐位相同。
+ * @note [en] No dot-product instruction is needed: `vmull_s8` + `vpadalq_s16` reach the same exact
+ *            integer sum on both AArch32 and AArch64, so unlike `quantize` this cell can be claimed
+ *            for the whole tier.
+ * @note [zh] 不需要点积指令：`vmull_s8` + `vpadalq_s16` 在 AArch32 与 AArch64 上都能得到同一个
+ *            精确整数和，所以与 `quantize` 不同，这一格可以按整个档位声称。
+ * @since 0.1.0
+ */
+infr_status infr_arm_neon_fc_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                const infr_quant *quant);
