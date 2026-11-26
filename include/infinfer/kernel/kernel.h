@@ -502,6 +502,26 @@ infr_status infr_kernel_register_arm_m(void);
 infr_status infr_kernel_register_arm_neon(void);
 
 /**
+ * @brief [en] Register the RISC-V Vector tier rows this build actually contains.
+ * @brief [zh] 注册本次构建真正包含的 RISC-V Vector 档位行。
+ * @return [en] INFR_OK when every row registered (including the empty case).
+ * @return [zh] 全部登记成功时返回 INFR_OK（空集也算成功）。
+ * @note [en] Same posture as the DSP and NEON tiers: the tier is a capability of the build.
+ *            GCC defines `__riscv_vector` only for `-march=...v...`, so a build without the
+ *            extension registers nothing and `infr_kernel_find` reports the absence.
+ * @note [zh] 与 DSP、NEON 档位同一姿态：档位是构建能力。GCC 只在 `-march=...v...` 时定义
+ *            `__riscv_vector`，没有该扩展的构建什么都不登记，缺席由 `infr_kernel_find`
+ *            如实报出。
+ * @note [en] As on NEON, the two fp32 reductions (dot product and sum) are **not**
+ *            bit-identical to the reference: one running float became one partial sum per
+ *            lane. The four elementwise kernels are. The parity harness draws that line.
+ * @note [zh] 与 NEON 一样，两个 fp32 归约（点积与求和）**不是**逐位相同：一条流水 float 变成了
+ *            每个车道一条部分和。四个逐元素内核则是。这条界线由 parity 骨架画出。
+ * @since 0.1.0
+ */
+infr_status infr_kernel_register_rvv(void);
+
+/**
  * @brief [en] Stable, non-NULL name of a status code (safe in log format strings).
  * @brief [zh] 状态码的稳定非空名称（可安全用于日志格式串）。
  * @param status [en] Status code.

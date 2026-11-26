@@ -47,7 +47,7 @@ kernels:
       autovec: todo
       arm_neon: { fp32/none: done, int8/none: todo }
       arm_m: todo
-      rvv: todo
+      rvv: { fp32/none: done, int8/none: todo }
     grad: todo
   fc:
     tflite: [FULLY_CONNECTED]
@@ -66,7 +66,7 @@ kernels:
       # flat `done` here would claim them.
       arm_neon: { fp32/none: done, int8/tensor: todo, int16/tensor: todo }
       arm_m: { fp32/none: todo, int8/tensor: done, int16/tensor: done }
-      rvv: todo
+      rvv: { fp32/none: done, int8/tensor: todo, int16/tensor: todo }
     grad: todo
   quantize:
     tflite: [QUANTIZE]
@@ -84,19 +84,19 @@ kernels:
     tflite: [ADD]
     onnx: [{op: Add}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: todo }
+    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: done }
     grad: todo
   sum:
     tflite: [SUM]
     onnx: [{op: ReduceSum}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: todo }
+    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: done }
     grad: todo
   scale:
     tflite: [MUL]
     onnx: [{op: Mul, where: "one operand is a scalar"}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: todo }
+    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: done }
     grad: todo
   max:
     tflite: [REDUCE_MAX]
@@ -104,7 +104,7 @@ kernels:
     dtype_quant: [[fp32, none]]
     # Flat on purpose: the kernel declares one pair, so a kernel-level `done` claims
     # exactly that one pair and nothing else.
-    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: todo }
+    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: done }
     grad: no-grad
 composed:
   conv2d:
