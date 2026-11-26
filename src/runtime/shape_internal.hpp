@@ -25,11 +25,16 @@ namespace infr_detail {
 /**
  * @brief [en] Output extent for a strided window with symmetric zero padding (floor).
  * @brief [zh] 带对称零填充的滑动窗口输出长度（向下取整）。
- * @param [in] in Input extent along this axis.
- * @param [in] kernel Window extent; 0 is rejected.
- * @param [in] pad Padding on each side.
- * @param [in] stride Step between windows; 0 is rejected.
- * @param [out] out Receives the extent; untouched on failure.
+ * @param in [en] Input extent along this axis.
+ * @param in [zh] 该轴上的输入长度。
+ * @param kernel [en] Window extent; 0 is rejected.
+ * @param kernel [zh] 窗口长度；0 被拒绝。
+ * @param pad [en] Padding on each side.
+ * @param pad [zh] 每侧的填充量。
+ * @param stride [en] Step between windows; 0 is rejected.
+ * @param stride [zh] 相邻窗口的步长；0 被拒绝。
+ * @param out [en] Receives the extent; untouched on failure.
+ * @param out [zh] 接收输出长度；失败时不改动。
  * @return INFR_OK, or INFR_ERR_INVALID_ARGUMENT when the window cannot fit at all.
  * @note [en] The window may hang off the *end* (floor drops the partial one) but may
  *            not be longer than the padded input: that case has no output at all and
@@ -54,7 +59,8 @@ inline infr_status out_extent(uint32_t in, uint32_t kernel, uint32_t pad, uint32
  * @brief [en] Whether a tensor is fp32 and unquantized -- the only dtype the L2
  *            operators currently promise.
  * @brief [zh] 张量是否为 fp32 且未量化——这是 L2 算子目前唯一承诺的类型。
- * @param [in] tensor Tensor to inspect; must not be NULL.
+ * @param tensor [en] Tensor to inspect; must not be NULL.
+ * @param tensor [zh] 要检查的张量；不得为 NULL。
  * @return True when `dtype == INFR_DTYPE_F32` and `quant.kind == INFR_QUANT_NONE`.
  * @since 0.1.0
  */

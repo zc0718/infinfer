@@ -103,9 +103,12 @@ typedef struct infr_conv2d_params {
 /**
  * @brief [en] Output shape of a convolution, so callers do not re-derive it.
  * @brief [zh] 卷积的输出形状，免得每个调用方自己再推一遍。
- * @param [in] params Geometry; must not be NULL.
- * @param [in] input_shape Rank-4 NHWC input descriptor; must not be NULL.
- * @param [out] out_shape Receives `[1, out_h, out_w, out_channels]`.
+ * @param params [en] Geometry; must not be NULL.
+ * @param params [zh] 几何参数；不得为 NULL。
+ * @param input_shape [en] Rank-4 NHWC input descriptor; must not be NULL.
+ * @param input_shape [zh] 4 维 NHWC 输入描述符；不得为 NULL。
+ * @param out_shape [en] Receives `[1, out_h, out_w, out_channels]`.
+ * @param out_shape [zh] 接收 `[1, out_h, out_w, out_channels]`。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for a NULL argument, a rank other
  *         than 4, a zero stride, or a filter larger than the padded input.
  * @note [en] The extent arithmetic lives in one place because getting it wrong is
@@ -121,13 +124,18 @@ infr_status infr_conv2d_output_shape(const infr_conv2d_params *params, const inf
 /**
  * @brief [en] fp32 convolution (dense or depthwise) over an NHWC tensor.
  * @brief [zh] 在 NHWC 张量上做 fp32 卷积（普通或逐通道）。
- * @param [in] input Rank-4 NHWC input, `[1, in_h, in_w, in_channels]`.
- * @param [in] filter OHWI filter, `[out_channels, kernel_h, kernel_w, in_channels/groups]`.
- * @param [in] bias `out_channels` per-channel offsets, or NULL for none.
- * @param [in] params Geometry; `in_channels`/`out_channels` must match the tensors.
- * @param [in,out] output Rank-4 NHWC output whose shape must already equal
- *                 `infr_conv2d_output_shape`; the data is overwritten.
- * @param [in,out] workspace Scratch source; rewound before returning, on every path.
+ * @param input [en] Rank-4 NHWC input, `[1, in_h, in_w, in_channels]`.
+ * @param input [zh] 4 维 NHWC 输入，`[1, in_h, in_w, in_channels]`。
+ * @param filter [en] OHWI filter, `[out_channels, kernel_h, kernel_w, in_channels/groups]`.
+ * @param filter [zh] OHWI 滤波器，`[out_channels, kernel_h, kernel_w, in_channels/groups]`。
+ * @param bias [en] `out_channels` per-channel offsets, or NULL for none.
+ * @param bias [zh] `out_channels` 个逐通道偏移；不使用时为 NULL。
+ * @param params [en] Geometry; `in_channels`/`out_channels` must match the tensors.
+ * @param params [zh] 几何参数；`in_channels`/`out_channels` 必须与张量一致。
+ * @param output [en] Rank-4 NHWC output whose shape must already equal `infr_conv2d_output_shape`; the data is overwritten.
+ * @param output [zh] 4 维 NHWC 输出，其形状必须已等于 `infr_conv2d_output_shape`；数据会被覆盖。
+ * @param workspace [en] Scratch source; rewound before returning, on every path.
+ * @param workspace [zh] 临时空间来源；任何返回路径上都会先回退。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, mismatched shapes,
  *         or a filter larger than the padded input; INFR_ERR_UNSUPPORTED for a dtype,
  *         quantisation or grouping outside the stated subset;
@@ -191,9 +199,12 @@ typedef struct infr_pool_params {
 /**
  * @brief [en] Output shape of a pooling operator.
  * @brief [zh] 池化算子的输出形状。
- * @param [in] params Window geometry; must not be NULL.
- * @param [in] input_shape Rank-4 NHWC input descriptor; must not be NULL.
- * @param [out] out_shape Receives `[1, out_h, out_w, channels]`.
+ * @param params [en] Window geometry; must not be NULL.
+ * @param params [zh] 窗口几何；不得为 NULL。
+ * @param input_shape [en] Rank-4 NHWC input descriptor; must not be NULL.
+ * @param input_shape [zh] 4 维 NHWC 输入描述符；不得为 NULL。
+ * @param out_shape [en] Receives `[1, out_h, out_w, channels]`.
+ * @param out_shape [zh] 接收 `[1, out_h, out_w, channels]`。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for a NULL argument, rank other than 4,
  *         a zero stride or window, or a window larger than the padded input.
  * @since 0.1.0
@@ -204,11 +215,14 @@ infr_status infr_max_pool2d_output_shape(const infr_pool_params *params, const i
 /**
  * @brief [en] fp32 max pooling over an NHWC tensor.
  * @brief [zh] 在 NHWC 张量上做 fp32 最大池化。
- * @param [in] input Rank-4 NHWC input, `[1, in_h, in_w, channels]`.
- * @param [in] params Window geometry; `channels` must match the input.
- * @param [in,out] output Rank-4 NHWC output whose shape must already equal
- *                 `infr_max_pool2d_output_shape`; the data is overwritten.
- * @param [in,out] workspace Scratch source; rewound before returning, on every path.
+ * @param input [en] Rank-4 NHWC input, `[1, in_h, in_w, channels]`.
+ * @param input [zh] 4 维 NHWC 输入，`[1, in_h, in_w, channels]`。
+ * @param params [en] Window geometry; `channels` must match the input.
+ * @param params [zh] 窗口几何；`channels` 必须与输入一致。
+ * @param output [en] Rank-4 NHWC output whose shape must already equal `infr_max_pool2d_output_shape`; the data is overwritten.
+ * @param output [zh] 4 维 NHWC 输出，其形状必须已等于 `infr_max_pool2d_output_shape`；数据会被覆盖。
+ * @param workspace [en] Scratch source; rewound before returning, on every path.
+ * @param workspace [zh] 临时空间来源；任何返回路径上都会先回退。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, a mismatched channel
  *         count, a stride of 0, or padding not smaller than the window;
  *         INFR_ERR_UNSUPPORTED for a dtype or quantisation outside the stated subset;
@@ -233,9 +247,12 @@ infr_status infr_max_pool2d_f32(const infr_tensor *input, const infr_pool_params
 /**
  * @brief [en] Global average pooling: mean over H and W, per channel.
  * @brief [zh] 全局平均池化：对 H、W 求均值，逐通道。
- * @param [in] input Rank-4 NHWC input, `[1, in_h, in_w, channels]`.
- * @param [in,out] output Rank-4 NHWC output that must already be `[1, 1, 1, channels]`.
- * @param [in,out] workspace Scratch source; rewound before returning, on every path.
+ * @param input [en] Rank-4 NHWC input, `[1, in_h, in_w, channels]`.
+ * @param input [zh] 4 维 NHWC 输入，`[1, in_h, in_w, channels]`。
+ * @param output [en] Rank-4 NHWC output that must already be `[1, 1, 1, channels]`.
+ * @param output [zh] 4 维 NHWC 输出，必须已等于 `[1, 1, 1, channels]`。
+ * @param workspace [en] Scratch source; rewound before returning, on every path.
+ * @param workspace [zh] 临时空间来源；任何返回路径上都会先回退。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, a non-rank-4 tensor,
  *         a channel mismatch, or an output that is not `[1,1,1,C]`;
  *         INFR_ERR_UNSUPPORTED for a dtype or quantisation outside the stated subset;

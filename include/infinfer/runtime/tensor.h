@@ -101,7 +101,8 @@ typedef struct infr_tensor {
 /**
  * @brief [en] Bytes per element for a dtype; 0 for an unknown dtype.
  * @brief [zh] 某 dtype 每个元素的字节数；未知 dtype 返回 0。
- * @param [in] dtype Element type.
+ * @param dtype [en] Element type.
+ * @param dtype [zh] 元素类型。
  * @return Bytes per element, or 0 when `dtype` is not one of the declared values.
  * @since 0.1.0
  */
@@ -110,9 +111,12 @@ size_t infr_dtype_size(infr_dtype dtype);
 /**
  * @brief [en] Fill a shape from a rank and its dims, deriving `elem_count`.
  * @brief [zh] 用阶数和各维长度填写 shape，并推导 `elem_count`。
- * @param [out] shape Descriptor to fill; must not be NULL.
- * @param [in] rank Number of axes, 1..INFR_TENSOR_MAX_RANK.
- * @param [in] dims Extent of each axis, outermost first; must not be NULL.
+ * @param shape [en] Descriptor to fill; must not be NULL.
+ * @param shape [zh] 要填写的描述符；不得为 NULL。
+ * @param rank [en] Number of axes, 1..INFR_TENSOR_MAX_RANK.
+ * @param rank [zh] 轴数，1..INFR_TENSOR_MAX_RANK。
+ * @param dims [en] Extent of each axis, outermost first; must not be NULL.
+ * @param dims [zh] 各轴长度，最外层在前；不得为 NULL。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for a NULL argument, rank 0 or above
  *         INFR_TENSOR_MAX_RANK, a zero-length axis, or an element count that does
  *         not fit in 32 bits.
@@ -130,9 +134,12 @@ infr_status infr_shape_init(infr_shape *shape, uint8_t rank, const uint32_t *dim
 /**
  * @brief [en] Row-major element offset of a multi-dimensional index.
  * @brief [zh] 多维索引对应的行主序元素偏移。
- * @param [in] shape Descriptor; must not be NULL.
- * @param [in] index `shape->rank` indices, outermost first; must not be NULL.
- * @param [out] out_offset Receives the element offset; untouched on failure.
+ * @param shape [en] Descriptor; must not be NULL.
+ * @param shape [zh] 描述符；不得为 NULL。
+ * @param index [en] `shape->rank` indices, outermost first; must not be NULL.
+ * @param index [zh] `shape->rank` 个索引，最外层在前；不得为 NULL。
+ * @param out_offset [en] Receives the element offset; untouched on failure.
+ * @param out_offset [zh] 接收元素偏移；失败时不改动。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for a NULL argument, an uninitialised
  *         shape, or an index equal to or beyond that axis.
  * @note [en] Bounds are checked here rather than at the call site, so a gather that
@@ -147,10 +154,14 @@ infr_status infr_shape_offset(const infr_shape *shape, const uint32_t *index, ui
 /**
  * @brief [en] Bind a buffer, dtype and shape into a tensor view.
  * @brief [zh] 把缓冲区、dtype 与 shape 绑成一个张量视图。
- * @param [out] tensor View to fill; must not be NULL.
- * @param [in] data Buffer holding `shape->elem_count` elements of `dtype`; not NULL.
- * @param [in] dtype Element type.
- * @param [in] shape Descriptor to copy in; must not be NULL and must be initialised.
+ * @param tensor [en] View to fill; must not be NULL.
+ * @param tensor [zh] 要填写的视图；不得为 NULL。
+ * @param data [en] Buffer holding `shape->elem_count` elements of `dtype`; not NULL.
+ * @param data [zh] 存放 `shape->elem_count` 个 `dtype` 元素的缓冲区；不得为 NULL。
+ * @param dtype [en] Element type.
+ * @param dtype [zh] 元素类型。
+ * @param shape [en] Descriptor to copy in; must not be NULL and must be initialised.
+ * @param shape [zh] 被复制的描述符；不得为 NULL 且必须已初始化。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for a NULL argument, an uninitialised
  *         shape, or an unknown dtype.
  * @note [en] The view borrows the buffer: it neither copies nor owns it, which is
@@ -165,7 +176,8 @@ infr_status infr_tensor_init(infr_tensor *tensor, void *data, infr_dtype dtype, 
 /**
  * @brief [en] Byte size of the data a tensor view spans.
  * @brief [zh] 张量视图所跨数据的字节数。
- * @param [in] tensor View; NULL or an unknown dtype yields 0.
+ * @param tensor [en] View; NULL or an unknown dtype yields 0.
+ * @param tensor [zh] 视图；NULL 或未知 dtype 返回 0。
  * @return `elem_count * infr_dtype_size(dtype)`, or 0 for an invalid view.
  * @since 0.1.0
  */

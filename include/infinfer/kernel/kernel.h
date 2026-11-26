@@ -291,7 +291,8 @@ typedef void (*infr_act_f32_fn)(const float *in, float *out, uint32_t n);
 /**
  * @brief [en] Look up the float32 implementation of a fused activation.
  * @brief [zh] 查询某个融合激活的 float32 实现。
- * @param [in] act Activation code.
+ * @param act [en] Activation code.
+ * @param act [zh] 激活码。
  * @return [en] A function pointer, or NULL when the tier has no implementation yet.
  * @return [zh] 函数指针；该档位尚无实现时返回 NULL。
  * @note [en] A NULL return is a fact the caller must handle, not an error to
@@ -306,8 +307,10 @@ infr_act_f32_fn infr_activation_f32(infr_activation act);
 /**
  * @brief [en] Validate and convert a raw activation code to the enum.
  * @brief [zh] 校验原始激活码并转换为枚举值。
- * @param [in] code Raw code from a model blob.
- * @param [out] out Receives the enum value on success; untouched on failure.
+ * @param code [en] Raw code from a model blob.
+ * @param code [zh] 模型 blob 中的原始码。
+ * @param out [en] Receives the enum value on success; untouched on failure.
+ * @param out [zh] 成功时接收枚举值；失败时不改动。
  * @return INFR_OK, INFR_ERR_INVALID_ARGUMENT for a NULL `out`, or
  *         INFR_ERR_UNSUPPORTED for a code outside `infr_activation`.
  * @since 0.1.0
@@ -317,10 +320,14 @@ infr_status infr_activation_from_code(uint32_t code, infr_activation *out);
 /**
  * @brief [en] Quantize n floats to int8 using resolved parameters.
  * @brief [zh] 用已解析参数把 n 个 float 量化为 int8。
- * @param [in] in Source floats.
- * @param [out] out Destination int8 buffer.
- * @param [in] n Element count.
- * @param [in] quant Resolved parameters; `kind` must not be INFR_QUANT_NONE.
+ * @param in [en] Source floats.
+ * @param in [zh] 源 float 数据。
+ * @param out [en] Destination int8 buffer.
+ * @param out [zh] 目标 int8 缓冲区。
+ * @param n [en] Element count.
+ * @param n [zh] 元素个数。
+ * @param quant [en] Resolved parameters; `kind` must not be INFR_QUANT_NONE.
+ * @param quant [zh] 已解析的参数；`kind` 不得为 INFR_QUANT_NONE。
  * @return INFR_OK on success; INFR_ERR_* otherwise.
  * @since 0.1.0
  */
@@ -329,10 +336,14 @@ infr_status infr_quantize_i8(const float *in, int8_t *out, uint32_t n, const inf
 /**
  * @brief [en] Dequantize n int8 values back to float using resolved parameters.
  * @brief [zh] 用已解析参数把 n 个 int8 反量化为 float。
- * @param [in] in Source int8 values.
- * @param [out] out Destination floats.
- * @param [in] n Element count.
- * @param [in] quant Resolved parameters; `kind` must not be INFR_QUANT_NONE.
+ * @param in [en] Source int8 values.
+ * @param in [zh] 源 int8 数据。
+ * @param out [en] Destination floats.
+ * @param out [zh] 目标 float 数据。
+ * @param n [en] Element count.
+ * @param n [zh] 元素个数。
+ * @param quant [en] Resolved parameters; `kind` must not be INFR_QUANT_NONE.
+ * @param quant [zh] 已解析的参数；`kind` 不得为 INFR_QUANT_NONE。
  * @return INFR_OK on success; INFR_ERR_* otherwise.
  * @since 0.1.0
  */
@@ -391,7 +402,8 @@ typedef struct infr_kernel_desc {
 /**
  * @brief [en] Register one kernel row.
  * @brief [zh] 注册一行内核。
- * @param [in] kernel Descriptor; the registry copies it, the caller keeps ownership of `name`.
+ * @param kernel [en] Descriptor; the registry copies it, the caller keeps ownership of `name`.
+ * @param kernel [zh] 描述符；注册表复制它，`name` 的所有权仍属调用方。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for a NULL/empty descriptor, a NULL body,
  *         or a conflicting duplicate (same name x dtype x quant x tier, different body);
  *         INFR_ERR_BUFFER_TOO_SMALL when the fixed-capacity table is full. Re-registering
@@ -407,10 +419,14 @@ infr_status infr_kernel_register(const infr_kernel_desc *kernel);
 /**
  * @brief [en] Find a registered kernel row.
  * @brief [zh] 查找已注册的内核行。
- * @param [in] name Matrix kernel key.
- * @param [in] dtype Element type.
- * @param [in] quant Quantization scheme.
- * @param [in] tier Implementation tier.
+ * @param name [en] Matrix kernel key.
+ * @param name [zh] 矩阵表里的内核键名。
+ * @param dtype [en] Element type.
+ * @param dtype [zh] 元素类型。
+ * @param quant [en] Quantization scheme.
+ * @param quant [zh] 量化方案。
+ * @param tier [en] Implementation tier.
+ * @param tier [zh] 实现档位。
  * @return [en] The row, or NULL when absent; a NULL body is never registered.
  * @return [zh] 命中行；不存在时为 NULL（NULL 实现永不入库）。
  * @since 0.1.0
@@ -433,7 +449,8 @@ infr_status infr_kernel_register_scalar(void);
 /**
  * @brief [en] Stable, non-NULL name of a status code (safe in log format strings).
  * @brief [zh] 状态码的稳定非空名称（可安全用于日志格式串）。
- * @param [in] status Status code.
+ * @param status [en] Status code.
+ * @param status [zh] 状态码。
  * @return [en] A static string; unknown values map to "INFR_STATUS_UNKNOWN".
  * @return [zh] 静态字符串；未知值映射为 "INFR_STATUS_UNKNOWN"。
  * @since 0.1.0

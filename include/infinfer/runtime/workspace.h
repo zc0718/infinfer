@@ -58,9 +58,12 @@ typedef struct infr_workspace {
 /**
  * @brief [en] Bind a workspace to a buffer and reset its cursor.
  * @brief [zh] 把工作区绑定到缓冲区并重置游标。
- * @param [in,out] ws Workspace to initialise; must not be NULL.
- * @param [in] buffer Caller-owned storage; NULL is allowed only with size_bytes == 0.
- * @param [in] size_bytes Capacity in bytes.
+ * @param ws [en] Workspace to initialise; must not be NULL.
+ * @param ws [zh] 要初始化的工作区；不得为 NULL。
+ * @param buffer [en] Caller-owned storage; NULL is allowed only with size_bytes == 0.
+ * @param buffer [zh] 调用方持有的存储；仅当 size_bytes == 0 时允许 NULL。
+ * @param size_bytes [en] Capacity in bytes.
+ * @param size_bytes [zh] 容量，字节。
  * @return INFR_OK, or INFR_ERR_INVALID_ARGUMENT for a NULL workspace or a NULL
  *         buffer with a non-zero size.
  * @since 0.1.0
@@ -70,10 +73,14 @@ infr_status infr_workspace_init(infr_workspace *ws, void *buffer, size_t size_by
 /**
  * @brief [en] Reserve size_bytes from the workspace, aligned to `alignment`.
  * @brief [zh] 从工作区预留 size_bytes 字节，按 `alignment` 对齐。
- * @param [in,out] ws Workspace to allocate from.
- * @param [in] size_bytes Requested size in bytes.
- * @param [in] alignment Power-of-two alignment in bytes (1, 2, 4, 8, ...).
- * @param [out] out Receives the reservation; untouched on failure.
+ * @param ws [en] Workspace to allocate from.
+ * @param ws [zh] 从中分配的工作区。
+ * @param size_bytes [en] Requested size in bytes.
+ * @param size_bytes [zh] 请求的字节数。
+ * @param alignment [en] Power-of-two alignment in bytes (1, 2, 4, 8, ...).
+ * @param alignment [zh] 对齐字节数，必须是 2 的幂（1, 2, 4, 8, ...）。
+ * @param out [en] Receives the reservation; untouched on failure.
+ * @param out [zh] 接收预留区；失败时不改动。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments or a non-power-of-two
  *         alignment; INFR_ERR_BUFFER_TOO_SMALL when the capacity cannot hold the
  *         request (including alignment padding).
@@ -93,7 +100,8 @@ infr_status infr_workspace_alloc(infr_workspace *ws, size_t size_bytes, size_t a
 /**
  * @brief [en] Bytes handed out so far, including alignment padding.
  * @brief [zh] 已分配字节数（含对齐填充）。
- * @param [in] ws Workspace; NULL yields 0.
+ * @param ws [en] Workspace; NULL yields 0.
+ * @param ws [zh] 工作区；NULL 返回 0。
  * @return Bytes used, or 0 for a NULL workspace.
  * @since 0.1.0
  */
@@ -102,7 +110,8 @@ size_t infr_workspace_used(const infr_workspace *ws);
 /**
  * @brief [en] Snapshot of the cursor, for a later `infr_workspace_release`.
  * @brief [zh] 游标快照，供之后的 `infr_workspace_release` 使用。
- * @param [in] ws Workspace; NULL yields 0.
+ * @param ws [en] Workspace; NULL yields 0.
+ * @param ws [zh] 工作区；NULL 返回 0。
  * @return The current `used_bytes`, or 0 for a NULL workspace.
  * @note [en] A mark is only meaningful for the same workspace it came from: it is a
  *            byte offset, not a reservation handle.
@@ -114,8 +123,10 @@ size_t infr_workspace_mark(const infr_workspace *ws);
 /**
  * @brief [en] Give back everything allocated since `mark`, so scratch can be reused.
  * @brief [zh] 归还 `mark` 之后分配的全部空间，以便临时缓冲被复用。
- * @param [in,out] ws Workspace to rewind.
- * @param [in] mark Value previously returned by `infr_workspace_mark` on `ws`.
+ * @param ws [en] Workspace to rewind.
+ * @param ws [zh] 要回退的工作区。
+ * @param mark [en] Value previously returned by `infr_workspace_mark` on `ws`.
+ * @param mark [zh] 此前由 `infr_workspace_mark` 在 `ws` 上返回的值。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for a NULL workspace or a mark larger
  *         than the current `used_bytes` (which would move the cursor forwards and
  *         hand out memory that was already handed out).

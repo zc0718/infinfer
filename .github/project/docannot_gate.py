@@ -49,6 +49,9 @@ FILE_BLOCK = re.compile(r"/\*!(.*?)\*/", re.S)
 NO_FILE = re.compile(r"/\*")
 INLINE = re.compile(r"/\*\*<(.*?)\*/", re.S)
 BRIEF_EN = re.compile(r"@brief\s*\[en\]")
+PARAM_TAG = re.compile(r"^ \* @param\s+(\S+)\s+\[(en|zh)\]\s+\S", re.M)
+PARAM_ANY = re.compile(r"^ \* @param\s+(.*)$", re.M)
+
 BRIEF_ZH = re.compile(r"@brief\s*\[zh\]")
 SINCE = re.compile(r"@since\s+\S+")
 
@@ -166,6 +169,22 @@ def audit(root):
                     problems.append(
                         f"D3 {rel}:{line_no}: module tag outside a Doxygen block "
                         "(module generation fails silently)")
+    for path in files:
+        rel = pathlib.Path(path).relative_to(root).as_posix()
+        text = path.read_text(encoding="utf-8", errors="replace")
+        spoken = {}
+        for name, lang in PARAM_TAG.findall(text):
+            spoken.setdefault(name, set()).add(lang)
+        for raw in PARAM_ANY.findall(text):
+            if raw.startswith("["):
+                problems.append(
+                    f"D6 {rel}: @param uses a direction tag where every other tag carries a language "
+                    "(write `@param name [en] ...` / `@param name [zh] ...`)")
+                continue
+            name = raw.split(" ")[0]
+            if len(spoken.get(name, set())) < 2:
+                problems.append(
+                    f"D6 {rel}: @param {name} is not bilingual (needs an [en] line and a [zh] line)")
     return problems
 
 
@@ -185,6 +204,14 @@ def selftest():
         ("D3 a module tag outside Doxygen is red", "src/d3.c",
          "/*\n * @exporter\n */\nvoid f(void) {}\n",
          "D3 src/d3.c:2: module tag outside a Doxygen block"),
+        ("D6 a direction tag is red", "src/d6.c",
+         "/**\n * @brief [en] ok\n * @brief [zh] 好\n * @since 0.1.0\n"
+         " * @param [in] a the input\n */\nvoid f(int a);\n",
+         "uses a direction tag"),
+        ("D6 a monolingual @param is red", "src/d6b.c",
+         "/**\n * @brief [en] ok\n * @brief [zh] 好\n * @since 0.1.0\n"
+         " * @param a [en] the input\n */\nvoid f(int a);\n",
+         "@param a is not bilingual"),
         ("D4 a tagged inline member comment is red", "src/d4.c",
          "/**\n * @brief [en] a\n * @brief [zh] 甲\n * @since 0.1.0\n */\nint x; /**< [en] only english */\n",
          "D4 src/d4.c:6: inline member comment carries a language marker"),
