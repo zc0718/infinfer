@@ -111,5 +111,15 @@
     "include/",
     "src/",
     "workspace/"
-  ]
+  ],
+  "template_text": {
+    "LICENSE": {
+      "sha256": "9cc3c7349df4f3ad5bb70c72b2164d451ce4fdbeb2aa7229acef2de49a7e0ee8",
+      "why": "the Apache-2.0 text as shipped by fcpp v0.3.11; never modified since the initial commit -- pinning it here is how \"do not touch the template text\" stops being policy only"
+    },
+    "NOTICE": {
+      "sha256": "f244c32ff71ea1724ce353da0a99075b01d3cb74db76a1bbe303f0bc433d747a",
+      "why": "the template's licence statement, including the CC BY-NC 4.0 clause for the documentation; third-party attribution belongs in THIRD_PARTY_NOTICES.md, which this repository owns"
+    }
+  }
 }

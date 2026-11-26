@@ -17,11 +17,12 @@
     "",
     "`redistributed` drives D4: our Conan package does not embed its dependencies, so this is false",
     "for all six today and NOTICE names none of them -- correctly. The rule exists so that vendoring",
-    "a dependency into the tree cannot happen without an attribution line appearing."
+    "a dependency into the tree cannot happen without an attribution line appearing.",
+    "`notice_file` is this repository's own file, not the template's NOTICE: the template text is pinned by scaffold gate G5, so a rule whose remedy was 'edit NOTICE' would be a rule that cannot be obeyed without a scaffold change. D4 reads only the marked section of our file."
   ],
   "conandata": "conandata.yml",
   "metadata": "metadata.json",
-  "notice_file": "NOTICE",
+  "notice_file": "THIRD_PARTY_NOTICES.md",
   "allowed_licences": [
     "Apache-2.0",
     "BSD-3-Clause",
@@ -34,79 +35,113 @@
       "conan": "zlib",
       "metadata_key": "ZLIB",
       "bucket": "common",
-      "targets": ["ZLIB::ZLIB"],
+      "targets": [
+        "ZLIB::ZLIB"
+      ],
       "license": "Zlib",
       "license_status": "verified",
       "license_evidence": "conan recipe license = \"Zlib\"; package ships s/src/LICENSE (Jean-loup Gailly / Mark Adler notice)",
       "redistributed": false,
       "baremetal_ok": false,
       "why": "the template's C demo unit (src/ctest.c) compresses a buffer with it; kept from the template, not yet used by the kernel layer",
-      "used_from": {"path": "src/ctest.c", "contains": "#include <zlib.h>"}
+      "used_from": {
+        "path": "src/ctest.c",
+        "contains": "#include <zlib.h>"
+      }
     },
     {
       "conan": "pcre2",
       "metadata_key": "PCRE2",
       "bucket": "c",
-      "targets": ["pcre2::pcre2"],
+      "targets": [
+        "pcre2::pcre2"
+      ],
       "license": "BSD-3-Clause",
       "license_status": "verified",
       "license_evidence": "conan recipe license = \"BSD-3-Clause\"; package ships s/src/COPYING",
       "redistributed": false,
       "baremetal_ok": false,
       "why": "the template's C demo unit (src/ctest.c) matches a regular expression with it; kept from the template",
-      "used_from": {"path": "src/ctest.c", "contains": "#include <pcre2.h>"}
+      "used_from": {
+        "path": "src/ctest.c",
+        "contains": "#include <pcre2.h>"
+      }
     },
     {
       "conan": "eigen",
       "metadata_key": "Eigen3",
       "bucket": "cpp",
-      "targets": ["Eigen3::Eigen"],
+      "targets": [
+        "Eigen3::Eigen"
+      ],
       "license": "MPL-2.0",
       "license_status": "verified",
       "license_evidence": "package ships p/licenses/COPYING.MPL2 among LGPL/GPL/BSD/Apache alternatives; MPL-2.0 is the one we rely on",
       "redistributed": false,
       "baremetal_ok": false,
       "why": "the template's C++ demo unit (src/cpptest.cpp) solves a small system with it; kept from the template",
-      "used_from": {"path": "src/cpptest.cpp", "contains": "#include <Eigen/Dense>"}
+      "used_from": {
+        "path": "src/cpptest.cpp",
+        "contains": "#include <Eigen/Dense>"
+      }
     },
     {
       "conan": "etl",
       "metadata_key": "etl",
       "bucket": "cpp",
-      "targets": ["etl::etl"],
+      "targets": [
+        "etl::etl"
+      ],
       "license": "MIT",
       "license_status": "verified",
       "license_evidence": "conan recipe license = \"MIT\" (this machine's cache); the recipe also installs its LICENSE into licenses/",
       "redistributed": false,
       "baremetal_ok": true,
       "why": "the only dependency allowed on a bare-metal target (metadata.baremetal_white_list); used by src/etl.cpp",
-      "used_from": {"path": "src/etl.cpp", "contains": "#include <etl/algorithm.h>"}
+      "used_from": {
+        "path": "src/etl.cpp",
+        "contains": "#include <etl/algorithm.h>"
+      }
     },
     {
       "conan": "gtest",
       "metadata_key": "GTest",
       "bucket": "infra",
-      "targets": ["gtest::gtest"],
+      "targets": [
+        "gtest::gtest"
+      ],
       "license": "BSD-3-Clause",
       "license_status": "verified",
       "license_evidence": "conan recipe license = \"BSD-3-Clause\"; package ships s/src/LICENSE (Google Inc. notice)",
       "redistributed": false,
       "baremetal_ok": false,
       "why": "the test framework; infra bucket, never part of the shipped library",
-      "used_from": {"path": "test_package/test/unit/req.cpp", "contains": "#include <gtest/gtest.h>"}
+      "used_from": {
+        "path": "test_package/test/unit/req.cpp",
+        "contains": "#include <gtest/gtest.h>"
+      }
     },
     {
       "conan": "pybind11",
       "metadata_key": "pybind11",
       "bucket": "infra",
-      "targets": ["pybind11::module"],
+      "targets": [
+        "pybind11::module"
+      ],
       "license": "BSD-3-Clause",
       "license_status": "unverified",
       "license_evidence": "not verifiable on this machine: pybind11 is not in the Conan cache because the bindings are disabled (gaps G-31); the id is the upstream one and this entry must be re-checked the moment the bindings are enabled",
       "redistributed": false,
       "baremetal_ok": false,
       "why": "the Python bindings demo (api/python_bindings.cpp); metadata.enable_python_bindings stays false, so this is a build-only dependency",
-      "used_from": {"path": "api/python_bindings.cpp", "contains": "#include <pybind11/pybind11.h>"}
+      "used_from": {
+        "path": "api/python_bindings.cpp",
+        "contains": "#include <pybind11/pybind11.h>"
+      }
     }
+  ],
+  "notice_section": [
+    "<!-- redistributed:begin -->",
+    "<!-- redistributed:end -->"
   ]
 }

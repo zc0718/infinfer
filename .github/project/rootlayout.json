@@ -39,9 +39,10 @@
     ".vscode"
   ],
   "project": [
+    "THIRD_PARTY_NOTICES.md",
     "include",
-    "src",
     "metadata.json",
+    "src",
     "workspace"
   ],
   "toolchain": [

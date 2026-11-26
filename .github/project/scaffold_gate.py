@@ -17,6 +17,10 @@ This gate keeps the useful half of the contract and makes the fork list
      (a stale tolerance hides the next real divergence, so it fails)
   G3 no local file on the template-owned surface is missing from `checked`
   G4 `tolerated` may not grow past `tolerance_budget`
+  G5 every `template_text` path still hashes to the pinned value: `LICENSE` and `NOTICE` came
+     from the template, are not on its checked surface, and were until now protected by nothing
+     but discipline. Changing one is allowed -- it means changing the pin, which is a decision
+     that has to appear in a diff instead of happening quietly.
 
 `--pin` regenerates `checked` from the upstream tree, so the sha list is never
 hand-typed. `--selftest` proves each rule can fail on its own fixture.
@@ -127,6 +131,24 @@ def audit(local, upstream, manifest):
     budget = manifest.get("tolerance_budget")
     if isinstance(budget, int) and len(tolerated) > budget:
         problems.append(f"G4 tolerated grew to {len(tolerated)} > budget {budget}")
+
+    # G5 -- the template's own prose, pinned by hash. This runs against the local tree only: the
+    # upstream copy is fetched for G1-G3, but these two files are not on the template surface the
+    # patterns describe, and that is exactly why nothing noticed them before.
+    for rel, entry in sorted((manifest.get("template_text") or {}).items()):
+        expected = str(entry.get("sha256", "")).strip()
+        actual_path = Path(local) / rel
+        if not expected:
+            problems.append(f"G5 {rel}: pinned without a sha256")
+        elif not actual_path.is_file():
+            problems.append(f"G5 {rel}: missing locally")
+        elif sha256(actual_path) != expected:
+            problems.append(
+                f"G5 {rel}: the bytes changed since the pin -- if this is intended, update "
+                f"template_text.{rel}.sha256 in the same commit so the change is visible"
+            )
+        if not str(entry.get("why", "")).strip():
+            problems.append(f"G5 {rel}: pinned without a why")
     return problems
 
 
@@ -212,6 +234,20 @@ def selftest():
         lambda up, lo: (lo / "b.txt").write_text("BETA\n", encoding="utf-8"),
         "G4 tolerated grew to 2 > budget 1",
     ))
+    # G5's fixtures pin a file that is deliberately *not* on the template surface, which is the
+    # situation LICENSE and NOTICE are in: nothing else in this gate would look at them. The name
+    # has no `.txt` suffix on purpose -- the fixture surface is `*.txt`, and a pinned file that also
+    # landed there would fail G3 as well, which would make the fixture prove the wrong rule.
+    cases.append((
+        "G5 a changed template text is red",
+        lambda up, lo: (lo / "NOTICE").write_text("edited\n", encoding="utf-8"),
+        "G5 NOTICE: the bytes changed since the pin",
+    ))
+    cases.append((
+        "G5 an unchanged template text is green",
+        lambda up, lo: (lo / "NOTICE").write_text("notice\n", encoding="utf-8"),
+        None,
+    ))
 
     failures = 0
     for index, (name, mutate, expected) in enumerate(cases):
@@ -224,6 +260,13 @@ def selftest():
                 {"path": "b.txt", "why": "fixture", "exit": "fixture"},
             ]
             manifest["tolerance_budget"] = 1
+        if index in (5, 6):  # the two G5 fixtures: pin the text the mutator writes (or does not)
+            manifest["template_text"] = {
+                "NOTICE": {
+                    "sha256": hashlib.sha256(b"notice\n").hexdigest(),
+                    "why": "fixture",
+                }
+            }
         problems = audit(lo, up, manifest)
         joined = "\n".join(problems)
         if expected is None:

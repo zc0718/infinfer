@@ -19,9 +19,11 @@ Rules:
   D3 every entry declares an SPDX licence from `allowed_licences`; a licence that could
      not be verified on the machine (`license_status: unverified`) is only acceptable for
      something we do not redistribute
-  D4 `redistributed` and being named in `NOTICE` are the same predicate, in both
+  D4 `redistributed` and being named in the attribution section are the same predicate, in both
      directions: an attribution line for something we do not ship is as wrong as shipping
-     something without one
+     something without one. Only the text between the markers in `notice_section` counts -- the
+     file also carries a human inventory that names everything, and counting that would make the
+     rule fire on its own documentation
   D5 "it is used" is measured rather than claimed: `used_from.path` must exist and contain
      `used_from.contains`; an entry with no consumer must carry `why_unused` instead
   D6 `metadata.baremetal_white_list` names entries that are marked `baremetal_ok` -- the
@@ -137,8 +139,26 @@ def check(root, data_path=None):
                         f"deps: metadata declares '{bucket}/{key}' with no entry in deps.json"
                     )
 
-    notice_path = root / data.get("notice_file", "NOTICE")
-    notice_text = notice_path.read_text(encoding="utf-8").lower() if notice_path.is_file() else ""
+    notice_path = root / data.get("notice_file", "THIRD_PARTY_NOTICES.md")
+    notice_text = ""
+    section = data.get("notice_section")
+    if notice_path.is_file():
+        whole = notice_path.read_text(encoding="utf-8")
+        if isinstance(section, list) and len(section) == 2:
+            begin, end = section
+            if begin in whole and end in whole:
+                notice_text = whole.split(begin, 1)[1].split(end, 1)[0].lower()
+            else:
+                problems.append(
+                    f"deps: {notice_path.name} has no '{begin}' / '{end}' pair, so D4 cannot tell "
+                    f"an attribution line from the rest of the file"
+                )
+        else:
+            notice_text = whole.lower()
+    else:
+        problems.append(
+            f"deps: {notice_path.name} is missing -- it is the file the attribution rule reads"
+        )
 
     for entry in entries:
         name = entry.get("conan", "<no name>")
@@ -212,7 +232,17 @@ def selftest():
         root = pathlib.Path(workdir)
         (root / "src").mkdir()
         (root / "src/uses.c").write_text("#include <zlib.h>\nint x;\n", encoding="utf-8")
-        (root / "NOTICE").write_text("This project is Apache-2.0.\n", encoding="utf-8")
+        notice = root / "THIRD_PARTY_NOTICES.md"
+
+        def set_notice(section_body):
+            notice.write_text(
+                "This project is Apache-2.0.\n<!-- redistributed:begin -->\n"
+                + section_body
+                + "<!-- redistributed:end -->\n| zlib | Zlib | inventory row |\n",
+                encoding="utf-8",
+            )
+
+        set_notice("")
         (root / "conandata.yml").write_text(
             "requirements:\n  - \"zlib/1.3.1\"\n  # - \"dlib/19.24.2\"\n", encoding="utf-8"
         )
@@ -241,7 +271,12 @@ def selftest():
             return base
 
         def run(entries=None, allowed=("Zlib",)):
-            data = {"allowed_licences": list(allowed), "entries": entries if entries is not None else [entry()]}
+            data = {
+                "allowed_licences": list(allowed),
+                "notice_file": "THIRD_PARTY_NOTICES.md",
+                "notice_section": ["<!-- redistributed:begin -->", "<!-- redistributed:end -->"],
+                "entries": entries if entries is not None else [entry()],
+            }
             path = root / "deps-fixture.json"
             path.write_text(json.dumps(data), encoding="utf-8")
             return check(root, data_path=path)[0]
@@ -307,7 +342,7 @@ def selftest():
             failures += 1
             print(f"[deps:selftest] FAIL D3 expected the evidence report, got {problems}")
 
-        (root / "NOTICE").write_text("This project is Apache-2.0 and ships zlib.\n", encoding="utf-8")
+        set_notice("This package ships zlib.\n")
         problems = run([entry(redistributed=True)])
         if not problems:
             print("[deps:selftest] PASS D4 redistributed + named in NOTICE is green (positive twin)")
@@ -323,7 +358,7 @@ def selftest():
             print(f"[deps:selftest] FAIL D4 expected the reverse report, got {problems}")
 
         problems = run([entry(redistributed=True)])
-        (root / "NOTICE").write_text("This project is Apache-2.0.\n", encoding="utf-8")
+        set_notice("")
         problems = run([entry(redistributed=True)])
         if any("never names it" in p for p in problems):
             print("[deps:selftest] PASS D4 redistribution without a NOTICE line is red")
