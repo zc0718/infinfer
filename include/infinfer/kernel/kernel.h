@@ -522,6 +522,24 @@ infr_status infr_kernel_register_arm_neon(void);
 infr_status infr_kernel_register_rvv(void);
 
 /**
+ * @brief [en] Register the x86 (SSE2) tier rows this build actually contains.
+ * @brief [zh] 注册本次构建真正包含的 x86（SSE2）档位行。
+ * @return [en] INFR_OK when every row registered (including the empty case).
+ * @return [zh] 全部登记成功时返回 INFR_OK（空集也算成功）。
+ * @note [en] Same posture again, with one difference worth stating: SSE2 is baseline on x86-64 but
+ *            not on 32-bit x86, so the guard is the compiler's answer and not an assumption about
+ *            the machine the library happens to be built on.
+ * @note [zh] 又是同一姿态，但有一点值得写清：SSE2 在 x86-64 上是基线、在 32 位 x86 上不是，因此
+ *            守卫由编译器回答，而不是对本库恰好被构建于哪台机器作假设。
+ * @note [en] This is the only vector tier a host test run can actually execute, which makes it the
+ *            tier whose parity assertions run in `conan create` instead of in a probe elsewhere.
+ * @note [zh] 这是宿主测试唯一能真正执行的向量档位，因此它的 parity 断言跑在 `conan create` 里，
+ *            而不是跑在别处的探针上。
+ * @since 0.1.0
+ */
+infr_status infr_kernel_register_x86(void);
+
+/**
  * @brief [en] Stable, non-NULL name of a status code (safe in log format strings).
  * @brief [zh] 状态码的稳定非空名称（可安全用于日志格式串）。
  * @param status [en] Status code.

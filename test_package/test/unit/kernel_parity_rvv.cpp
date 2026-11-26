@@ -87,8 +87,11 @@ TEST(kernel_parity, add_rvv_fp32) {
     b[1] = 0.0F;
 
     for (std::uint32_t n : kLengths) {
-        std::vector<float> want(n, 0.0F);
-        std::vector<float> got(n, 0.0F);
+        // At least one slot: `std::vector<float>(0).data()` is nullptr, the kernel then
+        // refuses the call by contract, and the assertion would fail for a reason that has
+        // nothing to do with the tier under test. The length passed stays n.
+        std::vector<float> want(n == 0U ? 1U : n, 0.0F);
+        std::vector<float> got(n == 0U ? 1U : n, 0.0F);
         const void* inputs[2] = {a.data(), b.data()};
         void* want_out[1] = {want.data()};
         void* got_out[1] = {got.data()};
@@ -115,8 +118,8 @@ TEST(kernel_parity, scale_rvv_fp32) {
     const float factors[] = {2.5F, 0.0F, -1.0F};
     for (float factor : factors) {
         for (std::uint32_t n : kLengths) {
-            std::vector<float> want(n, 0.0F);
-            std::vector<float> got(n, 0.0F);
+            std::vector<float> want(n == 0U ? 1U : n, 0.0F);
+            std::vector<float> got(n == 0U ? 1U : n, 0.0F);
             const void* inputs[2] = {a.data(), &factor};
             void* want_out[1] = {want.data()};
             void* got_out[1] = {got.data()};
@@ -152,8 +155,8 @@ TEST(kernel_parity, relu_rvv_fp32) {
     a[2] = std::numeric_limits<float>::infinity();
 
     for (std::uint32_t n : kLengths) {
-        std::vector<float> want(n, 0.0F);
-        std::vector<float> got(n, 0.0F);
+        std::vector<float> want(n == 0U ? 1U : n, 0.0F);
+        std::vector<float> got(n == 0U ? 1U : n, 0.0F);
         const void* inputs[1] = {a.data()};
         void* want_out[1] = {want.data()};
         void* got_out[1] = {got.data()};

@@ -45,6 +45,8 @@ kernels:
     tiers:
       scalar: done
       autovec: todo
+      # Per-pair: two declared pairs, one built -- a flat `done` would claim int8/none.
+      x86: { fp32/none: done, int8/none: todo }
       arm_neon: { fp32/none: done, int8/none: todo }
       arm_m: todo
       rvv: { fp32/none: done, int8/none: todo }
@@ -61,6 +63,9 @@ kernels:
     tiers:
       scalar: done
       autovec: todo
+      # Per-pair for the same reason as the tiers below: this kernel declares three
+      # pairs, so a flat `done` would claim the two quantized ones as well.
+      x86: { fp32/none: done, int8/tensor: todo, int16/tensor: todo }
       # Per-pair (gaps G-51): the NEON row is the fp32 dot product. The quantized
       # pairs stay open -- int8 has a DSP path on Cortex-M and no NEON row yet, and a
       # flat `done` here would claim them.
@@ -84,19 +89,19 @@ kernels:
     tflite: [ADD]
     onnx: [{op: Add}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: done }
+    tiers: { scalar: done, autovec: todo, x86: done, arm_neon: done, arm_m: todo, rvv: done }
     grad: todo
   sum:
     tflite: [SUM]
     onnx: [{op: ReduceSum}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: done }
+    tiers: { scalar: done, autovec: todo, x86: done, arm_neon: done, arm_m: todo, rvv: done }
     grad: todo
   scale:
     tflite: [MUL]
     onnx: [{op: Mul, where: "one operand is a scalar"}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: done }
+    tiers: { scalar: done, autovec: todo, x86: done, arm_neon: done, arm_m: todo, rvv: done }
     grad: todo
   max:
     tflite: [REDUCE_MAX]
@@ -104,7 +109,7 @@ kernels:
     dtype_quant: [[fp32, none]]
     # Flat on purpose: the kernel declares one pair, so a kernel-level `done` claims
     # exactly that one pair and nothing else.
-    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: done }
+    tiers: { scalar: done, autovec: todo, x86: done, arm_neon: done, arm_m: todo, rvv: done }
     grad: no-grad
 composed:
   conv2d:

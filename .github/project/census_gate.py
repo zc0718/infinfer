@@ -63,7 +63,9 @@ CENSUS = Path(__file__).resolve().with_name("census.json")
 
 DTYPES = ("fp32", "int8", "int16", "u8", "i32")
 QUANTS = ("none", "tensor", "channel")
-TIERS = ("scalar", "autovec", "arm_neon", "arm_m", "rvv")
+# The order mirrors infr_tier in include/infinfer/kernel/kernel.h, so a row and the enum
+# read the same way. A tier token the header does not define is not a legal claim.
+TIERS = ("scalar", "autovec", "x86", "arm_neon", "arm_m", "rvv")
 STATUSES = ("todo", "done", "na")
 GRADS = ("todo", "done", "no-grad")
 KERNEL_FIELDS = ("tflite", "onnx", "dtype_quant", "tiers", "grad")
@@ -401,6 +403,19 @@ def selftest():
             "unknown tier 'avx512'",
         ),
         (
+            # The positive twin of the case above: 'x86' must be a legal token, otherwise the
+            # matrix cannot express the tier the header already defines (INFR_TIER_X86), and a
+            # tier nobody can declare reads exactly like a tier nobody has implemented.
+            # `phrase=None` means "this fixture must produce no problem at all". The scalar claim
+            # stays because `good_census` names its cell -- dropping it would raise an orphan-key
+            # problem and the fixture would then be red for a reason that has nothing to do with
+            # the token under test.
+            "R2 x86 is a legal tier token",
+            mutate_matrix(tiers={"scalar": "done", "x86": "todo"}),
+            good_census,
+            None,
+        ),
+        (
             "R2a per-pair status token",
             mutate_matrix(tiers={"scalar": {"fp32/none": "maybe"}}),
             good_census,
@@ -648,6 +663,15 @@ def selftest():
             matrix_path = write(f"matrix-{index}.yml", matrix)
             census_path = write(f"census-{index}.json", census)
             problems, _ = run_check(matrix_path, census_path)
+            if phrase is None:
+                # A green fixture: the rule must accept it outright. Without one of these,
+                # tightening a token list could reject a legal value and no fixture would say so.
+                if problems:
+                    failures += 1
+                    print(f"[census:selftest] FAIL {label}: expected no problem, got {problems}")
+                else:
+                    print(f"[census:selftest] PASS {label}")
+                continue
             hit = [p for p in problems if phrase in p]
             if hit:
                 print(f"[census:selftest] PASS {label} -> {hit[0]}")

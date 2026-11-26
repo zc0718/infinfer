@@ -103,8 +103,11 @@ TEST(KernelParityAddNeon, Fp32MatchesScalarBitwise) {
     b[1] = 0.0F;
 
     for (std::uint32_t length : lengths) {
-        std::vector<float> want(length, 0.0F);
-        std::vector<float> got(length, 0.0F);
+        // At least one slot: `std::vector<float>(0).data()` is nullptr, the kernel then
+        // refuses the call by contract, and the assertion would fail for a reason that has
+        // nothing to do with the tier under test. The length passed stays n.
+        std::vector<float> want(length == 0U ? 1U : length, 0.0F);
+        std::vector<float> got(length == 0U ? 1U : length, 0.0F);
         const void* inputs[2] = {a.data(), b.data()};
         void* want_out[1] = {want.data()};
         void* got_out[1] = {got.data()};
