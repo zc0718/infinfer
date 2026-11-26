@@ -2,8 +2,6 @@
 #include <infinfer/kernel/kernel.h>
 // Conan::ImportEnd
 
-#include <string.h>
-
 /*!
  * @ingroup group_contract
  * @file
@@ -62,6 +60,28 @@ static infr_kernel_desc g_kernel_table[INFR_KERNEL_TABLE_CAPACITY];
  * 本文件也从此**不**持有任何可变且带初值的全局对象。 */
 static uint32_t g_kernel_count;
 
+/* Name comparison without the C library. The registry sits on the boot path of a
+ * bare-metal image, so it must not pull a library routine in: the multilib that
+ * matches this toolchain emits instructions a given target model may refuse, and
+ * a registry that only exists to look a kernel up has no business deciding
+ * whether the image boots. Measured on the M-profile QEMU target, where the
+ * fault landed inside the library's string compare, not in any kernel.
+ *
+ * 不借 C 库比较名字。注册表在裸机镜像的启动路径上，不该把库函数拉进来：与该工
+ * 具链匹配的多库会生成个别目标模型拒绝执行的指令，而注册表的职责只是查内核，
+ * 不该决定镜像能不能起来。在 M-profile 的 QEMU 目标上实测：故障落在库的字符串
+ * 比较里，而不是任何内核里。 */
+static int name_equal(const char *left, const char *right) {
+    while (*left == *right) {
+        if (*left == '\0') {
+            return 1;
+        }
+        ++left;
+        ++right;
+    }
+    return 0;
+}
+
 /**
  * @brief [en] Register one kernel row; idempotent for an identical body, rejects a conflicting one.
  * @brief [zh] 注册一行内核；同一个体重复注册幂等，冲突的体一律拒绝。
@@ -76,7 +96,7 @@ infr_status infr_kernel_register(const infr_kernel_desc *kernel) {
     for (i = 0U; i < g_kernel_count; ++i) {
         const infr_kernel_desc *row = &g_kernel_table[i];
         if (row->dtype == kernel->dtype && row->quant == kernel->quant && row->tier == kernel->tier &&
-            strcmp(row->name, kernel->name) == 0) {
+            name_equal(row->name, kernel->name)) {
             /* Idempotent re-registration is fine; a conflicting body is not. */
             return row->fn == kernel->fn ? INFR_OK : INFR_ERR_INVALID_ARGUMENT;
         }
@@ -102,7 +122,7 @@ const infr_kernel_desc *infr_kernel_find(const char *name, infr_dtype dtype, inf
     }
     for (i = 0U; i < g_kernel_count; ++i) {
         const infr_kernel_desc *row = &g_kernel_table[i];
-        if (row->dtype == dtype && row->quant == quant && row->tier == tier && strcmp(row->name, name) == 0) {
+        if (row->dtype == dtype && row->quant == quant && row->tier == tier && name_equal(row->name, name)) {
             return row;
         }
     }
