@@ -6,6 +6,15 @@
     "fc",
     "relu"
   ],
+  "graph": [
+    {
+      "op": "fc",
+      "act": "relu"
+    },
+    {
+      "op": "fc"
+    }
+  ],
   "input": {
     "file": "input.bin",
     "dtype": "fp32",
@@ -17,7 +26,7 @@
   },
   "blob": {
     "file": "model.blob",
-    "sha256": "ae281d15caf3122983f122f8062da1bbe83103577328a9af262661e64ad6dbb6"
+    "sha256": "d7a16f3a3694cad149345de35f12fb28addb3fbe06013f3b25f3f3da00cd80ae"
   },
   "expect": {
     "file": "expect_fp32.bin",

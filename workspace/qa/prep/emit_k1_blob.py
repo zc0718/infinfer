@@ -12,32 +12,46 @@ not that the code equals itself. Bitwise cross-target equality is a separate
 judgement (see `workspace/qa/kat/run_kat.py`); here the tolerance is the plan's
 FP32 window.
 
-Blob format v1 (little endian), documented so the reader is not reverse
-engineered:
-
-    "INFRKAT\\0"          8 bytes
-    u32 version = 1
-    u32 tensor_count
-    per tensor:
-        char name[16]     NUL padded
-        u32 dtype         1 = F32, 2 = I8 (mirrors infr_dtype)
-        u32 byte_len
-        bytes payload
+The blob is the `INFRKAT` **v2 graph blob**: weights *and* the graph live in the file,
+and the format has exactly one definition (`blobfmt.py`), imported by every producer
+and every Python consumer. This model has no runtime slots at all -- its input is a
+constant slot, which is the one shape the executor has to support without an `input`
+node (a graph that needs no caller-provided data).
 """
 import argparse
 import hashlib
 import json
 import pathlib
-import struct
 import sys
 
 import numpy as np
 
+import blobfmt
+
 SEED = 0x5EED
 IN, HIDDEN, OUT = 16, 32, 4
-MAGIC = b"INFRKAT\0"
-VERSION = 1
-DTYPE_F32 = 1
+
+# Slot order is the on-disk order and the source of `manifest.json`'s graph, so the
+# blob and the prose cannot disagree.
+SLOTS = (
+    ("x", (1, IN), True),
+    ("h", (1, HIDDEN), False),
+    ("y", (1, OUT), False),
+    ("w1", (HIDDEN, IN), True),
+    ("w2", (OUT, HIDDEN), True),
+)
+NODES = (
+    {"op": "fc", "in": "x", "out": "h", "w": "w1", "act": "relu"},
+    {"op": "fc", "in": "h", "out": "y", "w": "w2"},
+)
+
+
+def describe(node) -> dict:
+    """The same node, in the words a human reads in `manifest.json`."""
+    entry = {"op": node["op"]}
+    if "act" in node:
+        entry["act"] = node["act"]
+    return entry
 
 
 def lcg_value(seed: int) -> np.float32:
@@ -60,13 +74,6 @@ def weights():
     return x, w1, w2
 
 
-def tensor(name: str, dtype: int, payload: bytes) -> bytes:
-    raw = name.encode("ascii")
-    if len(raw) > 15:
-        raise SystemExit(f"emit_k1_blob: tensor name too long: {name}")
-    return raw.ljust(16, b"\0") + struct.pack("<II", dtype, len(payload)) + payload
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("out", help="output directory (test_package/resources/kat/k1_mlp3)")
@@ -79,12 +86,10 @@ def main() -> int:
     hidden = np.maximum(x @ w1.T, np.float32(0.0)).astype(np.float32)
     y2 = (hidden @ w2.T).astype(np.float32)
 
-    tensors = [
-        tensor("x", DTYPE_F32, x.tobytes()),
-        tensor("w1", DTYPE_F32, w1.tobytes()),
-        tensor("w2", DTYPE_F32, w2.tobytes()),
-    ]
-    blob = MAGIC + struct.pack("<II", VERSION, len(tensors)) + b"".join(tensors)
+    payloads = {"x": x.tobytes(), "w1": w1.tobytes(), "w2": w2.tobytes()}
+    slot_specs = [(name, dims, payloads[name] if is_constant else b"")
+                  for name, dims, is_constant in SLOTS]
+    blob = blobfmt.build(slot_specs, NODES)
 
     files = {
         "model.blob": blob,
@@ -99,6 +104,7 @@ def main() -> int:
         "source": "hand-written integer-LCG weights (no closed-source tool)",
         "built_with": f"numpy {np.__version__} float32",
         "subset": ["fc", "relu"],
+        "graph": [describe(node) for node in NODES],
         "input": {"file": "input.bin", "dtype": "fp32", "shape": [1, IN],
                   "sha256": hashlib.sha256(files["input.bin"]).hexdigest()},
         "blob": {"file": "model.blob",

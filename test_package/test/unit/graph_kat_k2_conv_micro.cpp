@@ -31,7 +31,7 @@
 namespace {
 
 constexpr char kMagic[8] = {'I', 'N', 'F', 'R', 'K', 'A', 'T', '\0'};
-constexpr std::uint32_t kVersion = 1;
+constexpr std::uint32_t kVersion = 2;
 constexpr std::uint32_t kDtypeF32 = 1;
 
 /* The graph is the KAT's definition, not a parameter: it is spelled out here in the
@@ -57,39 +57,49 @@ std::vector<unsigned char> read_file(const std::string& path) {
     return std::vector<unsigned char>(std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>());
 }
 
-/* Blob reader for the documented v1 layout; any drift fails loudly instead of being
- * read as garbage floats. */
+/* Blob reader for the documented v2 layout. The **node table is skipped on purpose**:
+ * this test re-spells the graph in C, so a wrong node list in the blob cannot hide
+ * behind a runner that obeys it. `graph_blob_k2.cpp` is the test that obeys the nodes;
+ * only the two together say "the blob is right" and "the executor does what it says". */
 std::map<std::string, std::vector<float>> parse_blob(const std::vector<unsigned char>& bytes) {
     std::map<std::string, std::vector<float>> tensors;
-    EXPECT_GE(bytes.size(), std::size_t{16});
-    if (bytes.size() < 16) {
+    EXPECT_GE(bytes.size(), std::size_t{24});
+    if (bytes.size() < 24) {
         return tensors;
     }
     EXPECT_EQ(0, std::memcmp(bytes.data(), kMagic, sizeof kMagic));
     EXPECT_EQ(kVersion, read_u32(bytes, 8));
-    const std::uint32_t count = read_u32(bytes, 12);
-    std::size_t offset = 16;
-    for (std::uint32_t i = 0; i < count; ++i) {
-        EXPECT_LE(offset + 24, bytes.size());
-        if (offset + 24 > bytes.size()) {
+    const std::uint32_t node_count = read_u32(bytes, 12);
+    const std::uint32_t slot_count = read_u32(bytes, 16);
+    std::size_t offset = 24 + (static_cast<std::size_t>(node_count) * 36U);
+    EXPECT_LE(offset, bytes.size()) << "node table runs past the end of the blob";
+    if (offset > bytes.size()) {
+        return tensors;
+    }
+    for (std::uint32_t i = 0; i < slot_count; ++i) {
+        EXPECT_LE(offset + 44, bytes.size());
+        if (offset + 44 > bytes.size()) {
             return tensors;
         }
         std::string name(reinterpret_cast<const char*>(bytes.data() + offset));
         const std::uint32_t dtype = read_u32(bytes, offset + 16);
-        const std::uint32_t byte_len = read_u32(bytes, offset + 20);
-        offset += 24;
-        EXPECT_EQ(kDtypeF32, dtype) << "tensor " << name;
-        EXPECT_EQ(0U, byte_len % sizeof(float)) << "tensor " << name;
-        EXPECT_LE(offset + byte_len, bytes.size()) << "tensor " << name;
+        const std::uint32_t byte_len = read_u32(bytes, offset + 40);
+        offset += 44;
+        EXPECT_EQ(kDtypeF32, dtype) << "slot " << name;
+        EXPECT_EQ(0U, byte_len % sizeof(float)) << "slot " << name;
+        EXPECT_LE(offset + byte_len, bytes.size()) << "slot " << name;
         if (offset + byte_len > bytes.size()) {
             return tensors;
+        }
+        if (byte_len == 0) {
+            continue; /* runtime slot: nothing to bake */
         }
         std::vector<float> values(byte_len / sizeof(float));
         std::memcpy(values.data(), bytes.data() + offset, byte_len);
         tensors[name] = values;
         offset += byte_len;
     }
-    EXPECT_EQ(bytes.size(), offset) << "trailing bytes after the declared tensors";
+    EXPECT_EQ(bytes.size(), offset) << "trailing bytes after the declared slots";
     return tensors;
 }
 

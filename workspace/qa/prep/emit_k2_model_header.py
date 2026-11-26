@@ -17,27 +17,20 @@ import pathlib
 import struct
 import sys
 
-MAGIC = b"INFRKAT\0"
+import blobfmt
+
 EXPECTED_ORDER = ("conv_w", "conv_b", "dw_w", "dw_b", "fc_w", "fc_b")
 
 
 def parse_blob(data: bytes):
-    if len(data) < 16 or data[:8] != MAGIC:
-        raise SystemExit("emit_k2_model_header: not an INFRKAT v1 blob")
-    version, count = struct.unpack_from("<II", data, 8)
-    if version != 1:
-        raise SystemExit(f"emit_k2_model_header: unsupported version {version}")
-    tensors, offset = {}, 16
-    for _ in range(count):
-        name = data[offset:offset + 16].split(b"\0", 1)[0].decode("ascii")
-        dtype, byte_len = struct.unpack_from("<II", data, offset + 16)
-        offset += 24
-        if dtype != 1 or byte_len % 4:
-            raise SystemExit(f"emit_k2_model_header: tensor {name} is not fp32")
-        tensors[name] = struct.unpack_from(f"<{byte_len // 4}f", data, offset)
-        offset += byte_len
-    if offset != len(data):
-        raise SystemExit("emit_k2_model_header: trailing bytes after the last tensor")
+    """Read the **constant** slots out of a v2 graph blob.
+
+    The nodes are skipped on purpose: this script bakes weights and input into a C
+    header, and the frozen target chain spells its own graph out in C. What it must
+    not do is carry a second copy of the slot layout -- `blobfmt` owns that, and a v1
+    blob (24-byte tensor header) is rejected there instead of being misparsed.
+    """
+    tensors = blobfmt.parse_constants(data)
     missing = [n for n in EXPECTED_ORDER if n not in tensors]
     if missing:
         raise SystemExit(f"emit_k2_model_header: blob is missing {missing}")

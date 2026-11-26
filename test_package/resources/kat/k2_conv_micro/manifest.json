@@ -3,6 +3,7 @@
   "source": "hand-written integer-LCG weights (no closed-source tool)",
   "built_with": "numpy 2.5.4 float64 reference",
   "subset": [
+    "input",
     "conv2d",
     "relu",
     "max_pool2d",
@@ -12,15 +13,15 @@
   ],
   "graph": [
     {
+      "op": "input"
+    },
+    {
       "op": "conv2d",
       "kernel": 3,
       "stride": 1,
       "pad": 1,
-      "out_channels": 8,
-      "groups": 1
-    },
-    {
-      "op": "relu"
+      "groups": 1,
+      "act": "relu"
     },
     {
       "op": "max_pool2d",
@@ -33,14 +34,11 @@
       "kernel": 3,
       "stride": 1,
       "pad": 1,
-      "out_channels": 16,
-      "groups": 8
+      "groups": 8,
+      "act": "relu"
     },
     {
-      "op": "relu"
-    },
-    {
-      "op": "mean"
+      "op": "mean_hw"
     },
     {
       "op": "fc",
@@ -71,7 +69,7 @@
   },
   "blob": {
     "file": "model.blob",
-    "sha256": "6de3183e7136e385e7c5f8e7bc376bf3b4cd338083e05bf1f8879ac615390dc4"
+    "sha256": "af1773fe76cc1ec5d46365790f4907dd65272cb275753c6e5b6755556c505252"
   },
   "expect": {
     "file": "expect_fp32.bin",

@@ -21,30 +21,45 @@ transcribed in float64 with explicit loops, i.e. neither the same formulas as th
 kernels nor the same summation order -- so agreement means the operators are
 right, not that the code equals itself.
 
-Blob format v1 (little endian), identical to `k1_mlp3`:
+Graph blob format v2 (little endian):
 
     "INFRKAT\\0"          8 bytes
-    u32 version = 1
-    u32 tensor_count
-    per tensor:
+    u32 version = 2
+    u32 node_count
+    u32 slot_count
+    u32 reserved = 0
+    per node (36 bytes):
+        u8  op            0=input 1=conv2d 2=max_pool2d 3=mean_hw 4=fc
+        u8  act           infr_activation applied to the output, 0 = none
+        u16 reserved = 0
+        u32 in_slot, out_slot, w_slot, b_slot     (0xFFFFFFFF = none)
+        u32 p[4]          conv2d {kernel, stride, pad, groups},
+                          max_pool2d {kernel, stride, pad, -}
+    per slot:
         char name[16]     NUL padded
         u32 dtype         1 = F32 (mirrors infr_dtype)
-        u32 byte_len
+        u32 rank
+        u32 dims[4]
+        u32 byte_len      0 = runtime buffer, >0 = constant payload
         bytes payload
+
+v1 carried only the tensor table, so the graph had to be spelled out a second time in
+C++ (and a third time in prose in `manifest.json`, which nothing read). With
+`k2_conv_micro` promoted from fixture to consumer case (PLAN §2.2.1 / P4.5) the graph
+has to be **data**, otherwise every new architecture means another hand-written
+runner. The v1 reader is dropped on purpose: two versions of one format drift.
 """
 import argparse
 import hashlib
 import json
 import pathlib
-import struct
 import sys
 
 import numpy as np
 
+import blobfmt
+
 SEED = 0x2C0B
-MAGIC = b"INFRKAT\0"
-VERSION = 1
-DTYPE_F32 = 1
 
 IN_H = IN_W = 16
 IN_C = 1
@@ -131,11 +146,69 @@ def fully_connected(x, w, b):
     return (w.astype(np.float64) @ flat) + b.astype(np.float64)
 
 
-def tensor(name: str, dtype: int, payload: bytes) -> bytes:
-    raw = name.encode("ascii")
-    if len(raw) > 15:
-        raise SystemExit(f"emit_k2_blob: tensor name too long: {name}")
-    return raw.ljust(16, b"\0") + struct.pack("<II", dtype, len(payload)) + payload
+# The graph, as data. Slot order is the on-disk order and is also what `manifest.json`
+# is generated from, so the blob and the prose cannot disagree.
+SLOTS = (
+    ("input", (1, IN_H, IN_W, IN_C), False),
+    ("conv", (1, IN_H, IN_W, CONV_OC), False),
+    ("pool", (1, IN_H // 2, IN_W // 2, CONV_OC), False),
+    ("dw", (1, IN_H // 2, IN_W // 2, DW_OC), False),
+    ("gap", (1, 1, 1, DW_OC), False),
+    ("out", (1, 1, 1, FC_OC), False),
+    ("conv_w", (CONV_OC, CONV_K, CONV_K, IN_C), True),
+    ("conv_b", (CONV_OC,), True),
+    ("dw_w", (DW_OC, DW_K, DW_K, 1), True),
+    ("dw_b", (DW_OC,), True),
+    ("fc_w", (FC_OC, FC_IN), True),
+    ("fc_b", (FC_OC,), True),
+)
+NODES = (
+    {"op": "input", "out": "input"},
+    {"op": "conv2d", "in": "input", "out": "conv", "w": "conv_w", "b": "conv_b",
+     "p": (CONV_K, 1, 1, 1), "act": "relu"},
+    {"op": "max_pool2d", "in": "conv", "out": "pool", "p": (POOL_K, POOL_STRIDE, 0, 0)},
+    {"op": "conv2d", "in": "pool", "out": "dw", "w": "dw_w", "b": "dw_b",
+     "p": (DW_K, 1, 1, CONV_OC), "act": "relu"},
+    {"op": "mean_hw", "in": "dw", "out": "gap"},
+    {"op": "fc", "in": "gap", "out": "out", "w": "fc_w", "b": "fc_b"},
+)
+
+
+def describe(node) -> dict:
+    """The same node, in the words a human reads in `manifest.json`."""
+    if node["op"] == "conv2d":
+        kernel, stride, pad, groups = node["p"]
+        return {"op": "conv2d", "kernel": kernel, "stride": stride, "pad": pad,
+                "groups": groups, "act": node.get("act", "none")}
+    if node["op"] == "max_pool2d":
+        kernel, stride, pad, _ = node["p"]
+        return {"op": "max_pool2d", "kernel": kernel, "stride": stride, "pad": pad}
+    if node["op"] == "fc":
+        return {"op": "fc", "out_channels": FC_OC}
+    return {"op": node["op"]}
+
+
+def subset_of(nodes) -> list:
+    """The operator names this model needs, with `conv2d` split into dense/depthwise."""
+    names = []
+    for node in nodes:
+        if node["op"] == "conv2d":
+            names.append("dwconv2d" if node["p"][3] > 1 else "conv2d")
+        elif node["op"] == "mean_hw":
+            names.append("mean")
+        else:
+            names.append(node["op"])
+        act = node.get("act", "none")
+        if act != "none" and act not in names:
+            names.append(act)
+    return names
+
+
+def slot(name: str, dims, payload: bytes) -> bytes:
+    return blobfmt.slot(name, dims, payload)
+
+
+
 
 
 def main() -> int:
@@ -157,9 +230,9 @@ def main() -> int:
     h4 = mean_hw(h3)
     y = fully_connected(h4, weights["fc_w"], weights["fc_b"]).astype(np.float32)
 
-    order = ("conv_w", "conv_b", "dw_w", "dw_b", "fc_w", "fc_b")
-    payloads = [tensor(name, DTYPE_F32, weights[name].tobytes()) for name in order]
-    blob = MAGIC + struct.pack("<II", VERSION, len(payloads)) + b"".join(payloads)
+    slot_specs = [(name, dims, weights[name].tobytes() if is_weight else b"")
+                  for name, dims, is_weight in SLOTS]
+    blob = blobfmt.build(slot_specs, NODES)
 
     files = {
         "model.blob": blob,
@@ -173,17 +246,9 @@ def main() -> int:
         "id": "k2_conv_micro",
         "source": "hand-written integer-LCG weights (no closed-source tool)",
         "built_with": f"numpy {np.__version__} float64 reference",
-        "subset": ["conv2d", "relu", "max_pool2d", "dwconv2d", "mean", "fc"],
-        "graph": [
-            {"op": "conv2d", "kernel": 3, "stride": 1, "pad": 1, "out_channels": CONV_OC, "groups": 1},
-            {"op": "relu"},
-            {"op": "max_pool2d", "kernel": POOL_K, "stride": POOL_STRIDE, "pad": 0},
-            {"op": "conv2d", "kernel": 3, "stride": 1, "pad": 1, "out_channels": DW_OC, "groups": CONV_OC},
-            {"op": "relu"},
-            {"op": "mean"},
-            {"op": "fc", "out_channels": FC_OC},
-        ],
-        "weights": {"order": list(order), "dtype": "fp32"},
+        "subset": subset_of(NODES),
+        "graph": [describe(node) for node in NODES],
+        "weights": {"order": [name for name, _, is_weight in SLOTS if is_weight], "dtype": "fp32"},
         "input": {"file": "input.bin", "dtype": "fp32", "shape": [1, IN_H, IN_W, IN_C],
                   "sha256": hashlib.sha256(files["input.bin"]).hexdigest()},
         "blob": {"file": "model.blob", "sha256": hashlib.sha256(blob).hexdigest()},

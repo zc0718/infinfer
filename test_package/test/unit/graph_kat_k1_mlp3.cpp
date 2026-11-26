@@ -28,7 +28,7 @@
 namespace {
 
 constexpr char kMagic[8] = {'I', 'N', 'F', 'R', 'K', 'A', 'T', '\0'};
-constexpr std::uint32_t kVersion = 1;
+constexpr std::uint32_t kVersion = 2;
 constexpr std::uint32_t kDtypeF32 = 1;
 constexpr std::size_t kIn = 16;
 constexpr std::size_t kHidden = 32;
@@ -53,31 +53,41 @@ std::vector<unsigned char> read_file(const std::string& path) {
                                       std::istreambuf_iterator<char>());
 }
 
-// Blob reader for the documented v1 layout; the test fails loudly on any drift
-// instead of silently reading garbage.
+// Blob reader for the documented v2 layout. The node table is skipped: this test
+// re-spells the two nodes in C, so a wrong node list in the blob cannot hide behind a
+// runner that obeys it (`graph_blob_k2.cpp` is the one that obeys the nodes). k1's
+// input is a constant slot, which is why nothing here needs `input.bin`.
 std::vector<Tensor> parse_blob(const std::vector<unsigned char>& bytes) {
     std::vector<Tensor> tensors;
-    EXPECT_GE(bytes.size(), std::size_t{16});
-    if (bytes.size() < 16) {
+    EXPECT_GE(bytes.size(), std::size_t{24});
+    if (bytes.size() < 24) {
         return tensors;
     }
     EXPECT_EQ(0, std::memcmp(bytes.data(), kMagic, sizeof kMagic));
     EXPECT_EQ(kVersion, read_u32(bytes, 8));
-    const std::uint32_t count = read_u32(bytes, 12);
-    std::size_t offset = 16;
-    for (std::uint32_t i = 0; i < count; ++i) {
-        EXPECT_LE(offset + 24, bytes.size());
-        if (offset + 24 > bytes.size()) {
+    const std::uint32_t node_count = read_u32(bytes, 12);
+    const std::uint32_t slot_count = read_u32(bytes, 16);
+    std::size_t offset = 24 + (static_cast<std::size_t>(node_count) * 36U);
+    EXPECT_LE(offset, bytes.size()) << "node table runs past the end of the blob";
+    if (offset > bytes.size()) {
+        return tensors;
+    }
+    for (std::uint32_t i = 0; i < slot_count; ++i) {
+        EXPECT_LE(offset + 44, bytes.size());
+        if (offset + 44 > bytes.size()) {
             break;
         }
         Tensor tensor;
         tensor.name.assign(reinterpret_cast<const char*>(bytes.data() + offset));
         const std::uint32_t dtype = read_u32(bytes, offset + 16);
-        const std::uint32_t length = read_u32(bytes, offset + 20);
-        offset += 24;
-        EXPECT_EQ(kDtypeF32, dtype) << "tensor " << tensor.name;
+        const std::uint32_t length = read_u32(bytes, offset + 40);
+        offset += 44;
+        EXPECT_EQ(kDtypeF32, dtype) << "slot " << tensor.name;
         EXPECT_LE(offset + length, bytes.size());
         EXPECT_EQ(0U, length % sizeof(float));
+        if (length == 0) {
+            continue; /* runtime slot: this test reads only the constants */
+        }
         const std::size_t n = length / sizeof(float);
         tensor.values.resize(n);
         std::memcpy(tensor.values.data(), bytes.data() + offset, length);
