@@ -17,6 +17,14 @@ it is a gate and not a paragraph.
   T3 every debt entry is still accurate: the literal it names is still present.
      A declaration that outlives the code it describes is worse than none - it
      reads as current while pointing at nothing.
+  T4 every board profile names a declared house package and a triplet that
+     package actually provides. A board is itself a claim (the m33 cell cost a
+     day to a profile that was wrong), so it has to agree with the toolchain
+     table instead of inventing a compiler.
+  T5 the heavy checks that CI cannot run are still declared *and located*: a
+     command, the profiles it needs, where it runs, and why not in CI. A heavy
+     check that only exists in someone's shell history is the same disease as a
+     gate nobody runs.
 
 `--selftest` proves each rule fails on its own fixture.
 
@@ -142,21 +150,78 @@ def rule_debt_is_current(root, manifest):
     return problems
 
 
+def rule_boards_agree(root, manifest):
+    """T4: every board names a declared house package and one of its targets."""
+    problems = []
+    root = Path(root)
+    boards_dir = root / manifest.get("boards_dir", "")
+    if not boards_dir or not boards_dir.is_dir():
+        return problems  # a tree without board profiles has nothing to agree on
+    house = manifest.get("house", {})
+    for path in sorted(boards_dir.glob("*.json")):
+        try:
+            board = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            problems.append(f"T4 {path.name}: cannot read ({exc})")
+            continue
+        toolchain = board.get("toolchain") or {}
+        package = toolchain.get("package")
+        triplet = toolchain.get("triplet")
+        if package not in house:
+            problems.append(
+                f"T4 {path.name}: toolchain.package '{package}' is not a declared "
+                f"house package")
+            continue
+        targets = house[package].get("targets", [])
+        if triplet not in targets:
+            problems.append(
+                f"T4 {path.name}: triplet '{triplet}' is not one of "
+                f"{package}'s targets {targets}")
+    return problems
+
+
+def rule_heavy_checks(root, manifest):
+    """T5: what CI cannot run must still say where it runs and why not."""
+    problems = []
+    for index, entry in enumerate(manifest.get("heavy_checks", [])):
+        if not isinstance(entry, dict):
+            problems.append(f"T5 heavy[{index}]: expected an object")
+            continue
+        for field in ("id", "command", "runs_from", "why_not_in_ci"):
+            value = entry.get(field)
+            if not isinstance(value, str) or not value.strip():
+                problems.append(
+                    f"T5 heavy[{index}] ({entry.get('id', '?')}): "
+                    f"missing or empty '{field}'")
+        profiles = entry.get("profiles")
+        if not isinstance(profiles, list) or not profiles:
+            problems.append(
+                f"T5 heavy[{index}] ({entry.get('id', '?')}): "
+                f"missing or empty 'profiles'")
+    return problems
+
+
 def check(root):
     manifest = load_manifest(root)
     return (rule_owned_surface(root, manifest)
             + rule_declarations(root, manifest)
-            + rule_debt_is_current(root, manifest))
+            + rule_debt_is_current(root, manifest)
+            + rule_boards_agree(root, manifest)
+            + rule_heavy_checks(root, manifest))
 
 
 def _fixture(root, manifest, surface_file, surface_text, debt_file=None,
-             debt_text=None):
+             debt_text=None, board_text=None):
     """Lay out a miniature tree: a manifest, one owned file, one debt file."""
     root = Path(root)
     (root / ".github/project").mkdir(parents=True, exist_ok=True)
     (root / MANIFEST).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    for relative, text in ((surface_file, surface_text), (debt_file, debt_text)):
-        if relative is None:
+    pairs = [(surface_file, surface_text), (debt_file, debt_text)]
+    boards_dir = manifest.get("boards_dir")
+    if boards_dir and board_text is not None:
+        pairs.append((f"{boards_dir}/fixture.json", board_text))
+    for relative, text in pairs:
+        if relative is None or text is None:
             continue
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -164,6 +229,8 @@ def _fixture(root, manifest, surface_file, surface_text, debt_file=None,
 
 
 def selftest():
+    good_board = ('{"toolchain": {"package": "arm-toolchain/11.3.rel1", '
+                  '"triplet": "arm-none-eabi"}}')
     base_manifest = {
         "house": {"arm-toolchain/11.3.rel1": {"targets": ["arm-none-eabi"]}},
         # Built from fragments so this file never contains the literal it bans.
@@ -171,6 +238,14 @@ def selftest():
         "owned_surface": ["workspace"],
         "skip_dirs": [],
         "text_suffixes": [".py"],
+        "boards_dir": "workspace/boards",
+        "heavy_checks": [{
+            "id": "cross-build",
+            "command": "conan create . -pr:h {profile}",
+            "profiles": ["armv8"],
+            "runs_from": "preflight",
+            "why_not_in_ci": "no conan on the gates job",
+        }],
         "debt": [{
             "path": ".github/workflows/ci.yml",
             "contains": "apt-" + "compiler",
@@ -180,8 +255,9 @@ def selftest():
     }
     cases = []
 
-    def case(name, expected, manifest=None, surface="import os\n", debt="apt-compiler\n"):
-        return (name, expected, manifest or base_manifest, surface, debt)
+    def case(name, expected, manifest=None, surface="import os\n",
+             debt="apt-compiler\n", board=good_board):
+        return (name, expected, manifest or base_manifest, surface, debt, board)
 
     cases.append(case("clean tree is green", None))
     cases.append(case(
@@ -200,13 +276,27 @@ def selftest():
     cases.append(case(
         "a scan exemption without a reason is red", "T2 ",
         manifest={**base_manifest, "skip_dirs": [{"path": "workspace/build"}]}))
+    cases.append(case(
+        "a board naming an undeclared toolchain is red", "T4 ",
+        board='{"toolchain": {"package": "apt:gcc", "triplet": "arm-none-eabi"}}'))
+    cases.append(case(
+        "a board naming a triplet its package does not provide is red", "T4 ",
+        board='{"toolchain": {"package": "arm-toolchain/11.3.rel1", '
+              '"triplet": "riscv-none-elf"}}'))
+    cases.append(case(
+        "a heavy check without a location is red", "T5 ",
+        manifest={**base_manifest, "heavy_checks": [{
+            "id": "cross-build", "command": "conan create .",
+            "profiles": ["armv8"], "runs_from": "",
+            "why_not_in_ci": "no conan in CI",
+        }]}))
 
     failures = 0
-    for name, expected, manifest, surface, debt in cases:
+    for name, expected, manifest, surface, debt, board in cases:
         temp = tempfile.mkdtemp(prefix="toolchain-selftest-")
         try:
             _fixture(temp, manifest, "workspace/app/tool.py", surface,
-                     ".github/workflows/ci.yml", debt)
+                     ".github/workflows/ci.yml", debt, board)
             problems = check(temp)
             if expected is None:
                 if problems:

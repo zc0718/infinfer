@@ -5,7 +5,9 @@
     "This file is the data half; toolchain_gate.py is the teeth half. T1 scans the surface we own for third-party compiler names, T2 refuses a debt entry without why/exit, T3 refuses a stale debt entry (the literal it claims is no longer in the file).",
     "哪些编译器可以构建本工程，以及树里还在指名哪些不行的。INV-7 规定'板子进矩阵的前提是 house 工具链能构建它'，所以'用哪个编译器'是合同而不是细节：同一份源码由两套地基编出来，是两套无法互相比较的证据。",
     "本文件是数据那一半，toolchain_gate.py 是牙齿那一半：T1 扫我们自己的面里有没有第三方编译器名，T2 拒收没有 why/exit 的债务条目，T3 拒收已失效的债务条目（它声称的字面量在文件里已不存在）。",
-    "T1 只扫**代码面**（.py/.sh/.json/.yml/.c/.h/.cpp）：规矩是「我们的脚本不许调用第三方编译器」，而文档/笔记**可以**提这些名字——本文件和 gaps.md 就在讨论禁令本身。"
+    "T1 只扫**代码面**（.py/.sh/.json/.yml/.c/.h/.cpp）：规矩是「我们的脚本不许调用第三方编译器」，而文档/笔记**可以**提这些名字——本文件和 gaps.md 就在讨论禁令本身。",
+    "T4 每块板型必须指名一个已申报的 house 包，且它的 triplet 必须是该包真正提供的目标；板型本身就是一个声称（m33 那次为一个错的 profile 花了一天），所以它必须与工具链表一致，而不是自己发明一个编译器。",
+    "T5 CI 跑不动的重活仍然是**一等公民**：命令、所需 profile、在哪跑、为什么不在 CI 跑。只活在某个人的 shell 历史里的重活，和没人跑的门禁是同一种病。"
   ],
   "house": {
     "arm-toolchain/11.3.rel1": {
@@ -64,6 +66,19 @@
     ".cpp",
     ".yml",
     ".yaml"
+  ],
+  "boards_dir": "workspace/qa/qemu/boards",
+  "heavy_checks": [
+    {
+      "id": "cross-build-library",
+      "command": "conan create . -pr:h {profile} -pr:b default --build=missing -c user.het:run_tests=False --test-folder= -nr",
+      "profiles": [
+        "armv8",
+        "armv7hf"
+      ],
+      "runs_from": "preflight, or any machine that has the house profiles; measured green on 2026-11-26 for both profiles",
+      "why_not_in_ci": "the project-gates job has no conan, no house profiles and no warm cache, so running it there would be red for reasons that have nothing to do with the tree"
+    }
   ],
   "debt": [
     {

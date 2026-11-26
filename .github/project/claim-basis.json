@@ -31,7 +31,15 @@
         "arm": "arm-toolchain/11.3.rel1 (resolved by declared version probe from the Conan cache)",
         "riscv": "rv-toolchain/14.3.rel1 (resolved by declared version probe; xpack reports GCC 14.2.0)",
         "arm_linux": "arm-toolchain/11.3.rel1 for aarch64-none-linux-gnu and arm-none-linux-gnueabihf (resolved by declared version probe; qemu-user needs no sysroot because the ELFs are static)",
-        "provenance": "toolchains.json + toolchain_gate.py: our own code surfaces may only resolve the house packages; the three template-owned places that still apt-install compilers are declared debt with a removal condition and are re-checked by T3"
+        "provenance": "toolchains.json + toolchain_gate.py: our own code surfaces may only resolve the house packages; the three template-owned places that still apt-install compilers are declared debt with a removal condition and are re-checked by T3",
+        "heavy_check": "conan create . -pr:h {armv8,armv7hf} -pr:b default --build=missing -c user.het:run_tests=False --test-folder= -nr: both profiles cross-build the library with the house toolchain (measured 2026-11-26); the gate's T5 keeps this declared with where it runs and why the project-gates job cannot run it",
+        "gate_rules": [
+          "T1 owned surface is house-only",
+          "T2 debt needs why/exit, exemptions need why",
+          "T3 debt must still be accurate",
+          "T4 boards agree with the declared toolchains",
+          "T5 heavy checks stay declared and located"
+        ]
       },
       "variants": {
         "aarch64-linux": [
