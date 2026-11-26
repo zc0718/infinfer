@@ -87,7 +87,7 @@
     "test_package/conanfile.py": "28ca75ff819233055d95334554904c6b1c6ea1eb0665d08ccece714aaac6bf39",
     "CMakeLists.txt": "65cbd4dddf3c0879bd39e9ea4f9f4e635a91e2d4851d5ee30eece008c18dc7b1"
   },
-  "tolerance_budget": 4,
+  "tolerance_budget": 3,
   "tolerated": [
     {
       "path": ".github/workflows/ci-orchestrator.yml",
@@ -103,17 +103,11 @@
       "path": ".github/workflows/hetai-package-matrix.yml",
       "why": "HETAI_PLAN_ROOT pointed at the upstream author's machine path /home/fcpp/WorkProject/Plan (IDENTITY_LEAK, gaps G-24)",
       "exit": "none needed after this commit: the value now comes from the `vars.HETAI_PLAN_ROOT` repository variable, matching the two sibling env vars"
-    },
-    {
-      "path": "CMakeLists.txt",
-      "why": "ADR-002 component fork: src/kernel/**/*.c compile into the _cpp component (C11), and _cpp also gets C_STANDARD; upstream's extension split would create a _c <-> _cpp component cycle",
-      "exit": "drop the entry once fcpp lets a recipe declare which component a source subtree belongs to (upstream issue), or if the kernels ever move to C++"
     }
   ],
   "owned_dirs": [
     "include/",
     "src/",
     "workspace/"
-  ],
-  "_tolerance_note": "4th fork: CMakeLists.txt carries the ADR-002 component edge (src/kernel/**/*.c -> _cpp, plus C_STANDARD on _cpp). Three were the derivation baseline; this one is required by the L1/L2 split and is reclaimed if fcpp ever lets a recipe map a source subtree to a component."
+  ]
 }

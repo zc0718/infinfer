@@ -116,19 +116,6 @@ collect_files(C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src" ${C_SOURCE_PATTERNS})
 collect_files(CPP_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src" ${CPP_SOURCE_PATTERNS})
 collect_files(MODULE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/src" ${MODULE_PATTERNS})
 
-# The reference kernels (src/kernel/**/*.c) are C, but they ship in the _cpp component.
-# Upstream splits by extension, which would put them in _c; that forces _c to require
-# _cpp (the ABI wrapper calls the orchestration) while _cpp would require _c (the
-# orchestration calls the kernels), i.e. a component cycle. Keeping them .c means the C
-# compiler still builds them -- they are not renamed or rewritten -- they just live in
-# the C++ component, which is what `component_requires: {infinfer_c: [infinfer_cpp]}`
-# declares to consumers.
-file(GLOB_RECURSE KERNEL_C_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/kernel/*.c")
-if(KERNEL_C_SOURCES)
-    list(FILTER C_SOURCES EXCLUDE REGEX "/src/kernel/.*\\.c$")
-    list(APPEND CPP_SOURCES ${KERNEL_C_SOURCES})
-endif()
-
 
 if(IS_HEADER AND ENABLE_PYBIND)
   message(FATAL_ERROR "enable_python_bindings needs compiled sources; header-only (is_header=true) has none")
@@ -255,9 +242,6 @@ else()  # general package
   )
 
   set_target_properties(${LIB_NAME}_cpp PROPERTIES
-          C_STANDARD ${BUILD_CSTD}
-          C_STANDARD_REQUIRED ON
-          C_EXTENSIONS OFF
           CXX_STANDARD ${BUILD_CPPSTD}
           CXX_STANDARD_REQUIRED ON
           CXX_EXTENSIONS OFF
