@@ -65,7 +65,7 @@ kernels:
       autovec: na
       # Per-pair for the same reason as the tiers below: this kernel declares three
       # pairs, so a flat `done` would claim the two quantized ones as well.
-      x86: { fp32/none: done, int8/tensor: done, int16/tensor: todo }
+      x86: { fp32/none: done, int8/tensor: done, int16/tensor: done }
       # Per-pair (gaps G-51): the NEON row is the fp32 dot product. The quantized
       # pairs stay open -- int8 has a DSP path on Cortex-M and no NEON row yet, and a
       # flat `done` here would claim them.

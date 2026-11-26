@@ -356,3 +356,62 @@ TEST(kernel_parity, fc_x86_i8) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, &unresolved));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, &unresolved));
 }
+
+TEST(kernel_parity, fc_x86_i16) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_x86());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* row =
+        infr_kernel_find("fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_X86);
+    ASSERT_NE(nullptr, scalar) << "fc/int16/tensor/scalar is not registered";
+    if (row == nullptr) {
+        GTEST_SKIP() << kNoVector;
+    }
+
+    // The corpus exists to hit the one corner the obvious SSE2 form gets wrong: two lanes that
+    // are both INT16_MIN squared sum to exactly 2^31, which wraps in `_mm_madd_epi16`'s paired
+    // int32 result but not in the reference's int64 accumulator. If a future body switches to the
+    // paired form for speed, this case is what fails.
+    const std::uint32_t lengths[] = {0U, 1U, 3U, 7U, 8U, 9U, 16U, 17U, 64U, 511U};
+    std::vector<std::int16_t> x(511);
+    std::vector<std::int16_t> w(511);
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        x[i] = static_cast<std::int16_t>(static_cast<int>((i * 733U) % 65535U) - 32767);
+        w[i] = static_cast<std::int16_t>(static_cast<int>((i * 977U + 13U) % 65535U) - 32767);
+    }
+    x[0] = INT16_MIN; /* INT16_MIN * INT16_MIN twice is the wrap corner */
+    w[0] = INT16_MIN;
+    x[1] = INT16_MIN;
+    w[1] = INT16_MIN;
+    x[2] = INT16_MAX;
+    w[2] = INT16_MIN;
+    x[3] = -1;
+    w[3] = 1;
+
+    infr_quant quant{};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 1.0F;
+    quant.zero_point = 5;
+    quant.requant_multiplier = 1e-6F; /* keeps the sum inside int16 after requantisation */
+
+    const void* inputs[2] = {x.data(), w.data()};
+    for (std::uint32_t n : lengths) {
+        std::int16_t want = 42;
+        std::int16_t got = 42;
+        void* want_out[1] = {&want};
+        void* got_out[1] = {&got};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, &quant));
+        ASSERT_EQ(INFR_OK, row->fn(inputs, got_out, n, &quant));
+        EXPECT_EQ(static_cast<int>(want), static_cast<int>(got)) << "length " << n;
+    }
+
+    std::int16_t out = 0;
+    void* out_ptr[1] = {&out};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, nullptr));
+    infr_quant unresolved{};
+    unresolved.requant_multiplier = 1.0F;
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, &unresolved));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, &unresolved));
+}

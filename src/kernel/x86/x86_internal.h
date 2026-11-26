@@ -95,4 +95,17 @@ infr_status infr_x86_relu_i8(const void *const *inputs, void *const *outputs, ui
 infr_status infr_x86_fc_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
                            const infr_quant *quant);
 
+
+/**
+ * @brief [en] int16 dot product with an int64 accumulator (the paired SSE2 form would wrap).
+ * @brief [zh] int64 累加的 int16 点积（SSE2 的成对形式会回绕）。
+ * @note [en] See `fc_i16.c`: the obvious `_mm_madd_epi16` pairing overflows on `-32768^2 + -32768^2`
+ *            = 2^31, so each product is isolated with a zero lane and widened to int64.
+ * @note [zh] 见 `fc_i16.c`：显而易见的 `_mm_madd_epi16` 成对形式在 `-32768² + -32768² = 2^31`
+ *            上回绕，所以每个乘积用零车道隔开、再扩成 int64。
+ * @since 0.1.0
+ */
+infr_status infr_x86_fc_i16(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                            const infr_quant *quant);
+
 #endif /* INFR_SRC_KERNEL_X86_INTERNAL_H */
