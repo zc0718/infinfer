@@ -1,0 +1,22 @@
+{
+  "_comment": [
+    "Which paths must never be published, as data.",
+    "The owner's instruction (2026-11-26): the working papers -- the gap ledger and the plan -- cannot become",
+    "public by any route, while the rest of the execution subset is tracked normally. `procdocs_gate.py`",
+    "enforces that from the index side and this list is the only place the set is written down.",
+    "",
+    "为什么是数据而不是写在门禁里：这份集合会变（新的过程文档会出现），而「哪些东西不能公开」是业主的决定，",
+    "不该埋在代码的判断里。改这里等于改一条安全属性，所以门禁对每一条都要求 .gitignore 里也有对应规则——",
+    "两个独立的锁，缺一个就红。",
+    "",
+    "Patterns use a simple intent: `dir/**` protects the directory and everything below it;",
+    "`prefix/*.md` protects the matches directly in `prefix`; anything else is a plain glob.",
+    "Do NOT use `workspace/**`: that would protect the code, which is the opposite of the point."
+  ],
+  "protected": [
+    "workspace/audit/**",
+    "workspace/PLAN-*.md"
+  ],
+  "ignore_file": ".gitignore",
+  "why": "process notes: self-criticism, internal sequencing, owner instructions. Kept locally, never shipped."
+}

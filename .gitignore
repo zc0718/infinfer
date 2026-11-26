@@ -31,6 +31,18 @@ __pycache__/
 /workspace/qa/kat/generated/
 /workspace/qa/qemu/build/
 
+# Process documents: kept locally, never shipped (owner's instruction, 2026-11-26 -- gaps G-76).
+# The gap ledger and the plan carry self-criticism and internal sequencing, so the requirement is
+# that they cannot be published **by any route**, not that we remember not to push them. Two locks:
+# this list, and `procdocs_gate.py`, which fails the build when one of them reaches the index --
+# including via `git add -f`, which bypasses this file completely.
+#
+# 过程文档：只在本地保留，永不随仓发布（业主指示，2026-11-26，gaps G-76）。差距台账与计划里有自我批评
+# 与内部排序，所以要求是「任何途径都不能公开」，而不是「记得别 push」。两把锁：下面两条规则，以及
+# `procdocs_gate.py`——它在本索引里发现它们就判红，包括绕过本文件的 `git add -f`。
+/workspace/audit/
+/workspace/PLAN-*.md
+
 # agent-skill adapter views (generated symlinks/junctions; canonical source is .github/skills)
 # Default: .agents only. Optional: .claude / .codex via `sync --harness claude|codex`.
 # No trailing slash: a POSIX view is a symlink, which a "dir/" pattern does not match.
