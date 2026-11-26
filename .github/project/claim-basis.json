@@ -12,7 +12,7 @@
       "chains": {
         "k0_actquant": "PASS on all six targets",
         "k1_mlp3": "PASS on all six targets",
-        "k2_conv_micro": "PASS on five targets; open on m33-an505 (reports a CPU exception, tracked separately)"
+        "k2_conv_micro": "PASS on all six targets"
       },
       "targets": [
         "m3-an385",
@@ -22,9 +22,8 @@
         "rv64-virt",
         "m33-an505"
       ],
-      "excluded": {
-        "m33-an505/k2_conv_micro": "open: the C++ runtime chain still takes a CPU exception on this model; k0 and k1 pass, so the operator path itself is fine"
-      },
+      "excluded": {},
+      "board_note": "m33-an505 links .data/.bss and the stack inside mps.ram (0x80000000..0x80FFFFFF, confirmed with `info mtree`); the earlier placement at 0x00401000 with _estack=0x00800000 sat in tz-mpc-upstream windows and dropped stack pushes, which is what made k2 lose its return address",
       "reproduce": "python3 workspace/qa/kat/run_kat.py --chain all  (needs workspace/, so a fresh clone must skip it and say so)",
       "toolchain": {
         "arm": "arm-toolchain/11.3.rel1 (resolved by declared version probe from the Conan cache)",
