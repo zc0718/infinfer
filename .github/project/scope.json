@@ -1,0 +1,33 @@
+{
+  "_comment": [
+    "Scope rules this project asserts about itself. They live here, not in a local note,",
+    "because a note is gone after a machine change and gets re-decided by the next pass",
+    "over the tree. `scope_gate.py` checks all three rules on every push.",
+    "S1 identity_sweep_exceptions: a literal that an external system hardcodes. The identity",
+    "   sweep (grep for the upstream project name) must leave it alone: renaming it points",
+    "   that external system at a path which does not exist, and nothing local notices.",
+    "S2 out_of_scope: a switch this plan does not own; it must keep the listed value.",
+    "S3 every entry carries `why` and `exit`, so an exception cannot be added without",
+    "   saying what it is for and what would remove it.",
+    "The two incidents behind S1/S2 are recorded in workspace/audit/gaps.md as G-42 and G-43."
+  ],
+  "identity_sweep_exceptions": [
+    {
+      "path": ".github/misc/supportable-board-matrix.yml",
+      "must_contain": "/tmp/fcpp_benchmark_",
+      "count": 12,
+      "must_not_contain": "infinfer_benchmark",
+      "why": "The ops server deploys benchmark bundles into /tmp/fcpp_benchmark_* and those directories are created outside this repository. The name is the deploy target, not the project identity; renaming it to the project prefix sends the deploy tool to a directory that does not exist, and every local gate still passes.",
+      "exit": "never: the literal belongs to the deploy host. If the ops side renames the directories, update `must_contain` in the same change."
+    }
+  ],
+  "out_of_scope": [
+    {
+      "path": "metadata.json",
+      "key": "workflow_triggers.on_board",
+      "must_be": false,
+      "why": "benchmark/platform/*.json lists the physical devices wired into CI (hardware in the loop, the self-hosted board route). This plan covers the virtualised matrix under workspace/qa only, so the board route stays off and no :fire: commit is pushed.",
+      "exit": "turn it on in the plan that owns hardware, not here."
+    }
+  ]
+}
