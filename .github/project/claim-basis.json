@@ -113,6 +113,34 @@
         "rvv": 1
       },
       "counts_note": "the counts were 9/2/10 (50 comparisons) until 2026-11-26, when fc/int8 landed on arm_neon and rvv (G-79) and relu/int8 on arm_m (G-83); the claim gate found the staleness on its first run"
+    },
+    {
+      "id": "case-k2-blob-graph",
+      "claim": "the same `model.blob` the host gtest reads is also parsed and executed on the target: `k2_conv_micro` runs twice inside one process, once hand-written and once driven by the blob's own node table, and the two agree bit for bit on every QEMU target",
+      "why_it_was_missing": "the blob carried the graph from G-92 on, but only the host gtest read it; the target chain still spelled the graph out and took only the weights from the generated header, so the evidence stopped exactly between 'the host runs a data-driven graph' and 'the target runs a hand-written one'",
+      "how": "`workspace/qa/kat/blob_graph.c` parses the v2 header/node/slot tables and drives the public L2 operators; `emit_blob_image.py` compiles the blob in as raw bytes, not float literals, because `1e-7` round-tripping silently differs between newlib and glibc. Every operator re-derives its own output shape and compares it against the slot's declaration, so a wrong generator is red instead of feeding garbage floats to the next layer",
+      "gate": "kat-chains",
+      "commit": "acb4df5",
+      "host": "zc Linux, QEMU 8.2.2",
+      "date": "2026-11-26",
+      "local_only": true,
+      "targets": [
+        "m3-an385",
+        "m4-an386",
+        "m7-an500",
+        "m33-an505",
+        "rv32-virt",
+        "rv64-virt",
+        "aarch64-linux",
+        "armv7hf-linux"
+      ],
+      "red_proof": "two mutations on the real tree, both restored byte-for-byte by md5: `kernel 3->1` in the node table makes the chain fail at the shape re-derivation (exit 10); `act relu->none` leaves a graph whose geometry is entirely valid, so the only thing that can go red is the bitwise comparison itself -- and it does (exit 10)",
+      "excluded": {
+        "numerical_correctness": "the in-chain comparison is between two implementations, so it proves equivalence rather than correctness; the values are judged against numpy by the host gtest `graph_blob_k2.cpp`, and the chain's single judgement stays bit equality",
+        "permanent_negative": "the C-side negatives live in this record rather than in CI: a deliberately-corrupt build axis would double the KAT image matrix; the permanent negative cases are the C++ executor's `RejectsAMalformedBlob`"
+      },
+      "reproduce": "python3 workspace/qa/kat/run_kat.py --chain k2  (needs workspace/, so a fresh clone must skip it and say so)",
+      "not_in_ci": "same reason as `kat-cross-target`: the project-gates job has no house cross toolchain and no qemu"
     }
   ]
 }
