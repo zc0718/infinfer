@@ -10,17 +10,6 @@
  * @brief [en] x86 implementation of the broadcast scalar multiply.
  * @brief [zh] 按标量广播乘法的 x86 实现。
  * @since 0.1.0
- *
- * @note [en] The file name carries the ISA because the coverage collector in
- *            `test_package/conanfile.py` copies every `.gcda`/`.gcno` **by basename** into one
- *            flat directory, so two sources called `fc.c` overwrite each other's counts and the
- *            second one silently disappears from the report. Until that collector is fixed
- *            (gaps G-62), the six x86 bodies keep unique stems; renaming them back is the whole
- *            diff of the follow-up commit.
- * @note [zh] 文件名带 ISA 前缀，是因为 `test_package/conanfile.py` 里的覆盖率收集**按 basename**
- *            把每个 `.gcda`/`.gcno` 平铺复制到同一个目录：两个都叫 `fc.c` 的源文件会互相覆盖计数，
- *            后处理的那个从报告里静默消失。在该收集器修好之前（gaps G-62），六个 x86 实现体保持唯一
- *            的文件名主干；后续那条提交的全部 diff 就是把它们改回去。
  */
 
 #if defined(__SSE2__)

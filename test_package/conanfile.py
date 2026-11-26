@@ -16,6 +16,20 @@ MAIN_CPP = 'main.cpp'
 _get_file_name = (lambda x: x.split(sep)[-1])
 
 
+def _slot_name(object_path: str) -> str:
+    """Short, stable directory name for one object directory.
+
+    The coverage collector copies every `.gcda`/`.gcno` pair into a directory of its own, keyed by
+    the object's directory. Flattening them by basename -- the template's behaviour -- makes two
+    translation units that share a file name (`fc.c` in two tiers) overwrite each other, and the
+    loser vanishes from the report with no diagnostic. Hashing the directory keeps the pair
+    together, keeps the name filesystem-safe, and stays stable across runs.
+    """
+    import hashlib
+
+    return 'o' + hashlib.sha256(os.path.dirname(object_path).encode('utf-8')).hexdigest()[:16]
+
+
 def _lcov_ignore_errors() -> str:
     """Error classes to skip, named per lcov version: geninfo 2.x validates the list, 1.x rejects unknown names."""
     try:
@@ -478,9 +492,17 @@ class PackageTestConan(ConanFile):
 
         coverage_folder = self._coverage_folder()
 
+        # One directory per object directory: the pair must stay together (gcov matches a `.gcda`
+        # to its `.gcno` by name in the same directory), but two sources that share a basename --
+        # `src/kernel/scalar/fc.c` and `src/kernel/x86/fc.c` -- must not land on the same path, or
+        # the later copy silently replaces the earlier one and that translation unit disappears
+        # from the report. The slot name is a hash of the object's directory, so it is stable
+        # across runs and short enough for any filesystem.
         for v1, v2 in zip(_gcda, _gcno):
-            shutil.copy2(v1, coverage_folder + sep + _get_file_name(v1))
-            shutil.copy2(v2, coverage_folder + sep + _get_file_name(v2))
+            _slot = coverage_folder + sep + _slot_name(v1)
+            os.makedirs(_slot, exist_ok=True)
+            shutil.copy2(v1, _slot + sep + _get_file_name(v1))
+            shutil.copy2(v2, _slot + sep + _get_file_name(v2))
 
         # `source` = deleted ucov_ copies; the line-range classes are named per lcov release (see _lcov_ignore_errors).
         cmd1 = ['lcov', '--directory', coverage_folder, '--capture', '--output-file',
