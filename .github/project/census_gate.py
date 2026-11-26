@@ -26,10 +26,15 @@ anything -- which is why PLAN P1.2 makes the two files mutually accountable:
      `where` on every claiming entry (ONNX reuses `Conv` for conv and dwconv; see
      PLAN §3.7).
   R5 every cell whose tier is `done` has a census key with a test name; every
-     census key is a matrix cell. Cells whose tier is `todo`/`na` are *pending*,
-     not red -- a red cell has to mean "we claim this and cannot prove it", not
-     "we have not written this tier yet" (that is PLAN P2.2's work list, and a
-     permanently red gate stops being read).
+       census key is a matrix cell. Cells whose tier is `todo` are *pending*,
+       not red -- a red cell has to mean "we claim this and cannot prove it", not
+       "we have not written this tier yet" (that is PLAN P2.2's work list, and a
+       permanently red gate stops being read). Cells whose tier is `na` are
+       *decided*, not pending: `todo` is work nobody has done, `na` is a written
+       decision that this tier is not a code tier for this kernel (for example
+       `autovec`, which is the same bodies built with vectorising flags and is
+       proven by `isa_gate.py` instead). Reporting both as pending would let a
+       decision look like a backlog, and a backlog look like a decision.
   R6 a census entry is a non-empty list of non-empty test names; a declared cell
      with `[]` is "declared but unproven" and is red, not absent.
   R7 `composed` rows are operators the graph layer assembles from kernels: they
@@ -289,8 +294,13 @@ def check_census(census, cells, status_by_key):
 
     declared = {cell_key(name, dtype, quant, tier) for name, rows in cells.items() for dtype, quant, tier in rows}
     for key in sorted(declared - set(entries)):
-        if status_by_key.get(key) == "done":
+        status = status_by_key.get(key)
+        if status == "done":
             problems.append(f"census: cell '{key}' is declared in matrix.yml but missing from census.json")
+        elif status == "na":
+            # Decided, not pending: this tier is not a code tier for this kernel and the matrix
+            # says so. Counting it as backlog would make a decision look like unfinished work.
+            pass
         else:
             pending.append(key)
     for key in sorted(set(entries) - declared):

@@ -1,0 +1,47 @@
+{
+  "_comment": [
+    "What `autovec` means in this project, as data.",
+    "`autovec` is not a code tier: the scalar bodies are the implementation and the only thing",
+    "that can be true or false is whether the shipped flags vectorise them. `isa_gate.py`",
+    "recompiles each file below with `flags` and counts packed SSE2 instructions in the",
+    "disassembly, so the claim is re-measured on every run instead of being remembered.",
+    "",
+    "Measured 2026-11-26 on gcc 13 (x86-64), packed instruction counts with -O2 vs -O3:",
+    "  add.c   0 -> 5    relu.c  0 -> 5    scale.c 0 -> 8    fc.c 0 -> 7    quant.c 1 -> 30",
+    "  reduce.c 1 -> 1 (unchanged)",
+    "This falsifies the earlier note that the kernel ABI blocks vectorisation: -O2 does, -O3",
+    "does not, and `restrict`/`ivdep` make no difference at -O3. CMake's Release flags are",
+    "-O3 -DNDEBUG, which is why the shipped release build already gets these.",
+    "",
+    "`degraded` is not a to-do list: it records where the tier is honestly *absent* and why.",
+    "It exists so that a missing vectorisation cannot be silently dropped from this file --",
+    "an entry without a reason is red."
+  ],
+  "tier": "autovec",
+  "flags": ["-O3", "-std=c11"],
+  "expect": {
+    "src/kernel/scalar/add.c": {
+      "min_packed": 3,
+      "what": "fp32 elementwise add; measured 5 packed instructions"
+    },
+    "src/kernel/scalar/relu.c": {
+      "min_packed": 3,
+      "what": "fp32 and int8 relu; measured 5"
+    },
+    "src/kernel/scalar/scale.c": {
+      "min_packed": 5,
+      "what": "fp32 broadcast multiply; measured 8"
+    },
+    "src/kernel/scalar/fc.c": {
+      "min_packed": 4,
+      "what": "fp32 and int8/int16 dot products; measured 7"
+    },
+    "src/kernel/scalar/quant.c": {
+      "min_packed": 15,
+      "what": "quantize/dequantize; measured 30"
+    }
+  },
+  "degraded": {
+    "src/kernel/scalar/reduce.c": "sum would need reassociation (-ffast-math) to become a packed reduction, and that changes the answer the parity window is defined against; max folds with a NaN-sensitive `>` and stays scalar. Measured 1 packed instruction before and after -O3, i.e. neither kernel becomes a packed reduction."
+  }
+}
