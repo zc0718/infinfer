@@ -78,6 +78,19 @@
       ],
       "runs_from": "preflight, or any machine that has the house profiles; measured green on 2026-11-26 for both profiles",
       "why_not_in_ci": "the project-gates job has no conan, no house profiles and no warm cache, so running it there would be red for reasons that have nothing to do with the tree"
+    },
+    {
+      "id": "tier-parity",
+      "command": "python3 workspace/qa/kat/run_kat.py --chain k3",
+      "profiles": [
+        "armv8",
+        "armv7hf",
+        "cortex-m4",
+        "cortex-m7",
+        "rv64gcv"
+      ],
+      "runs_from": "preflight, or any machine with the house toolchains and qemu; measured green 2026-11-26 (6 builds pass, 6 skip with reasons)",
+      "why_not_in_ci": "the project-gates job has no Conan cache, no house cross toolchain and no qemu, so it would be red for reasons that have nothing to do with the tree; T5 keeps this declaration honest and located"
     }
   ],
   "debt": [
