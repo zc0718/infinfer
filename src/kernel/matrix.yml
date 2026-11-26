@@ -84,7 +84,7 @@ kernels:
     tflite: [ADD]
     onnx: [{op: Add}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: todo }
     grad: todo
   sum:
     tflite: [SUM]
@@ -96,7 +96,7 @@ kernels:
     tflite: [MUL]
     onnx: [{op: Mul, where: "one operand is a scalar"}]
     dtype_quant: [[fp32, none]]
-    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    tiers: { scalar: done, autovec: todo, arm_neon: done, arm_m: todo, rvv: todo }
     grad: todo
   max:
     tflite: [REDUCE_MAX]

@@ -1,6 +1,9 @@
 {
   "schema": 1,
   "cells": {
+    "add/fp32/none/arm_neon": [
+      "kernel_parity/add_arm_neon_fp32"
+    ],
     "add/fp32/none/scalar": [
       "kernel_parity/add_scalar_fp32"
     ],
@@ -42,6 +45,9 @@
     ],
     "relu/int8/none/scalar": [
       "kernel_parity/relu_scalar_int8"
+    ],
+    "scale/fp32/none/arm_neon": [
+      "kernel_parity/scale_arm_neon_fp32"
     ],
     "scale/fp32/none/scalar": [
       "kernel_parity/scale_scalar_fp32"

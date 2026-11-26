@@ -43,6 +43,16 @@ infr_status infr_kernel_register_arm_neon(void) {
          .quant = INFR_QUANT_NONE,
          .tier = INFR_TIER_ARM_NEON,
          .fn = infr_arm_neon_max_f32},
+        {.name = "add",
+         .dtype = INFR_DTYPE_F32,
+         .quant = INFR_QUANT_NONE,
+         .tier = INFR_TIER_ARM_NEON,
+         .fn = infr_arm_neon_add_f32},
+        {.name = "scale",
+         .dtype = INFR_DTYPE_F32,
+         .quant = INFR_QUANT_NONE,
+         .tier = INFR_TIER_ARM_NEON,
+         .fn = infr_arm_neon_scale_f32},
     };
     uint32_t i;
 
