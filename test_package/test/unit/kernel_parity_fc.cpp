@@ -437,3 +437,42 @@ TEST(KernelParityFcArmM, Int16MatchesScalarBitwise) {
         EXPECT_EQ(static_cast<int>(want), static_cast<int>(got)) << "inner dimension " << n;
     }
 }
+
+TEST(KernelParityFcNeon, Fp32MatchesScalarWithinAFloatWindow) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_arm_neon());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("fc", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+    const infr_kernel_desc* neon =
+        infr_kernel_find("fc", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_ARM_NEON);
+    ASSERT_NE(nullptr, scalar) << "fc/fp32/none/scalar is not registered";
+    if (neon == nullptr) {
+        GTEST_SKIP() << "no NEON in this build: the arm_neon row is absent by design";
+    }
+
+    // The first tier that is not bit-identical to the reference: four lanes change the
+    // grouping of the partial sums, so this is judged with the float window the parity
+    // harness exists for. Integer tiers keep their zero-tolerance comparison.
+    const std::uint32_t lengths[] = {1U, 2U, 3U, 4U, 5U, 7U, 16U, 17U, 64U, 257U};
+    float x[257];
+    float w[257];
+    fill(x, sizeof(x) / sizeof(x[0]), 11U);
+    fill(w, sizeof(w) / sizeof(w[0]), 29U);
+    for (std::uint32_t length : lengths) {
+        const void* inputs[2] = {x, w};
+        float want = 0.0F;
+        float got = 0.0F;
+        void* want_out[1] = {&want};
+        void* got_out[1] = {&got};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, length, nullptr));
+        ASSERT_EQ(INFR_OK, neon->fn(inputs, got_out, length, nullptr));
+        infr_test::expect_float_buffers_near(&want, &got, 1, "fc fp32 neon vs scalar");
+    }
+
+    // A zero-length row is a legal reduction in both tiers, not an error.
+    const void* inputs[2] = {x, w};
+    float got = 42.0F;
+    void* got_out[1] = {&got};
+    ASSERT_EQ(INFR_OK, neon->fn(inputs, got_out, 0U, nullptr));
+    EXPECT_EQ(0.0F, got);
+}

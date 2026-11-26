@@ -54,7 +54,10 @@ kernels:
     tiers:
       scalar: done
       autovec: todo
-      arm_neon: todo
+      # Per-pair (gaps G-51): the NEON row is the fp32 dot product. The quantized
+      # pairs stay open -- int8 has a DSP path on Cortex-M and no NEON row yet, and a
+      # flat `done` here would claim them.
+      arm_neon: { fp32/none: done, int8/tensor: todo, int16/tensor: todo }
       arm_m: { fp32/none: todo, int8/tensor: done, int16/tensor: done }
       rvv: todo
     grad: todo

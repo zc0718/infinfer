@@ -7,6 +7,9 @@
     "dequantize/int8/tensor/scalar": [
       "kernel_parity/dequantize_scalar_s8"
     ],
+    "fc/fp32/none/arm_neon": [
+      "kernel_parity/fc_arm_neon_fp32"
+    ],
     "fc/fp32/none/scalar": [
       "kernel_parity/fc_scalar_fp32"
     ],

@@ -481,6 +481,27 @@ infr_status infr_kernel_register_scalar(void);
 infr_status infr_kernel_register_arm_m(void);
 
 /**
+ * @brief [en] Register the AArch32/AArch64 NEON tier rows this build actually contains.
+ * @brief [zh] 注册本次构建真正包含的 AArch32/AArch64 NEON 档位行。
+ * @return [en] INFR_OK when every row registered (including the empty case).
+ * @return [zh] 全部登记成功时返回 INFR_OK（空集也算成功）。
+ * @note [en] Same posture as the DSP tier: the tier is a capability of the build. AArch64 always
+ *            advertises `__ARM_NEON`, AArch32 only when the selected FPU has it, so a build that
+ *            cannot run the code cannot register the row either, and `infr_kernel_find` reports the
+ *            absence instead of the caller guessing.
+ * @note [zh] 与 DSP 档位同一姿态：档位是构建能力。AArch64 总是声称 `__ARM_NEON`，AArch32 只在所选
+ *            FPU 带它时才是，因此跑不了这段代码的构建也登记不了这一行；缺席由 `infr_kernel_find`
+ *            如实报出，而不是让调用方去猜。
+ * @note [en] Unlike the integer tiers, an fp32 NEON row is **not** bit-identical to the reference:
+ *            four lanes change the grouping of the partial sums. Judge it with a ULP/relative
+ *            window, which is what the parity harness does for floating point.
+ * @note [zh] 与整数档位不同，fp32 的 NEON 行**不是**逐位相同：四车道改变了部分和的合并顺序。判定要用
+ *            ULP/相对窗口——parity 骨架对浮点本来就是这么判的。
+ * @since 0.1.0
+ */
+infr_status infr_kernel_register_arm_neon(void);
+
+/**
  * @brief [en] Stable, non-NULL name of a status code (safe in log format strings).
  * @brief [zh] 状态码的稳定非空名称（可安全用于日志格式串）。
  * @param status [en] Status code.
