@@ -33,8 +33,8 @@
     ],
     "floors": {
       "Linux": {
-        "core": 90.0,
-        "all": 85.0
+        "core": 91.0,
+        "all": 91.0
       }
     },
     "default_floor": {
