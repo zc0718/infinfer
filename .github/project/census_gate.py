@@ -41,11 +41,18 @@ anything -- which is why PLAN P1.2 makes the two files mutually accountable:
      declare tflite / onnx / uses / kat, every `uses` names an existing kernel,
      and no name appears in both sections (a convolution that claims to be a
      kernel body is exactly the defect this section exists to prevent).
+  R8 every test name in a census entry is a real GTest id in `test_package/test/`
+     (`Suite/Name`, parsed from `TEST`/`TEST_F`/`TEST_P`). R5 only asked whether a
+     cell had a name; this asks whether the name is real. When the rule was added
+     (gaps G-70) 20 of the 36 entries named tests that did not exist: the cells
+     were implemented, but the index pointed at nothing, so "which test proves
+     this cell" had no answer -- and a rename could have produced that state with
+     every other gate green.
 
-**What this gate cannot know yet.** It does not run the named tests and does not
-check that the name exists in some file; that cross-check belongs to the parity
-harness (PLAN P1.1) once the first non-scalar tier lands. The gap is stated here
-so nobody mistakes a green census for a green kernel.
+**What this gate cannot know yet.** It checks that the named test is *written*, not that it is
+*green* or that it really compares the tier against the reference -- that is what running the
+suite (and the parity harness, PLAN P1.1) is for. The gap is stated here so nobody mistakes a
+green census for a green kernel.
 
 Usage:
 
@@ -57,7 +64,9 @@ Usage:
 """
 
 import argparse
+import itertools
 import json
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -280,8 +289,34 @@ def cell_key(kernel, dtype, quant, tier):
     return f"{kernel}/{dtype}/{quant}/{tier}"
 
 
-def check_census(census, cells, status_by_key):
-    """R5-R6: cross-check the census against the matrix; returns (problems, pending)."""
+def collect_tests(root):
+    """Map every GTest id in `test_package/test/` to the file that defines it.
+
+    R5 asks whether a `done` cell has a *name*; this is what asks whether the name is *real*. The
+    difference is not academic: when this rule was written, 20 of the 36 census entries named
+    tests that did not exist anywhere in the tree -- the cells were honestly implemented, but the
+    index pointed at nothing, so "which test proves this cell" had no answer.
+
+    `TEST_F`/`TEST_P` are included because a future cell may be proven by a fixture; the id is the
+    same `Suite/Name` shape in all three forms.
+    """
+    found = {}
+    pattern = re.compile(r"\bTEST(?:_F|_P)?\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)")
+    tests_root = Path(root) / "test_package" / "test"
+    if not tests_root.is_dir():
+        return found
+    for path in sorted(itertools.chain(tests_root.rglob("*.cpp"), tests_root.rglob("*.cc"))):
+        for suite, name in pattern.findall(path.read_text(encoding="utf-8", errors="replace")):
+            found[f"{suite}/{name}"] = str(path.relative_to(Path(root)))
+    return found
+
+
+def check_census(census, cells, status_by_key, tests):
+    """R5-R6-R8: cross-check the census against the matrix and against the test sources.
+
+    `tests` is required rather than optional: an optional argument would let a caller skip R8 by
+    forgetting it, which is exactly the "silently green" shape this gate exists to avoid.
+    """
     problems = []
     pending = []
     if not isinstance(census, dict):
@@ -316,10 +351,17 @@ def check_census(census, cells, status_by_key):
         for index, name in enumerate(names):
             if not isinstance(name, str) or not name.strip():
                 problems.append(f"census: cell '{key}' entry {index} is not a non-empty test name")
+                continue
+            if name not in tests:
+                problems.append(
+                    f"census: cell '{key}' names test '{name}', which does not exist in "
+                    f"test_package/test/ -- the cell may be implemented, but the index points at "
+                    f"nothing, so 'which test proves this cell' has no answer"
+                )
     return problems, pending
 
 
-def run_check(matrix_path, census_path):
+def run_check(matrix_path, census_path, tests=None):
     """Full check; returns (problems, pending). Empty problems means green."""
     data = load_yaml(matrix_path)
     problems, cells, status_by_key, _ = check_matrix(data)
@@ -331,7 +373,11 @@ def run_check(matrix_path, census_path):
         return [f"census: cannot read {census_path}: {exc}"], []
     except ValueError as exc:
         return [f"census: {census_path} is not valid JSON: {exc}"], []
-    return check_census(census, cells, status_by_key)
+    if tests is None:
+        # Production callers read the tree. The self-test passes a fixture set, and passing
+        # `tests` explicitly is the only way to run the rules without one.
+        tests = collect_tests(ROOT)
+    return check_census(census, cells, status_by_key, tests)
 
 
 def emit_census(matrix_path):
@@ -387,6 +433,16 @@ def selftest():
         },
     }
     good_census = {"schema": 1, "cells": {"relu/fp32/none/scalar": ["kernel_parity/relu_scalar_fp32"]}}
+
+    # R8 needs a test-id set. The fixture uses its own, so the rules can be exercised without
+    # depending on which tests happen to exist in the tree today -- but it is passed explicitly
+    # (never defaulted) so a caller cannot skip R8 by forgetting it.
+    fixture_tests = {
+        "kernel_parity/relu_scalar_fp32": "fixture/relu.cpp",
+        "kernel_parity/fc_scalar_fp32": "fixture/fc.cpp",
+        "kernel_parity/fc_int8_tensor": "fixture/fc_int8.cpp",
+        "kernel_parity/fc_arm_m_int8": "fixture/fc_arm_m.cpp",
+    }
 
     def mutate_matrix(**changes):
         data = json.loads(json.dumps(good_matrix))
@@ -576,6 +632,14 @@ def selftest():
             good_census,
             "kat must be 'pending' or the KAT that judges it",
         ),
+        (
+            # R8: the cell is implemented and R5 is satisfied by the presence of a name, but the
+            # name is not a test -- the state the tree was actually in for 20 of 36 cells.
+            "R8 a census name that is not a test",
+            good_matrix,
+            {"schema": 1, "cells": {"relu/fp32/none/scalar": ["kernel_parity/imaginary_relu"]}},
+            "which does not exist in test_package/test/",
+        ),
     ]
 
     failures = 0
@@ -592,7 +656,9 @@ def selftest():
                 path.write_text(json.dumps(payload), encoding="utf-8")
             return path
 
-        baseline, baseline_pending = run_check(write("good.yml", good_matrix), write("good.json", good_census))
+        baseline, baseline_pending = run_check(
+            write("good.yml", good_matrix), write("good.json", good_census), tests=fixture_tests
+        )
         if baseline:
             failures += 1
             print(f"[census:selftest] FAIL the good fixture reported: {baseline}")
@@ -605,7 +671,7 @@ def selftest():
         # A `todo` tier with no census entry is the backlog, not a lie: pending.
         pending_matrix = mutate_matrix(tiers={"scalar": "done", "autovec": "todo"})
         pending_problems, pending_keys = run_check(
-            write("pending.yml", pending_matrix), write("pending.json", good_census)
+            write("pending.yml", pending_matrix), write("pending.json", good_census), tests=fixture_tests
         )
         if pending_problems:
             failures += 1
@@ -649,7 +715,7 @@ def selftest():
             },
         }
         narrow_problems, narrow_pending = run_check(
-            write("pair.yml", per_pair_matrix), write("pair.json", per_pair_census)
+            write("pair.yml", per_pair_matrix), write("pair.json", per_pair_census), tests=fixture_tests
         )
         if narrow_problems:
             failures += 1
@@ -662,7 +728,9 @@ def selftest():
 
         widened = json.loads(json.dumps(per_pair_matrix))
         widened["kernels"]["fc"]["tiers"]["arm_m"] = "done"
-        wide_problems, _ = run_check(write("wide.yml", widened), write("wide.json", per_pair_census))
+        wide_problems, _ = run_check(
+            write("wide.yml", widened), write("wide.json", per_pair_census), tests=fixture_tests
+        )
         if [p for p in wide_problems if "fc/fp32/none/arm_m" in p and "missing from census.json" in p]:
             print("[census:selftest] PASS the plain form still fans out to every pair")
         else:
@@ -672,7 +740,7 @@ def selftest():
         for index, (label, matrix, census, phrase) in enumerate(fixtures):
             matrix_path = write(f"matrix-{index}.yml", matrix)
             census_path = write(f"census-{index}.json", census)
-            problems, _ = run_check(matrix_path, census_path)
+            problems, _ = run_check(matrix_path, census_path, tests=fixture_tests)
             if phrase is None:
                 # A green fixture: the rule must accept it outright. Without one of these,
                 # tightening a token list could reject a legal value and no fixture would say so.
