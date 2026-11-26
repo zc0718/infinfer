@@ -114,7 +114,7 @@
       "x86_64"
     ],
     "toolchain_version": [
-      "14.3.rel1"
+      "11.3.rel1"
     ]
   },
   "workflow_triggers": {
