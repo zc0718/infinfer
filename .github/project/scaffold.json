@@ -52,7 +52,6 @@
     ".vscode/extensions.json": "1bb271c357c4a3da69c3b2bc8e548a1b91428b792e06585469dd9881546f981b",
     ".vscode/settings.json": "329803f060c4b1ae5858638582bacdeae2253f78622eabbdd36791dc6811c63a",
     ".vscode/tasks.json": "57a29df6220eb0d00e20113b1ba317347555a5f441e26b58e0c2750b050b2ab2",
-    "CMakeLists.txt": "65cbd4dddf3c0879bd39e9ea4f9f4e635a91e2d4851d5ee30eece008c18dc7b1",
     "benchmark/.gitignore": "8e2229d14d8f4ac24854cc1be6a939dfa9dbdf60f3fd673a283b2d306830e8d1",
     "benchmark/CMakeLists.txt": "601a554f2bac38eb79904e15969839a559117717f45ad34b8f6122aa88df2026",
     "benchmark/README.md": "7ca59b42467d786dd1db2df52a19301e4653f368d78cef92096634f745043f15",
@@ -85,9 +84,10 @@
     "conanfile.py": "3aec26340e8e0c2bd1cf8e8140f2ca6d3aca29615b396c64311e8047972c8f3c",
     "docs/build.py": "8cab760f8a30b7edb354108c2b60fa24f8e3b4a3957f8d5b3e9e861cadffc12e",
     "test_package/CMakeLists.txt": "3493f8cca926b2b375e8ee4818397e41dd9d06adcec46b7fba9509ccc3111e92",
-    "test_package/conanfile.py": "28ca75ff819233055d95334554904c6b1c6ea1eb0665d08ccece714aaac6bf39"
+    "test_package/conanfile.py": "28ca75ff819233055d95334554904c6b1c6ea1eb0665d08ccece714aaac6bf39",
+    "CMakeLists.txt": "65cbd4dddf3c0879bd39e9ea4f9f4e635a91e2d4851d5ee30eece008c18dc7b1"
   },
-  "tolerance_budget": 3,
+  "tolerance_budget": 4,
   "tolerated": [
     {
       "path": ".github/workflows/ci-orchestrator.yml",
@@ -103,11 +103,17 @@
       "path": ".github/workflows/hetai-package-matrix.yml",
       "why": "HETAI_PLAN_ROOT pointed at the upstream author's machine path /home/fcpp/WorkProject/Plan (IDENTITY_LEAK, gaps G-24)",
       "exit": "none needed after this commit: the value now comes from the `vars.HETAI_PLAN_ROOT` repository variable, matching the two sibling env vars"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "why": "ADR-002 component fork: src/kernel/**/*.c compile into the _cpp component (C11), and _cpp also gets C_STANDARD; upstream's extension split would create a _c <-> _cpp component cycle",
+      "exit": "drop the entry once fcpp lets a recipe declare which component a source subtree belongs to (upstream issue), or if the kernels ever move to C++"
     }
   ],
   "owned_dirs": [
     "include/",
     "src/",
     "workspace/"
-  ]
+  ],
+  "_tolerance_note": "4th fork: CMakeLists.txt carries the ADR-002 component edge (src/kernel/**/*.c -> _cpp, plus C_STANDARD on _cpp). Three were the derivation baseline; this one is required by the L1/L2 split and is reclaimed if fcpp ever lets a recipe map a source subtree to a component."
 }

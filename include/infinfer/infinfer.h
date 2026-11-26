@@ -1,6 +1,7 @@
 // Conan::ImportStart
 #pragma once
 #include <infinfer/kernel/kernel.h>
+#include <infinfer/runtime/graph.h>
 #include <infinfer/runtime/tensor.h>
 #include <infinfer/runtime/workspace.h>
 // Conan::ImportEnd
