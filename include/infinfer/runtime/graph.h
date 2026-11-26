@@ -140,3 +140,88 @@ infr_status infr_conv2d_output_shape(const infr_conv2d_params *params, const inf
  */
 infr_status infr_conv2d_f32(const infr_tensor *input, const infr_tensor *filter, const float *bias,
                             const infr_conv2d_params *params, infr_tensor *output, infr_workspace *workspace);
+
+/**
+ * @brief [en] Window geometry of a pooling operator.
+ * @brief [zh] 池化算子的窗口几何。
+ * @since 0.1.0
+ */
+typedef struct infr_pool_params {
+    /**
+     * @brief [en] Window height in pixels.
+     * @brief [zh] 窗口高度（像素）。
+     */
+    uint32_t kernel_h;
+    /**
+     * @brief [en] Window width in pixels.
+     * @brief [zh] 窗口宽度（像素）。
+     */
+    uint32_t kernel_w;
+    /**
+     * @brief [en] Vertical step between windows; must be at least 1.
+     * @brief [zh] 相邻窗口的纵向步长；至少为 1。
+     */
+    uint32_t stride_h;
+    /**
+     * @brief [en] Horizontal step between windows; must be at least 1.
+     * @brief [zh] 相邻窗口的横向步长；至少为 1。
+     */
+    uint32_t stride_w;
+    /**
+     * @brief [en] Padding on each side vertically; must be smaller than `kernel_h`.
+     * @brief [zh] 上下各加的填充；必须小于 `kernel_h`。
+     */
+    uint32_t pad_h;
+    /**
+     * @brief [en] Padding on each side horizontally; must be smaller than `kernel_w`.
+     * @brief [zh] 左右各加的填充；必须小于 `kernel_w`。
+     */
+    uint32_t pad_w;
+    /**
+     * @brief [en] Channel count; must equal the input's innermost extent.
+     * @brief [zh] 通道数；必须等于输入最内轴长度。
+     */
+    uint32_t channels;
+} infr_pool_params;
+
+/**
+ * @brief [en] Output shape of a pooling operator.
+ * @brief [zh] 池化算子的输出形状。
+ * @param [in] params Window geometry; must not be NULL.
+ * @param [in] input_shape Rank-4 NHWC input descriptor; must not be NULL.
+ * @param [out] out_shape Receives `[1, out_h, out_w, channels]`.
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for a NULL argument, rank other than 4,
+ *         a zero stride or window, or a window larger than the padded input.
+ * @since 0.1.0
+ */
+infr_status infr_max_pool2d_output_shape(const infr_pool_params *params, const infr_shape *input_shape,
+                                         infr_shape *out_shape);
+
+/**
+ * @brief [en] fp32 max pooling over an NHWC tensor.
+ * @brief [zh] 在 NHWC 张量上做 fp32 最大池化。
+ * @param [in] input Rank-4 NHWC input, `[1, in_h, in_w, channels]`.
+ * @param [in] params Window geometry; `channels` must match the input.
+ * @param [in,out] output Rank-4 NHWC output whose shape must already equal
+ *                 `infr_max_pool2d_output_shape`; the data is overwritten.
+ * @param [in,out] workspace Scratch source; rewound before returning, on every path.
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, a mismatched channel
+ *         count, a stride of 0, or padding not smaller than the window;
+ *         INFR_ERR_UNSUPPORTED for a dtype or quantisation outside the stated subset;
+ *         INFR_ERR_BUFFER_TOO_SMALL when the workspace cannot hold `kernel_h*kernel_w`
+ *         floats.
+ * @note [en] The reduction is a call to the registered `max` kernel over a gathered
+ *            window, so this operator has no comparison of its own.
+ * @note [zh] 归约是对已注册 `max` kernel 的一次调用（作用在 gather 出来的窗口上），
+ *            所以本算子自己没有任何比较运算。
+ * @note [en] Padding contributes negative infinity, not zero: a zero pad would win the
+ *            maximum on an all-negative window and silently turn max pooling into
+ *            "max of the feature map and 0". Padding must also be smaller than the
+ *            window, so no output position can be entirely padding.
+ * @note [zh] 填充贡献的是负无穷而不是 0：填 0 会在全负窗口里赢下最大值，把最大池化
+ *            悄悄变成"特征图与 0 取最大"。填充还必须小于窗口，这样任何输出位置都不会
+ *            完全落在填充里。
+ * @since 0.1.0
+ */
+infr_status infr_max_pool2d_f32(const infr_tensor *input, const infr_pool_params *params, infr_tensor *output,
+                                infr_workspace *workspace);

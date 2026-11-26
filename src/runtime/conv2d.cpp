@@ -1,5 +1,7 @@
 // Conan::ImportStart
 #include <infinfer/runtime/graph.h>
+
+#include "shape_internal.hpp"
 // Conan::ImportEnd
 
 /*!
@@ -45,31 +47,12 @@ struct conv_plan {
     uint32_t window_len; /* kh * kw * in_per_group: the dot-product length */
 };
 
-bool is_f32(const infr_tensor* tensor) {
-    return tensor->dtype == INFR_DTYPE_F32 && tensor->quant.kind == INFR_QUANT_NONE;
-}
-
-/* Output extent with floor semantics, the same rule every framework uses: the
- * window may hang off the end, it may not hang off the start by more than the
- * padding allows. */
-infr_status out_extent(uint32_t in, uint32_t kernel, uint32_t pad, uint32_t stride, uint32_t* out) {
-    if (stride == 0U || kernel == 0U) {
-        return INFR_ERR_INVALID_ARGUMENT;
-    }
-    const uint32_t padded = in + (2U * pad);
-    if (padded < kernel) {
-        return INFR_ERR_INVALID_ARGUMENT;
-    }
-    *out = ((padded - kernel) / stride) + 1U;
-    return INFR_OK;
-}
-
 infr_status build_plan(const infr_tensor* input, const infr_tensor* filter, const infr_conv2d_params* params,
                        const infr_tensor* output, conv_plan* plan) {
     if (input->shape.rank != 4U || filter->shape.rank != 4U || output->shape.rank != 4U) {
         return INFR_ERR_UNSUPPORTED; /* batch-first 3-D and NCHW are out of the subset */
     }
-    if (!is_f32(input) || !is_f32(filter) || !is_f32(output)) {
+    if (!infr_detail::is_f32(input) || !infr_detail::is_f32(filter) || !infr_detail::is_f32(output)) {
         return INFR_ERR_UNSUPPORTED;
     }
     if (input->shape.dims[0] != 1U || output->shape.dims[0] != 1U) {
@@ -111,11 +94,11 @@ infr_status build_plan(const infr_tensor* input, const infr_tensor* filter, cons
 
     uint32_t derived_h = 0U;
     uint32_t derived_w = 0U;
-    infr_status status = out_extent(plan->in_h, plan->kh, plan->pad_h, plan->stride_h, &derived_h);
+    infr_status status = infr_detail::out_extent(plan->in_h, plan->kh, plan->pad_h, plan->stride_h, &derived_h);
     if (status != INFR_OK) {
         return status;
     }
-    status = out_extent(plan->in_w, plan->kw, plan->pad_w, plan->stride_w, &derived_w);
+    status = infr_detail::out_extent(plan->in_w, plan->kw, plan->pad_w, plan->stride_w, &derived_w);
     if (status != INFR_OK) {
         return status;
     }
@@ -159,11 +142,12 @@ infr_status infr_conv2d_output_shape(const infr_conv2d_params* params, const inf
     }
     uint32_t out_h = 0U;
     uint32_t out_w = 0U;
-    infr_status status = out_extent(input_shape->dims[1], params->kernel_h, params->pad_h, params->stride_h, &out_h);
+    infr_status status =
+        infr_detail::out_extent(input_shape->dims[1], params->kernel_h, params->pad_h, params->stride_h, &out_h);
     if (status != INFR_OK) {
         return status;
     }
-    status = out_extent(input_shape->dims[2], params->kernel_w, params->pad_w, params->stride_w, &out_w);
+    status = infr_detail::out_extent(input_shape->dims[2], params->kernel_w, params->pad_w, params->stride_w, &out_w);
     if (status != INFR_OK) {
         return status;
     }
