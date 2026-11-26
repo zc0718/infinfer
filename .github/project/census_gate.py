@@ -341,7 +341,50 @@ def check_matrix(data):
     check_composed(data.get("composed"), set(kernels), claims, problems)
     check_onnx_claims(claims, problems)
     check_scalar_reference(status_by_key, problems)
+    check_tier_chain_coverage(data, status_by_key, problems)
     return problems, cells, status_by_key, set(kernels)
+
+
+# The tiers `workspace/qa/kat/run_kat.py` builds a chain for. A `done` cell on one of them
+# is supposed to be compared against the scalar row **on the target**; a cell the cell
+# generator cannot express is never compared anywhere but on the host.
+TIER_CHAIN_TIERS = ("arm_neon", "arm_m", "rvv")
+
+
+def check_tier_chain_coverage(data, status_by_key, problems):
+    """R11: a `done` cell on a chain tier must be derivable by `emit_k3_cells`.
+
+    Why this rule exists: the generator keeps a hand-written `MODES` map from kernel name
+    to the call/comparison shape k3 uses. A kernel added to `matrix.yml` and marked `done`
+    on `rvv` is therefore *silently* absent from the on-target chain unless somebody also
+    edits that map -- and `claim_gate`'s count check cannot see it either, because both
+    sides of that check derive from the same filtered list. The result would be an
+    `arm_neon`/`rvv` cell whose only evidence is a host test, presented as if it had
+    cross-target evidence. `mul` was added exactly that way (gaps G-94).
+    """
+    prep = ROOT / "workspace" / "qa" / "prep"
+    if not (prep / "emit_k3_cells.py").is_file():
+        problems.append(
+            "R11: workspace/qa/prep/emit_k3_cells.py is missing, so no vector-tier cell can "
+            "be checked against the chain that is supposed to prove it"
+        )
+        return
+    if str(prep) not in sys.path:
+        sys.path.insert(0, str(prep))
+    import emit_k3_cells  # noqa: E402  (path is set up above, on purpose)
+
+    for tier in TIER_CHAIN_TIERS:
+        derived = {(name, dtype, quant) for name, dtype, quant, _call, _cmp in emit_k3_cells.collect(data, tier)}
+        for key, status in sorted(status_by_key.items()):
+            kernel, dtype, quant, cell_tier = key.split("/")
+            if cell_tier != tier or status != "done":
+                continue
+            if (kernel, dtype, quant) not in derived:
+                problems.append(
+                    f"matrix: '{key}' is done but the k3 cell generator cannot express it -- a "
+                    f"kernel reaches the on-target parity chain only through "
+                    f"emit_k3_cells.MODES, so this cell would never be compared off the host"
+                )
 
 
 def check_scalar_reference(status_by_key, problems):
@@ -621,6 +664,31 @@ def selftest():
             },
             {"schema": 1, "cells": {}},
             "must carry a non-empty 'where'",
+        ),
+        (
+            # R11: a `done` cell on a chain tier that the k3 generator cannot express has no
+            # cross-target evidence, and nothing else in the tree notices.
+            "R11 a done vector-tier cell the chain cannot derive",
+            {
+                "schema": 1,
+                "kernels": {
+                    "cos": {
+                        "tflite": ["COS"],
+                        "onnx": [{"op": "Cos"}],
+                        "dtype_quant": [["fp32", "none"]],
+                        "tiers": {"scalar": "done", "rvv": "done"},
+                        "grad": "todo",
+                    }
+                },
+            },
+            {
+                "schema": 1,
+                "cells": {
+                    "cos/fp32/none/scalar": ["KernelParityMul/ScalarFp32MatchesDoubleReference"],
+                    "cos/fp32/none/rvv": ["KernelParityRvv/MulFp32MatchesScalarBitwise"],
+                },
+            },
+            "the k3 cell generator cannot express it",
         ),
         (
             # R10 (PLAN gate/ports): a tier cell is only a cell if the scalar reference covers it.

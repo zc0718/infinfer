@@ -45,6 +45,10 @@ TEST(ContractActivation, DispatchMatchesThePinnedContract) {
         {INFR_ACT_RELU_N1_TO_1, 0.5F, 0.5F}, {INFR_ACT_RELU_N1_TO_1, 9.0F, 1.0F}, {INFR_ACT_RELU6, -1.0F, 0.0F},
         {INFR_ACT_RELU6, 10.0F, 6.0F},       {INFR_ACT_SIGN_BIT, -2.0F, -1.0F},   {INFR_ACT_SIGN_BIT, 3.0F, 1.0F},
         {INFR_ACT_HARD_SWISH, 0.0F, 0.0F},   {INFR_ACT_HARD_SWISH, 3.0F, 3.0F},   {INFR_ACT_HARD_SWISH, -4.0F, 0.0F},
+        /* hard-sigmoid is the SE gate: relu6(x + 3) / 6, so it saturates at 0 and 1
+         * and is exactly 0.5 at the origin. 0.5 is the case a "sigmoid" typo would
+         * still pass, which is why the two saturation ends are here as well. */
+        {INFR_ACT_HARD_SIGMOID, -4.0F, 0.0F}, {INFR_ACT_HARD_SIGMOID, 0.0F, 0.5F}, {INFR_ACT_HARD_SIGMOID, 9.0F, 1.0F},
     };
     for (const Case& item : cases) {
         const infr_act_f32_fn fn = infr_activation_f32(item.act);

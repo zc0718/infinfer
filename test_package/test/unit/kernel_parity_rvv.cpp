@@ -105,6 +105,37 @@ TEST(KernelParityRvv, AddFp32MatchesScalarBitwise) {
     }
 }
 
+TEST(KernelParityRvv, MulFp32MatchesScalarBitwise) {
+    Pair pair = {};
+    if (!resolve_pair("mul", &pair)) {
+        GTEST_SKIP() << kNoVector;
+    }
+    std::vector<float> a;
+    std::vector<float> b;
+    fill_corpus(a, b);
+    a[0] = std::numeric_limits<float>::infinity(); /* an infinity scaled by 2 stays infinite */
+    b[0] = 2.0F;
+    a[1] = -0.0F; /* -0.0 times a positive stays -0.0, sign included */
+    b[1] = 3.0F;
+
+    for (std::uint32_t n : kLengths) {
+        // At least one slot: `std::vector<float>(0).data()` is nullptr, the kernel then
+        // refuses the call by contract, and the assertion would fail for a reason that has
+        // nothing to do with the tier under test. The length passed stays n.
+        std::vector<float> want(n == 0U ? 1U : n, 0.0F);
+        std::vector<float> got(n == 0U ? 1U : n, 0.0F);
+        const void* inputs[2] = {a.data(), b.data()};
+        void* want_out[1] = {want.data()};
+        void* got_out[1] = {got.data()};
+        ASSERT_EQ(INFR_OK, pair.scalar->fn(inputs, want_out, n, nullptr));
+        ASSERT_EQ(INFR_OK, pair.rvv->fn(inputs, got_out, n, nullptr));
+        for (std::uint32_t i = 0; i < n; ++i) {
+            EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i]))
+                << "element " << i << " of " << n;
+        }
+    }
+}
+
 TEST(KernelParityRvv, ScaleFp32MatchesScalarBitwise) {
     Pair pair = {};
     if (!resolve_pair("scale", &pair)) {

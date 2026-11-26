@@ -282,10 +282,22 @@ typedef enum infr_activation {
      */
     INFR_ACT_HARD_SWISH = 6,
     /**
+     * @brief [en] relu6(x + 3) / 6.
+     * @brief [zh] relu6(x + 3) / 6。
+     * @note [en] The gate MobileNetV3's squeeze-and-excite block applies to its
+     *            pooled descriptor; it is cheaper than a logistic sigmoid because it
+     *            needs one clip and one divide, and it is a distinct code rather than
+     *            "hard-swish without the multiply" so a backend can fuse either.
+     * @note [zh] MobileNetV3 的 squeeze-and-excite 块作用在池化描述子上的门控；它比
+     *            逻辑 sigmoid 便宜（一次截断 + 一次除法），而且单独给一个码值，而不是
+     *            "去掉乘法的 hard-swish"，这样后端可以对两者分别融合。
+     */
+    INFR_ACT_HARD_SIGMOID = 7,
+    /**
      * @brief [en] Number of codes (not an activation).
      * @brief [zh] 码值个数（不是激活）。
      */
-    INFR_ACT_COUNT = 7
+    INFR_ACT_COUNT = 8
 } infr_activation;
 
 /* Install-only guard: this header is the ABI, so a C99 consumer must be able to
@@ -296,7 +308,7 @@ typedef enum infr_activation {
  * 本身按 C11 构建。该属性由 `header_dialect_gate` 守住；没有守卫，他们连 include
  * 都过不去。 */
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
-_Static_assert(INFR_ACT_COUNT == 7, "activation codes are contract; extend the enum and the switch together");
+_Static_assert(INFR_ACT_COUNT == 8, "activation codes are contract; extend the enum and the switch together");
 #endif
 
 /**

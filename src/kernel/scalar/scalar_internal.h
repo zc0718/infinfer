@@ -118,6 +118,14 @@ infr_status infr_scalar_add_f32(const void *const *inputs, void *const *outputs,
                                 const infr_quant *quant);
 
 /**
+ * @brief [en] Elementwise binary multiply over `element_count` floats.
+ * @brief [zh] 对 `element_count` 个 float 做逐元素二元乘法。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_mul_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                const infr_quant *quant);
+
+/**
  * @brief [en] Sum of `element_count` floats written to `outputs[0]`.
  * @brief [zh] 把 `element_count` 个 float 求和写入 `outputs[0]`。
  * @since 0.1.0

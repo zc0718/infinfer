@@ -41,6 +41,7 @@ import sys
 #     the measured worst, not a wish.
 MODES = {
     "add": ("BINARY", "BITWISE"),
+    "mul": ("BINARY", "BITWISE"),
     "relu": ("UNARY", "BITWISE"),
     "scale": ("SCALE", "BITWISE"),
     "max": ("REDUCE", "BITWISE"),

@@ -138,6 +138,12 @@
         "measured": 13,
         "what": "int8 dot: vmull_s8 + vpadalq_s16, int32 accumulate"
       },
+      "src/kernel/arm_neon/mul.c": {
+        "tier": "arm_neon",
+        "min_packed": 1,
+        "measured": 3,
+        "what": "fp32 multiply, 4 lanes"
+      },
       "src/kernel/arm_neon/quant.c": {
         "tier": "arm_neon",
         "min_packed": 1,
@@ -198,6 +204,12 @@
         "measured": 16,
         "what": "int8 dot: e8m1 -> e16m2 then vwmacc into int32"
       },
+      "src/kernel/rvv/mul.c": {
+        "tier": "rvv",
+        "min_packed": 1,
+        "measured": 9,
+        "what": "fp32 multiply, vector blocks"
+      },
       "src/kernel/rvv/quant.c": {
         "tier": "rvv",
         "min_packed": 1,
@@ -257,6 +269,12 @@
         "min_packed": 1,
         "measured": 84,
         "what": "int8 dot: sign mask, unpack to int16, maddwd"
+      },
+      "src/kernel/x86/mul.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 10,
+        "what": "fp32 multiply, 4 lanes"
       },
       "src/kernel/x86/reduce.c": {
         "tier": "x86",

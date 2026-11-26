@@ -84,6 +84,19 @@ static void act_hard_swish_f32(const float *in, float *out, uint32_t n) {
     }
 }
 
+static void act_hard_sigmoid_f32(const float *in, float *out, uint32_t n) {
+    uint32_t i;
+    for (i = 0; i < n; ++i) {
+        float shifted = in[i] + 3.0F;
+        if (shifted < 0.0F) {
+            shifted = 0.0F;
+        } else if (shifted > 6.0F) {
+            shifted = 6.0F;
+        }
+        out[i] = shifted / 6.0F;
+    }
+}
+
 /* Row order is contract: index == infr_activation value (see kernel.h). */
 static const infr_act_f32_fn ACT_TABLE[INFR_ACT_COUNT] = {
     act_none_f32,         /* INFR_ACT_NONE */
@@ -93,6 +106,7 @@ static const infr_act_f32_fn ACT_TABLE[INFR_ACT_COUNT] = {
     act_tanh_f32,         /* INFR_ACT_TANH */
     act_sign_bit_f32,     /* INFR_ACT_SIGN_BIT */
     act_hard_swish_f32,   /* INFR_ACT_HARD_SWISH */
+    act_hard_sigmoid_f32, /* INFR_ACT_HARD_SIGMOID */
 };
 
 /* A plain compile-time assertion now: the reference bodies are C11 like every other

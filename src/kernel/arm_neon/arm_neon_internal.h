@@ -48,6 +48,14 @@ infr_status infr_arm_neon_add_f32(const void *const *inputs, void *const *output
                                   const infr_quant *quant);
 
 /**
+ * @brief [en] fp32 elementwise multiply over four lanes: `y[i] = a[i] * b[i]`, bitwise identical.
+ * @brief [zh] 四车道 fp32 逐元素乘法：`y[i] = a[i] * b[i]`，逐位相同。
+ * @since 0.1.0
+ */
+infr_status infr_arm_neon_mul_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                  const infr_quant *quant);
+
+/**
  * @brief [en] fp32 broadcast multiply by `inputs[1][0]`, bitwise identical.
  * @brief [zh] 按 `inputs[1][0]` 的 fp32 广播乘法，逐位相同。
  * @since 0.1.0

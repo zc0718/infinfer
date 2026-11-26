@@ -13,6 +13,18 @@
     "add/fp32/none/x86": [
       "KernelParityX86/AddFp32MatchesScalarBitwise"
     ],
+    "mul/fp32/none/arm_neon": [
+      "KernelParityMulNeon/Fp32MatchesScalarBitwise"
+    ],
+    "mul/fp32/none/rvv": [
+      "KernelParityRvv/MulFp32MatchesScalarBitwise"
+    ],
+    "mul/fp32/none/scalar": [
+      "KernelParityMul/ScalarFp32MatchesDoubleReference"
+    ],
+    "mul/fp32/none/x86": [
+      "KernelParityX86/MulFp32MatchesScalarBitwise"
+    ],
     "dequantize/int8/tensor/arm_neon": [
       "KernelParityQuantNeon/DequantizeInt8MatchesScalarBitwise"
     ],

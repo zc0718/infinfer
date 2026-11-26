@@ -109,6 +109,12 @@ kernels:
     dtype_quant: [[fp32, none]]
     tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: na, rvv: done }
     grad: todo
+  mul:
+    tflite: [MUL]
+    onnx: [{op: Mul, where: "both operands are tensors of the same shape"}]
+    dtype_quant: [[fp32, none]]
+    tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: na, rvv: done }
+    grad: todo
   sum:
     tflite: [SUM]
     onnx: [{op: ReduceSum}]

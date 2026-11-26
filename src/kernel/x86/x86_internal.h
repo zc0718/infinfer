@@ -55,6 +55,14 @@ infr_status infr_x86_add_f32(const void *const *inputs, void *const *outputs, ui
                              const infr_quant *quant);
 
 /**
+ * @brief [en] fp32 elementwise multiply, bitwise identical to the reference.
+ * @brief [zh] fp32 逐元素乘法，与参考实现逐位相同。
+ * @since 0.1.0
+ */
+infr_status infr_x86_mul_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                             const infr_quant *quant);
+
+/**
  * @brief [en] fp32 broadcast multiply by `inputs[1][0]`, bitwise identical.
  * @brief [zh] 按 `inputs[1][0]` 的 fp32 广播乘法，逐位相同。
  * @since 0.1.0

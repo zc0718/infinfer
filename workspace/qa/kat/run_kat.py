@@ -37,14 +37,15 @@ GENERATED = HERE / "generated"
 
 KERNEL_SOURCES = [
     ROOT / "src/kernel/contract.c",
-    ROOT / "src/kernel/scalar/activation.c",
-    ROOT / "src/kernel/scalar/add.c",
-    ROOT / "src/kernel/scalar/fc.c",
-    ROOT / "src/kernel/scalar/quant.c",
-    ROOT / "src/kernel/scalar/reduce.c",
-    ROOT / "src/kernel/scalar/register.c",
-    ROOT / "src/kernel/scalar/relu.c",
-    ROOT / "src/kernel/scalar/scale.c",
+    # Every scalar body, by glob rather than by name. The explicit list this replaced was a
+    # trap: `scalar/register.c` names the new kernel, the link then wants its body, and the
+    # only symptom is `undefined reference` at KAT build time -- which no CI gate runs. Adding
+    # `mul` (2026-11-26) failed exactly that way (gaps G-94).
+    #
+    # 按 glob 取全部 scalar 体，而不是逐个点名。原来那份显式清单是个坑：`scalar/register.c`
+    # 里写了新 kernel，链接时就缺它的体，而唯一的症状是 KAT 构建期的 `undefined reference`
+    # ——那一步没有任何 CI 门禁会跑。2026-11-26 加 `mul` 时正是这样炸的（gaps G-94）。
+    *sorted((ROOT / "src/kernel/scalar").glob("*.c")),
 ]
 # The L2 operators live in C++17 (`src/runtime`). A chain that calls them has to be
 # linked by the C++ driver even though every source file it *writes* is C.
