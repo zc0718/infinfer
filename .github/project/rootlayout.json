@@ -1,0 +1,51 @@
+{
+  "_comment": [
+    "INV-11's root allowlist, as data. `rootlayout_gate.py` compares the repository root with",
+    "this file in both directions: an entry not listed here is red (a new top-level directory",
+    "appeared), and a listed entry that no longer exists is red (the list drifted stale, which",
+    "would let the first rule pass while nobody notices the inventory is fiction).",
+    "",
+    "Three groups, because they have three different owners:",
+    "  template  -- shipped by fcpp v0.3.11, verified by scaffold_gate.py; adding one of these is",
+    "               an upstream change, not a local decision",
+    "  project   -- this repository's own content (INV-11's allowed set)",
+    "  toolchain -- agent/tool state that lives in the tree but is not shipped (git-ignored or",
+    "               tool-owned); listed so its presence is a decision rather than a surprise",
+    "",
+    "The rule exists because the cheapest way to add a tool is a new top-level directory, and the",
+    "cheapest way to make a repository unreadable is to do that a dozen times. Tools go under",
+    "workspace/ unless they must run in CI, and then the answer is usually 'check the artefact in",
+    "and let CI verify it' (PLAN §3.10)."
+  ],
+  "template": [
+    "CMakeLists.txt",
+    "conandata.yml",
+    "conanfile.py",
+    "conan_provider.cmake",
+    "Doxyfile",
+    ".editorconfig",
+    ".github",
+    ".gitignore",
+    "LICENSE",
+    "NOTICE",
+    "package.json",
+    "package-lock.json",
+    "README.md",
+    "api",
+    "benchmark",
+    "docs",
+    "test_package",
+    ".devcontainer",
+    ".vscode"
+  ],
+  "project": [
+    "include",
+    "src",
+    "metadata.json",
+    "workspace"
+  ],
+  "toolchain": [
+    ".git",
+    ".agents"
+  ]
+}
