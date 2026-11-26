@@ -15,10 +15,30 @@
     "",
     "`degraded` is not a to-do list: it records where the tier is honestly *absent* and why.",
     "It exists so that a missing vectorisation cannot be silently dropped from this file --",
-    "an entry without a reason is red."
+    "an entry without a reason is red.",
+    "",
+    "Second claim (2026-11-26): the hand-written tiers are measured too, but at -O0.",
+    "-O0 turns the auto-vectoriser off, so a packed instruction there can only come from an",
+    "explicit intrinsic: that is what separates \"this body uses the ISA\" from \"this body happens",
+    "to be vectorisable\". Parity tests cannot see the difference -- a scalar loop returns the same",
+    "values -- which is why this had to be a disassembly rule rather than a test.",
+    "",
+    "Measured 2026-11-26 at -O0 (ISA-specific mnemonics, see the gate for the patterns):",
+    "  x86      add 10  fc 20  fc_i8 84  fc_i16 133  reduce 30  relu 19  relu_i8 20  scale 11  sum 14",
+    "  arm_neon add 3   fc 7   reduce 7  relu 8      scale 4    sum 9   relu_i8 4",
+    "  rvv      add 9   fc 14  reduce 12 relu 7      relu_i8 7  scale 7 sum 12",
+    "  arm_m    fc 2 (SMLAD/SMLALD)         every register.c: 0 (it is a table, not a body)",
+    "min_packed is 1 for every body on purpose: the claim is boolean (\"this body uses its ISA\"),",
+    "and a floor above it would make ordinary edits red without adding information. `measured`",
+    "records what the number was, so drift shows up in the gate output instead of being forgotten.",
+    "The cross tiers SKIP with a reason when their compiler is absent (the CI job has no Conan",
+    "cache); a SKIP is printed, never absorbed into the OK line."
   ],
   "tier": "autovec",
-  "flags": ["-O3", "-std=c11"],
+  "flags": [
+    "-O3",
+    "-std=c11"
+  ],
   "expect": {
     "src/kernel/scalar/add.c": {
       "min_packed": 3,
@@ -43,5 +63,195 @@
   },
   "degraded": {
     "src/kernel/scalar/reduce.c": "sum would need reassociation (-ffast-math) to become a packed reduction, and that changes the answer the parity window is defined against; max folds with a NaN-sensitive `>` and stays scalar. Measured 1 packed instruction before and after -O3, i.e. neither kernel becomes a packed reduction."
+  },
+  "handwritten": {
+    "tiers": {
+      "x86": {
+        "cc": "host",
+        "flags": [
+          "-std=c11",
+          "-O0",
+          "-msse2"
+        ]
+      },
+      "arm_neon": {
+        "cc": "house:aarch64-none-linux-gnu-gcc",
+        "flags": [
+          "-std=c11",
+          "-O0"
+        ]
+      },
+      "rvv": {
+        "cc": "house:riscv-none-elf-gcc",
+        "flags": [
+          "-std=c11",
+          "-O0",
+          "-march=rv64gcv",
+          "-mabi=lp64d",
+          "-mcmodel=medany"
+        ]
+      },
+      "arm_m": {
+        "cc": "house:arm-none-eabi-gcc",
+        "flags": [
+          "-std=c11",
+          "-O0",
+          "-mcpu=cortex-m7",
+          "-mthumb"
+        ]
+      }
+    },
+    "expect": {
+      "src/kernel/x86/add.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 10,
+        "what": "fp32 add, 4 lanes"
+      },
+      "src/kernel/x86/fc.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 20,
+        "what": "fp32 dot, 4 lanes + shuffle fold"
+      },
+      "src/kernel/x86/fc_i8.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 84,
+        "what": "int8 dot: sign mask, unpack to int16, maddwd"
+      },
+      "src/kernel/x86/fc_i16.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 133,
+        "what": "int16 dot: zero-interleaved maddwd, int64 accumulate"
+      },
+      "src/kernel/x86/reduce.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 30,
+        "what": "max and sum, compare+select so NaN/order match"
+      },
+      "src/kernel/x86/relu.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 19,
+        "what": "fp32 relu via cmpgt+and, not maxps"
+      },
+      "src/kernel/x86/relu_i8.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 20,
+        "what": "int8 relu via pcmpgtb + mask"
+      },
+      "src/kernel/x86/scale.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 11,
+        "what": "broadcast multiply"
+      },
+      "src/kernel/x86/sum.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 14,
+        "what": "sum with lane fold"
+      },
+      "src/kernel/arm_neon/add.c": {
+        "tier": "arm_neon",
+        "min_packed": 1,
+        "measured": 3,
+        "what": "fp32 add, 4 lanes"
+      },
+      "src/kernel/arm_neon/fc.c": {
+        "tier": "arm_neon",
+        "min_packed": 1,
+        "measured": 7,
+        "what": "fp32 dot via vmlaq_f32"
+      },
+      "src/kernel/arm_neon/reduce.c": {
+        "tier": "arm_neon",
+        "min_packed": 1,
+        "measured": 7,
+        "what": "max and sum, compare+select"
+      },
+      "src/kernel/arm_neon/relu.c": {
+        "tier": "arm_neon",
+        "min_packed": 1,
+        "measured": 8,
+        "what": "fp32 relu via compare+select"
+      },
+      "src/kernel/arm_neon/relu_i8.c": {
+        "tier": "arm_neon",
+        "min_packed": 1,
+        "measured": 4,
+        "what": "int8 relu via vmaxq_s8"
+      },
+      "src/kernel/arm_neon/scale.c": {
+        "tier": "arm_neon",
+        "min_packed": 1,
+        "measured": 4,
+        "what": "broadcast multiply"
+      },
+      "src/kernel/arm_neon/sum.c": {
+        "tier": "arm_neon",
+        "min_packed": 1,
+        "measured": 9,
+        "what": "sum with four partial accumulators"
+      },
+      "src/kernel/rvv/add.c": {
+        "tier": "rvv",
+        "min_packed": 1,
+        "measured": 9,
+        "what": "fp32 add, vsetvli-striped"
+      },
+      "src/kernel/rvv/fc.c": {
+        "tier": "rvv",
+        "min_packed": 1,
+        "measured": 14,
+        "what": "fp32 dot with a vector accumulator"
+      },
+      "src/kernel/rvv/reduce.c": {
+        "tier": "rvv",
+        "min_packed": 1,
+        "measured": 12,
+        "what": "max and sum"
+      },
+      "src/kernel/rvv/relu.c": {
+        "tier": "rvv",
+        "min_packed": 1,
+        "measured": 7,
+        "what": "fp32 relu via vfmax (IEEE maximumNumber)"
+      },
+      "src/kernel/rvv/relu_i8.c": {
+        "tier": "rvv",
+        "min_packed": 1,
+        "measured": 7,
+        "what": "int8 relu via vmax_vx_i8m1"
+      },
+      "src/kernel/rvv/scale.c": {
+        "tier": "rvv",
+        "min_packed": 1,
+        "measured": 7,
+        "what": "broadcast multiply"
+      },
+      "src/kernel/rvv/sum.c": {
+        "tier": "rvv",
+        "min_packed": 1,
+        "measured": 12,
+        "what": "sum with a vector accumulator"
+      },
+      "src/kernel/arm_m/fc.c": {
+        "tier": "arm_m",
+        "min_packed": 1,
+        "measured": 2,
+        "what": "int8/int16 dot via SMLAD/SMLALD"
+      }
+    },
+    "excluded": {
+      "src/kernel/x86/register.c": "registry table only (a list of descriptors), no kernel body",
+      "src/kernel/arm_neon/register.c": "registry table only, no kernel body",
+      "src/kernel/rvv/register.c": "registry table only, no kernel body",
+      "src/kernel/arm_m/register.c": "registry table only, no kernel body"
+    }
   }
 }
