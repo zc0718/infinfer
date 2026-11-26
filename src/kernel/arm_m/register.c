@@ -30,8 +30,16 @@ infr_status infr_kernel_register_arm_m(void) {
      * fp32 格在本档位没有 DSP 路径（FPU 是编译选项，不是这个档位能选择的指令集），
      * 所以矩阵里 fp32/arm_m 仍是待办格而不是声称。 */
     static const infr_kernel_desc builtins[] = {
-        {"fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_ARM_M, infr_arm_m_fc_i8},
-        {"fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_ARM_M, infr_arm_m_fc_i16},
+        {.name = "fc",
+         .dtype = INFR_DTYPE_I8,
+         .quant = INFR_QUANT_PER_TENSOR,
+         .tier = INFR_TIER_ARM_M,
+         .fn = infr_arm_m_fc_i8},
+        {.name = "fc",
+         .dtype = INFR_DTYPE_I16,
+         .quant = INFR_QUANT_PER_TENSOR,
+         .tier = INFR_TIER_ARM_M,
+         .fn = infr_arm_m_fc_i16},
     };
     uint32_t i;
 
