@@ -7,6 +7,10 @@
 // Conan::ImportEnd
 
 // C linkage, because this header is included from C and from the C++ core.
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*!
  * @ingroup group_runtime
  * @file tensor.h
@@ -166,3 +170,7 @@ infr_status infr_tensor_init(infr_tensor *tensor, void *data, infr_dtype dtype, 
  * @since 0.1.0
  */
 size_t infr_tensor_bytes(const infr_tensor *tensor);
+
+#ifdef __cplusplus
+}
+#endif

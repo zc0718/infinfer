@@ -8,6 +8,10 @@
 // Conan::ImportEnd
 
 // C linkage, because this header is included from C and from the C++ core.
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*!
  * @ingroup group_runtime
  * @file graph.h
@@ -249,3 +253,7 @@ infr_status infr_max_pool2d_f32(const infr_tensor *input, const infr_pool_params
  * @since 0.1.0
  */
 infr_status infr_mean_hw_f32(const infr_tensor *input, infr_tensor *output, infr_workspace *workspace);
+
+#ifdef __cplusplus
+}
+#endif
