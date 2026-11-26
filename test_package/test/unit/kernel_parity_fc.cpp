@@ -197,6 +197,145 @@ TEST(KernelParityFcInt8, RejectsUnresolvedQuantization) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, outputs, 1, &unquantized));
 }
 
+/*
+ * The int16 cell (`fc/int16/tensor/{scalar,arm_m}`). It is not "int8 with a wider
+ * type": the accumulator has to be int64, because `32767 * 32767` is about 2^30
+ * and int32 wraps on the *second* worst-case term. One case below pins exactly
+ * that -- it is the case that fails if anyone ever "simplifies" the accumulator.
+ *
+ * int16 格。它不是“更宽的 int8”：累加器必须是 int64，因为 `32767 * 32767` 约为 2^30，
+ * int32 在最坏情况下的**第二项**就会回绕。下面有一条用例专钉这件事——谁把累加器
+ * “简化”回去，它就先红。
+ */
+
+namespace {
+
+const infr_kernel_desc* scalar_fc_i16() {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    return infr_kernel_find("fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+}
+
+}  // namespace
+
+TEST(KernelParityFcInt16, ScalarInt16MatchesDefinition) {
+    const infr_kernel_desc* row = scalar_fc_i16();
+    ASSERT_NE(nullptr, row) << "fc/int16/tensor/scalar is not registered";
+
+    // 1*4 + 2*5 + 3*6 = 32, then 32 * 1.0 + 0 = 32.
+    const std::int16_t x[3] = {1, 2, 3};
+    const std::int16_t w[3] = {4, 5, 6};
+    std::int16_t got = -1;
+    infr_quant quant{};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 1.0F;
+    quant.zero_point = 0;
+    quant.requant_multiplier = 1.0F;
+    const void* inputs[2] = {x, w};
+    void* outputs[1] = {&got};
+
+    ASSERT_EQ(INFR_OK, row->fn(inputs, outputs, 3, &quant));
+    EXPECT_EQ(32, static_cast<int>(got));
+}
+
+TEST(KernelParityFcInt16, AccumulatesIn64BitsNot32) {
+    const infr_kernel_desc* row = scalar_fc_i16();
+    ASSERT_NE(nullptr, row);
+
+    // 64 terms of 16384*16384 = 2^28 put the accumulator at 2^34, eight times INT32_MAX,
+    // and 2^34 wraps to exactly 0 in 32 bits -- so a body that accumulated in int32 would
+    // answer 0 here, not "something slightly off". The multiplier is 2^-21, which makes
+    // the exact answer 2^13 = 8192 (both powers of two, so no rounding is involved).
+    std::int16_t x[64];
+    std::int16_t w[64];
+    for (int i = 0; i < 64; ++i) {
+        x[i] = 16384;
+        w[i] = 16384;
+    }
+    std::int16_t got = 0;
+    infr_quant quant{};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 1.0F;
+    quant.zero_point = 0;
+    quant.requant_multiplier = 1.0F / 2097152.0F;
+    const void* inputs[2] = {x, w};
+    void* outputs[1] = {&got};
+
+    ASSERT_EQ(INFR_OK, row->fn(inputs, outputs, 64, &quant));
+    std::int64_t want = 0;
+    for (int i = 0; i < 64; ++i) {
+        want += static_cast<std::int64_t>(x[i]) * static_cast<std::int64_t>(w[i]);
+    }
+    ASSERT_EQ(17179869184LL, static_cast<long long>(want));  // 2^34, the accumulator itself
+    EXPECT_EQ(8192, static_cast<int>(got));
+}
+
+TEST(KernelParityFcInt16, SaturatesInsteadOfWrapping) {
+    const infr_kernel_desc* row = scalar_fc_i16();
+    ASSERT_NE(nullptr, row);
+
+    infr_quant quant{};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 1.0F;
+    quant.zero_point = 0;
+    quant.requant_multiplier = 1.0F;
+
+    // 32767*32767 = 1073676289, far outside int16: saturating is the contract.
+    const std::int16_t big_x[1] = {32767};
+    const std::int16_t big_w[1] = {32767};
+    std::int16_t got = 0;
+    const void* inputs[2] = {big_x, big_w};
+    void* outputs[1] = {&got};
+    ASSERT_EQ(INFR_OK, row->fn(inputs, outputs, 1, &quant));
+    EXPECT_EQ(32767, static_cast<int>(got));
+
+    // -32768*32767 = -1073709056: the other end, and the value that catches a
+    // clamp written as `value > 32767 ? ... : (int16_t)value` (which would wrap).
+    const std::int16_t low_x[1] = {-32768};
+    const std::int16_t low_w[1] = {32767};
+    const void* low_inputs[2] = {low_x, low_w};
+    ASSERT_EQ(INFR_OK, row->fn(low_inputs, outputs, 1, &quant));
+    EXPECT_EQ(-32768, static_cast<int>(got));
+}
+
+TEST(KernelParityFcInt16, ZeroLengthReducesToTheZeroPoint) {
+    const infr_kernel_desc* row = scalar_fc_i16();
+    ASSERT_NE(nullptr, row);
+
+    const std::int16_t x[1] = {7};
+    const std::int16_t w[1] = {9};
+    std::int16_t got = 0;
+    infr_quant quant{};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 1.0F;
+    quant.zero_point = -5;
+    quant.requant_multiplier = 1.0F;
+    const void* inputs[2] = {x, w};
+    void* outputs[1] = {&got};
+    ASSERT_EQ(INFR_OK, row->fn(inputs, outputs, 0, &quant));
+    EXPECT_EQ(-5, static_cast<int>(got));
+}
+
+TEST(KernelParityFcInt16, RejectsUnresolvedQuantization) {
+    const infr_kernel_desc* row = scalar_fc_i16();
+    ASSERT_NE(nullptr, row);
+
+    const std::int16_t x[1] = {1};
+    const std::int16_t w[1] = {1};
+    std::int16_t got = 0;
+    const void* inputs[2] = {x, w};
+    void* outputs[1] = {&got};
+
+    infr_quant unresolved{};
+    unresolved.kind = INFR_QUANT_PER_TENSOR;  // multiplier left at 0
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, outputs, 1, &unresolved));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, outputs, 1, nullptr));
+
+    infr_quant unquantized{};
+    unquantized.kind = INFR_QUANT_NONE;
+    unquantized.requant_multiplier = 1.0F;
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, outputs, 1, &unquantized));
+}
+
 TEST(KernelParityFcArmM, Int8MatchesScalarBitwise) {
     EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
     EXPECT_EQ(INFR_OK, infr_kernel_register_arm_m());
@@ -226,6 +365,49 @@ TEST(KernelParityFcArmM, Int8MatchesScalarBitwise) {
     for (std::uint32_t n = 1U; n <= 17U; ++n) {
         std::int8_t want = 0;
         std::int8_t got = 0;
+        const void* inputs[2] = {x, w};
+        void* want_out[1] = {&want};
+        void* got_out[1] = {&got};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, &quant));
+        ASSERT_EQ(INFR_OK, dsp->fn(inputs, got_out, n, &quant));
+        EXPECT_EQ(static_cast<int>(want), static_cast<int>(got)) << "inner dimension " << n;
+    }
+}
+
+TEST(KernelParityFcArmM, Int16MatchesScalarBitwise) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_arm_m());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* dsp =
+        infr_kernel_find("fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_ARM_M);
+    ASSERT_NE(nullptr, scalar) << "fc/int16/tensor/scalar is not registered";
+    if (dsp == nullptr) {
+        GTEST_SKIP() << "no DSP extension in this build: the arm_m row is absent by design";
+    }
+
+    infr_quant quant{};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 0.5F;
+    quant.zero_point = -1234;
+    quant.requant_multiplier = 1.0F / 1024.0F;
+
+    // Signed values across the whole int16 range, so the pair lanes are exercised in
+    // both halves -- a DSP body that mixes lanes up still gets the product *sum*
+    // right, which is why the comparison is on the output value and not on lanes.
+    std::int16_t x[64];
+    std::int16_t w[64];
+    for (int i = 0; i < 64; ++i) {
+        x[i] = static_cast<std::int16_t>(((i * 4001) % 65536) - 32768);
+        w[i] = static_cast<std::int16_t>(((i * 7919 + 12345) % 65536) - 32768);
+    }
+
+    // 1..17 covers the odd tail and single-SMLALD lengths; 64 is 2^34-scale accumulation
+    // (see the scalar case), which is the int64 claim under test.
+    const std::uint32_t lengths[] = {1U, 2U, 3U, 5U, 16U, 17U, 64U};
+    for (std::uint32_t n : lengths) {
+        std::int16_t want = 0;
+        std::int16_t got = 0;
         const void* inputs[2] = {x, w};
         void* want_out[1] = {&want};
         void* got_out[1] = {&got};

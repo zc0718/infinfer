@@ -78,4 +78,73 @@ infr_status infr_arm_m_fc_i8(const void *const *inputs, void *const *outputs, ui
     return INFR_OK;
 }
 
+/**
+ * @brief [en] Read two adjacent int16 lanes as the 32-bit word `SMLALD` expects.
+ * @brief [zh] 把两个相邻 int16 车道读成 `SMLALD` 期望的那个 32 位字。
+ * @note [en] `__builtin_memcpy` rather than a pointer cast: the array is only 2-byte aligned and the
+ *            cast would be undefined behaviour. Measured, not assumed: at `-O2 -mcpu=cortex-m4` this
+ *            lowers to a single `ldr.w` and leaves **no** undefined `memcpy` symbol, so the library
+ *            still links on a target with no libc.
+ * @note [zh] 用 `__builtin_memcpy` 而不是指针强转：数组只保证 2 字节对齐，强转是未定义行为。
+ *            已经量过而非假设：`-O2 -mcpu=cortex-m4` 下它降为**一条** `ldr.w`，且目标文件里**没有**
+ *            未定义的 `memcpy` 符号，因此库在没有 libc 的裸机上仍能链接。
+ * @since 0.1.0
+ */
+static int32_t pair_at(const int16_t *values, uint32_t index) {
+    int32_t word;
+
+    __builtin_memcpy(&word, &values[index], sizeof word);
+    return word;
+}
+
+/**
+ * @brief [en] int16 dot product on the DSP extension: adjacent lanes accumulate into int64 via `SMLALD`.
+ * @brief [zh] DSP 扩展上的 int16 点积：相邻车道由 `SMLALD` 累加进 int64。
+ * @note [en] This is the shape the DSP was designed for, and it shows in three places. No packing:
+ *            two adjacent int16 already *are* the int16 pair, so the operand costs one load (the int8
+ *            body has to widen and shift each lane). No overflow: `SMLALD` accumulates in **64 bits**,
+ *            where the largest possible product is 2^30, so the accumulator survives
+ *            2^63/2^30 ~= 8.6e9 terms -- more than `UINT32_MAX`, i.e. more terms than the API can even
+ *            express. And no rounding divergence: the tail is
+ *            `infr_scalar_requantize_i16()`, the same function the reference calls.
+ * @note [zh] 这正是 DSP 设计时的形状，三处可见：不打包——两个相邻 int16 本身就是一个 int16 对，
+ *            操作数只要一条 load（int8 体得逐车道展宽、移位）；不溢出——`SMLALD` 以 **64 位**累加，
+ *            单项最大乘积为 2^30，因此累加器可容纳 2^63/2^30 ≈ 8.6e9 项，多于 `UINT32_MAX`，
+ *            即多于 API 能表达的任何长度；不漂移——尾部是 `infr_scalar_requantize_i16()`，
+ *            与参考实现同一个函数。
+ * @note [en] Lane order is irrelevant to the result: on a big-endian target both operands swap lanes
+ *            identically, and the sum of the two products is the same sum.
+ * @note [zh] 车道顺序不影响结果：大端目标上两个操作数会同步交换车道，两项乘积之和仍是同一个和。
+ * @since 0.1.0
+ */
+infr_status infr_arm_m_fc_i16(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                              const infr_quant *quant) {
+    const int16_t *x;
+    const int16_t *w;
+    int16_t *out;
+    int64_t acc = 0;
+    uint32_t i = 0U;
+
+    if (inputs == NULL || outputs == NULL || inputs[0] == NULL || inputs[1] == NULL || outputs[0] == NULL) {
+        return INFR_ERR_INVALID_ARGUMENT;
+    }
+    if (quant == NULL || quant->kind == INFR_QUANT_NONE || !(quant->requant_multiplier > 0.0F)) {
+        return INFR_ERR_INVALID_ARGUMENT;
+    }
+    out = (int16_t *)outputs[0];
+    x = (const int16_t *)inputs[0];
+    w = (const int16_t *)inputs[1];
+
+    for (; i + 1U < element_count; i += 2U) {
+        acc = __smlald(pair_at(x, i), pair_at(w, i), acc);
+    }
+    /* Odd tail: one lane left, so the paired instruction cannot help. */
+    if (i < element_count) {
+        acc += (int64_t)x[i] * (int64_t)w[i];
+    }
+
+    out[0] = infr_scalar_requantize_i16(acc, quant);
+    return INFR_OK;
+}
+
 #endif /* __ARM_FEATURE_DSP */

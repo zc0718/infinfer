@@ -45,15 +45,17 @@ kernels:
   fc:
     tflite: [FULLY_CONNECTED]
     onnx: [{op: Gemm}, {op: MatMul}]
-    dtype_quant: [[fp32, none], [int8, tensor]]
-    # Per-pair on purpose (gaps G-51): the DSP path is the int8 dot product.
-    # fp32/arm_m is `todo`, not `na` -- it is unbuilt, and on this profile it
-    # has no FPU to be built on.
+    dtype_quant: [[fp32, none], [int8, tensor], [int16, tensor]]
+    # Per-pair on purpose (gaps G-51): the DSP path is the dot product, and it
+    # exists for both quantized element types -- int8 with packed lanes, int16
+    # natively (`SMLALD` into a 64-bit accumulator), which is the shape the
+    # extension was designed for. fp32/arm_m is `todo`, not `na` -- it is
+    # unbuilt, and on this profile it has no FPU to be built on.
     tiers:
       scalar: done
       autovec: todo
       arm_neon: todo
-      arm_m: { fp32/none: todo, int8/tensor: done }
+      arm_m: { fp32/none: todo, int8/tensor: done, int16/tensor: done }
       rvv: todo
     grad: todo
   quantize:

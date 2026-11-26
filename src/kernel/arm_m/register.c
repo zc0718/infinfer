@@ -21,16 +21,17 @@
  */
 infr_status infr_kernel_register_arm_m(void) {
 #if defined(__ARM_FEATURE_DSP)
-    /* One row per (name, dtype, quant) the tier implements. Today only the int8 dot
-     * product: the fp32 cells have no DSP path on this profile (the FPU is a build
-     * flag, not an instruction set this tier can select), which is why the matrix
-     * keeps fp32/arm_m as an open cell rather than a claim.
+    /* One row per (name, dtype, quant) the tier implements. Today the int8 and int16 dot
+     * products: the fp32 cells have no DSP path on this profile (the FPU is a build flag, not
+     * an instruction set this tier can select), which is why the matrix keeps fp32/arm_m as an
+     * open cell rather than a claim.
      *
-     * 这里每登记一行 = 该档位实现的一个 (名字, dtype, quant)。目前只有 int8 点积：
+     * 这里每登记一行 = 该档位实现的一个 (名字, dtype, quant)。目前是 int8 与 int16 点积：
      * fp32 格在本档位没有 DSP 路径（FPU 是编译选项，不是这个档位能选择的指令集），
      * 所以矩阵里 fp32/arm_m 仍是待办格而不是声称。 */
     static const infr_kernel_desc builtins[] = {
         {"fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_ARM_M, infr_arm_m_fc_i8},
+        {"fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_ARM_M, infr_arm_m_fc_i16},
     };
     uint32_t i;
 

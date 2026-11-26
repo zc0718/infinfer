@@ -53,6 +53,32 @@ int8_t infr_scalar_clamp_i8(int32_t value) {
     return (int8_t)value;
 }
 
+/**
+ * @brief [en] Turn an int64 dot-product accumulator into one int16: multiply by the resolved
+ *            multiplier, add the zero point, round half away from zero, saturate.
+ * @brief [zh] 把 int64 点积累加器变成一个 int16：乘已解析乘子、加 zero point、半远离零舍入、饱和。
+ * @note [en] One definition for both int16 tiers on purpose: the DSP body calls this too, so the two
+ *            cannot drift into "bit-identical except on the value that rounds at a boundary".
+ * @note [zh] 两个 int16 档位共用这一处定义是刻意的：DSP 体也调它，两者就不可能漂移成
+ *            “除了边界舍入那个值之外逐位相同”。
+ * @note [en] Saturation happens in the double domain *before* the conversion, unlike the int8 tail:
+ *            an int64 accumulator times any multiplier can exceed every integer type, and a
+ *            float-to-int conversion of an out-of-range value is undefined behaviour, not a clamp.
+ * @note [zh] 与 int8 尾部不同，饱和在 double 域内、**转换之前**完成：int64 累加器乘任何乘子都
+ *            可能超出所有整数类型，而越界的浮点→整数转换是未定义行为，不会自己截断。
+ * @since 0.1.0
+ */
+int16_t infr_scalar_requantize_i16(int64_t acc, const infr_quant *quant) {
+    double scaled = ((double)acc * (double)quant->requant_multiplier) + (double)quant->zero_point;
+    if (scaled <= (double)INT16_MIN) {
+        return (int16_t)INT16_MIN;
+    }
+    if (scaled >= (double)INT16_MAX) {
+        return (int16_t)INT16_MAX;
+    }
+    return (int16_t)(scaled >= 0.0 ? scaled + 0.5 : scaled - 0.5);
+}
+
 
 /**
  * @brief [en] Quantize `n` floats to int8 with the given per-tensor parameters.

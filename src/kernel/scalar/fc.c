@@ -100,3 +100,47 @@ infr_status infr_scalar_fc_i8(const void *const *inputs, void *const *outputs, u
     out[0] = infr_scalar_clamp_i8(rounded);
     return INFR_OK;
 }
+
+/**
+ * @brief [en] int16 dot product: `inputs[0] . inputs[1]` in int64, requantized and saturated to one int16.
+ * @brief [zh] int16 点积：`inputs[0] . inputs[1]` 以 int64 累加，再量化并饱和为一个 int16。
+ * @note [en] The accumulation type is the whole point of this cell, so it is stated rather than left to
+ *            the reader: `32767 * 32767` is about 2^30, so int32 holds one worst-case term, loses
+ *            precision on the second and overflows on the **third** (a 512-wide row is ~256x past the
+ *            limit). int64 gives 8.6e9 terms of headroom with no saturation logic in the loop, which
+ *            is also what lets the DSP tier be exact (`SMLALD` accumulates in 64 bits).
+ * @note [zh] 累加类型就是这一格的意义所在，因此写明而不留给读者推断：`32767 * 32767` 约为 2^30，
+ *            因此 int32 只能稳稳装下**一项**最坏情况，第二项已丢精度、**第三项就溢出**
+ *            （512 宽的行超出上限约 256 倍）。int64 有 8.6e9 项余量、循环里不需要任何饱和逻辑——
+ *            这也正是 DSP 档位能做精确的前提（`SMLALD` 以 64 位累加）。
+ * @note [en] Requantization is not re-implemented here: `infr_scalar_requantize_i16()` is shared with
+ *            the DSP body, so "the tiers agree bit-for-bit" holds by construction, including at the
+ *            values where rounding and saturation decide the result.
+ * @note [zh] 再量化不在这里重写：`infr_scalar_requantize_i16()` 与 DSP 体共用，因此“两个档位逐位
+ *            相同”是构造性的，包括舍入与饱和真正决定结果的那些值。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_fc_i16(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                               const infr_quant *quant) {
+    const int16_t *x;
+    const int16_t *w;
+    int16_t *out;
+    int64_t acc = 0;
+    uint32_t i;
+
+    if (inputs == NULL || outputs == NULL || inputs[0] == NULL || inputs[1] == NULL || outputs[0] == NULL) {
+        return INFR_ERR_INVALID_ARGUMENT;
+    }
+    if (quant == NULL || quant->kind == INFR_QUANT_NONE || !(quant->requant_multiplier > 0.0F)) {
+        return INFR_ERR_INVALID_ARGUMENT;
+    }
+    out = (int16_t *)outputs[0];
+    x = (const int16_t *)inputs[0];
+    w = (const int16_t *)inputs[1];
+    /* Fixed accumulation order (i ascending), same rule as the fp32 and int8 bodies. */
+    for (i = 0; i < element_count; ++i) {
+        acc += (int64_t)x[i] * (int64_t)w[i];
+    }
+    out[0] = infr_scalar_requantize_i16(acc, quant);
+    return INFR_OK;
+}

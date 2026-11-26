@@ -61,6 +61,17 @@ infr_status infr_scalar_dequantize_i8(const void *const *inputs, void *const *ou
 int8_t infr_scalar_clamp_i8(int32_t value);
 
 /**
+ * @brief [en] Requantize an int64 accumulator to int16: shared by the scalar and DSP int16 bodies.
+ * @brief [zh] 把 int64 累加器再量化为 int16：scalar 与 DSP 两个 int16 体共用。
+ * @note [en] Sharing the whole tail (not just a clamp) is what makes "bit-identical across tiers" a
+ *            property of the design: the rounding and saturation have exactly one definition.
+ * @note [zh] 共享整个尾部（而不只是一个 clamp）才让“跨档位逐位相同”成为设计属性：舍入与饱和
+ *            只有一处定义。
+ * @since 0.1.0
+ */
+int16_t infr_scalar_requantize_i16(int64_t acc, const infr_quant *quant);
+
+/**
  * @brief [en] One int8 dot product: zero-centred operands accumulated in int32, requantized to int8.
  * @brief [zh] 一次 int8 点积：零中心化的操作数以 int32 累加，再再量化回 int8。
  * @note [en] Requantization reads `quant->requant_multiplier` and `quant->zero_point`; the
@@ -74,6 +85,21 @@ int8_t infr_scalar_clamp_i8(int32_t value);
  */
 infr_status infr_scalar_fc_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
                               const infr_quant *quant);
+
+/**
+ * @brief [en] One int16 dot product: operands accumulated in int64, requantized and saturated to int16.
+ * @brief [zh] 一次 int16 点积：操作数以 int64 累加，再量化并饱和回 int16。
+ * @note [en] The accumulator is int64 because int16 products are not small: one term can be about 2^30,
+ *            so int32 holds a single worst-case term, loses precision on the second and **overflows
+ *            on the third** -- a 512-wide row, which is an ordinary inner dimension, overshoots the
+ *            int32 range by about 256x. int32 would not be "tighter", it would be wrong.
+ * @note [zh] 累加器是 int64，因为 int16 乘积并不小：单项可达 2^30，因此 int32 只能稳稳装下
+ *            **一项**最坏情况，第二项已丢精度，**第三项就溢出**——512 宽的行（正常内维）会
+ *            超出 int32 上限约 256 倍。int32 不是“精度紧一点”，而是会算错。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_fc_i16(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                               const infr_quant *quant);
 
 /**
  * @brief [en] One dot product: activations against one weight row, `element_count` = inner dimension.

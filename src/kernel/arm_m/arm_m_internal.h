@@ -23,3 +23,14 @@
  */
 infr_status infr_arm_m_fc_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
                              const infr_quant *quant);
+
+/**
+ * @brief [en] int16 dot product using the DSP extension's dual multiply-accumulate into 64 bits.
+ * @brief [zh] 用 DSP 扩展的成对乘加（64 位累加）完成 int16 点积。
+ * @note [en] Declared under the same `__ARM_FEATURE_DSP` condition as the int8 row; the registry
+ *            decides whether it is ever visible.
+ * @note [zh] 与 int8 行同一个 `__ARM_FEATURE_DSP` 条件；是否可见由注册表决定。
+ * @since 0.1.0
+ */
+infr_status infr_arm_m_fc_i16(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                              const infr_quant *quant);
