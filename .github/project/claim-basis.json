@@ -1,4 +1,30 @@
 {
   "schema": 1,
-  "claims": []
+  "claims": [
+    {
+      "id": "kat-cross-target",
+      "claim": "the same KAT blob produces bitwise-identical output on the host and on every QEMU target below",
+      "gate": "kat",
+      "local_only": true,
+      "commit": "0c5863b",
+      "host": "zc Linux, QEMU 8.2.2",
+      "date": "2026-11-26",
+      "chains": {
+        "k0_actquant": "PASS",
+        "k1_mlp3": "PASS",
+        "k2_conv_micro": "PASS"
+      },
+      "targets": [
+        "m3-an385",
+        "m4-an386",
+        "m7-an500",
+        "rv32-virt",
+        "rv64-virt"
+      ],
+      "excluded": {
+        "m33-an505": "known open issue: the image faults before the check runs; tracked separately"
+      },
+      "reproduce": "python3 workspace/qa/kat/run_kat.py --chain all  (needs workspace/, so a fresh clone must skip it and say so)"
+    }
+  ]
 }
