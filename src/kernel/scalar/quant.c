@@ -38,7 +38,12 @@ static int quant_args_ok(const infr_quant *quant) {
     return 1;
 }
 
-static int8_t clamp_i8(int32_t value) {
+/**
+ * @brief [en] Clamp an int32 to the int8 range, saturating at both ends.
+ * @brief [zh] 把 int32 截断到 int8 范围，两端饱和。
+ * @since 0.1.0
+ */
+int8_t infr_scalar_clamp_i8(int32_t value) {
     if (value < -128) {
         return (int8_t)-128;
     }
@@ -47,6 +52,7 @@ static int8_t clamp_i8(int32_t value) {
     }
     return (int8_t)value;
 }
+
 
 /**
  * @brief [en] Quantize `n` floats to int8 with the given per-tensor parameters.
@@ -61,7 +67,7 @@ infr_status infr_quantize_i8(const float *in, int8_t *out, uint32_t n, const inf
     for (i = 0; i < n; ++i) {
         float scaled = in[i] / quant->scale + (float)quant->zero_point;
         int32_t rounded = (int32_t)(scaled >= 0.0F ? scaled + 0.5F : scaled - 0.5F);
-        out[i] = clamp_i8(rounded);
+        out[i] = infr_scalar_clamp_i8(rounded);
     }
     return INFR_OK;
 }

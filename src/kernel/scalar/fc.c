@@ -61,3 +61,42 @@ infr_status infr_scalar_fc_f32(const void *const *inputs, void *const *outputs, 
     out[0] = acc;
     return INFR_OK;
 }
+
+/**
+ * @brief [en] int8 dot product: `inputs[0] · inputs[1]` in int32, requantized to one int8.
+ * @brief [zh] int8 点积：`inputs[0] · inputs[1]` 以 int32 累加，再再量化为一个 int8。
+ * @note [en] The reference computes the requantization in double so that the definition is exact
+ *            and a faster tier has something unambiguous to match; the accumulator itself stays
+ *            int32 because that is the type the graph layer's contract promises.
+ * @note [zh] 参考实现用 double 做再量化，使定义精确、更快的档位有明确的对齐目标；累加器本身仍是
+ *            int32，因为那是图层契约承诺的类型。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_fc_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                              const infr_quant *quant) {
+    const int8_t *x;
+    const int8_t *w;
+    int8_t *out;
+    int32_t acc = 0;
+    uint32_t i;
+    double scaled;
+    int32_t rounded;
+
+    if (inputs == NULL || outputs == NULL || inputs[0] == NULL || inputs[1] == NULL || outputs[0] == NULL) {
+        return INFR_ERR_INVALID_ARGUMENT;
+    }
+    if (quant == NULL || quant->kind == INFR_QUANT_NONE || !(quant->requant_multiplier > 0.0F)) {
+        return INFR_ERR_INVALID_ARGUMENT;
+    }
+    out = (int8_t *)outputs[0];
+    x = (const int8_t *)inputs[0];
+    w = (const int8_t *)inputs[1];
+    /* Fixed accumulation order (i ascending), same rule as the fp32 body. */
+    for (i = 0; i < element_count; ++i) {
+        acc += (int32_t)x[i] * (int32_t)w[i];
+    }
+    scaled = ((double)acc * (double)quant->requant_multiplier) + (double)quant->zero_point;
+    rounded = (int32_t)(scaled >= 0.0 ? scaled + 0.5 : scaled - 0.5);
+    out[0] = infr_scalar_clamp_i8(rounded);
+    return INFR_OK;
+}

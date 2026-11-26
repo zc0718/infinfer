@@ -153,6 +153,17 @@ typedef struct infr_quant {
      */
     int32_t zero_point;
     /**
+     * @brief [en] Resolved requantization multiplier for dot-product kernels: `(scale_a * scale_b) / scale_out`, or 0 for kernels that do not requantize.
+     * @brief [zh] 点积内核的已解析再量化乘子：`(scale_a * scale_b) / scale_out`；不做再量化的内核为 0。
+     * @note [en] Stored as the *resolved ratio* on purpose: a dot-product kernel multiplies its
+     *            accumulator once and never divides, and a non-positive value is rejected rather
+     *            than silently zeroing the output. Only dot-product kernels read this field.
+     * @note [zh] 刻意存“已解析的比值”：点积内核只把累加器乘一次、永不除法，且非正值会被拒绝，
+     *            而不是静默把输出清零。只有点积内核读这个字段。
+     * @since 0.1.0
+     */
+    float requant_multiplier;
+    /**
      * @brief [en] Per-channel scales, or NULL.
      * @brief [zh] 逐通道 scale，可为 NULL。
      */

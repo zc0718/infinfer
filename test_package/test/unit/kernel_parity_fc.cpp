@@ -69,8 +69,7 @@ TEST(KernelParityFc, ScalarFp32MatchesDoubleReference) {
     }
 }
 
-TEST(KernelParityFc, RejectsMissingBuffers) {
-    const infr_kernel_desc* row = scalar_fc();
+TEST(KernelParityFc, RejectsMissingBuffers) {    const infr_kernel_desc* row = scalar_fc();
     ASSERT_NE(nullptr, row);
 
     const float x[2] = {1.0F, 2.0F};
@@ -102,4 +101,98 @@ TEST(KernelParityFc, ZeroLengthIsAZeroReduction) {
 
     ASSERT_EQ(INFR_OK, row->fn(inputs, outputs, 0, nullptr));
     EXPECT_EQ(0.0F, got);
+}
+
+TEST(KernelParityFcInt8, ScalarInt8MatchesDefinition) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    const infr_kernel_desc* row =
+        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    ASSERT_NE(nullptr, row) << "fc/int8/tensor/scalar is not registered";
+
+    // 1*4 + 2*5 + 3*6 = 32, then 32 * 1.0 + 0 = 32.
+    const int8_t x[3] = {1, 2, 3};
+    const int8_t w[3] = {4, 5, 6};
+    int8_t got = -1;
+    infr_quant quant{};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 1.0F;
+    quant.zero_point = 0;
+    quant.requant_multiplier = 1.0F;
+    const void* inputs[2] = {x, w};
+    void* outputs[1] = {&got};
+
+    ASSERT_EQ(INFR_OK, row->fn(inputs, outputs, 3, &quant));
+    EXPECT_EQ(32, static_cast<int>(got));
+}
+
+TEST(KernelParityFcInt8, AppliesMultiplierAndZeroPointThenClamps) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    const infr_kernel_desc* row =
+        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    ASSERT_NE(nullptr, row);
+
+    const int8_t x[3] = {1, 2, 3};
+    const int8_t w[3] = {4, 5, 6};  // acc = 32
+    int8_t got = 0;
+    infr_quant quant{};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 2.0F;
+    quant.zero_point = -10;
+    quant.requant_multiplier = 0.5F;  // 32 * 0.5 - 10 = 6
+    const void* inputs[2] = {x, w};
+    void* outputs[1] = {&got};
+    ASSERT_EQ(INFR_OK, row->fn(inputs, outputs, 3, &quant));
+    EXPECT_EQ(6, static_cast<int>(got));
+
+    // Saturation: 127*127 * 0.01 + 0 = 161.29 -> 161 -> clamped to 127.
+    const int8_t big_x[1] = {127};
+    const int8_t big_w[1] = {127};
+    quant.zero_point = 0;
+    quant.requant_multiplier = 0.01F;
+    const void* big_inputs[2] = {big_x, big_w};
+    ASSERT_EQ(INFR_OK, row->fn(big_inputs, outputs, 1, &quant));
+    EXPECT_EQ(127, static_cast<int>(got));
+}
+
+TEST(KernelParityFcInt8, ZeroLengthReducesToTheZeroPoint) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    const infr_kernel_desc* row =
+        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    ASSERT_NE(nullptr, row);
+
+    const int8_t x[1] = {7};
+    const int8_t w[1] = {9};
+    int8_t got = 0;
+    infr_quant quant{};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 1.0F;
+    quant.zero_point = -3;
+    quant.requant_multiplier = 1.0F;
+    const void* inputs[2] = {x, w};
+    void* outputs[1] = {&got};
+    ASSERT_EQ(INFR_OK, row->fn(inputs, outputs, 0, &quant));
+    EXPECT_EQ(-3, static_cast<int>(got));
+}
+
+TEST(KernelParityFcInt8, RejectsUnresolvedQuantization) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    const infr_kernel_desc* row =
+        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    ASSERT_NE(nullptr, row);
+
+    const int8_t x[1] = {1};
+    const int8_t w[1] = {1};
+    int8_t got = 0;
+    const void* inputs[2] = {x, w};
+    void* outputs[1] = {&got};
+
+    infr_quant unresolved{};
+    unresolved.kind = INFR_QUANT_PER_TENSOR;  // multiplier left at 0
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, outputs, 1, &unresolved));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, outputs, 1, nullptr));
+
+    infr_quant unquantized{};
+    unquantized.kind = INFR_QUANT_NONE;
+    unquantized.requant_multiplier = 1.0F;
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, outputs, 1, &unquantized));
 }

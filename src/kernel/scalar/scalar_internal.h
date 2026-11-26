@@ -54,6 +54,28 @@ infr_status infr_scalar_dequantize_i8(const void *const *inputs, void *const *ou
                                       const infr_quant *quant);
 
 /**
+ * @brief [en] Clamp an int32 to the int8 range: the shared tail of every quantizing body.
+ * @brief [zh] 把 int32 截断到 int8 范围：每个量化体的共用尾部。
+ * @since 0.1.0
+ */
+int8_t infr_scalar_clamp_i8(int32_t value);
+
+/**
+ * @brief [en] One int8 dot product: zero-centred operands accumulated in int32, requantized to int8.
+ * @brief [zh] 一次 int8 点积：零中心化的操作数以 int32 累加，再再量化回 int8。
+ * @note [en] Requantization reads `quant->requant_multiplier` and `quant->zero_point`; the
+ *            multiplier is the already-resolved `(scale_a * scale_b) / scale_out`, so the body
+ *            never divides. Asymmetric activation offsets are not modelled here: the graph layer
+ *            routes them through the quantize/dequantize kernels instead.
+ * @note [zh] 再量化读 `quant->requant_multiplier` 与 `quant->zero_point`；乘子是已解析的
+ *            `(scale_a * scale_b) / scale_out`，因此本体不做除法。这里不建模非对称激活偏移：
+ *            图层把它们走 quantize/dequantize 内核。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_fc_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                              const infr_quant *quant);
+
+/**
  * @brief [en] One dot product: activations against one weight row, `element_count` = inner dimension.
  * @brief [zh] 一次点积：激活对一行权重，`element_count` 为内维长度。
  * @since 0.1.0

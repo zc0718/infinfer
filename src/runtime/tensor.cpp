@@ -126,6 +126,11 @@ infr_status infr_tensor_init(infr_tensor* tensor, void* data, infr_dtype dtype, 
     tensor->quant.kind = INFR_QUANT_NONE;
     tensor->quant.scale = 1.0F;
     tensor->quant.zero_point = 0;
+    /* Zero means "this tensor does not requantize": only dot-product kernels read it,
+     * and they refuse a non-positive value instead of zeroing their output.
+     *
+     * 0 表示“这张张量不做再量化”：只有点积内核读它，且它们会拒绝非正值而不是把输出清零。 */
+    tensor->quant.requant_multiplier = 0.0F;
     tensor->quant.channel_scales = nullptr;
     tensor->quant.channel_zero_points = nullptr;
     tensor->quant.channel_count = 0U;
