@@ -34,6 +34,18 @@ kernels:
     dtype_quant: [[fp32, none]]
     tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
     grad: todo
+  quantize:
+    tflite: [QUANTIZE]
+    onnx: [{op: QuantizeLinear}]
+    dtype_quant: [[fp32, tensor]]
+    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    grad: no-grad
+  dequantize:
+    tflite: [DEQUANTIZE]
+    onnx: [{op: DequantizeLinear}]
+    dtype_quant: [[int8, tensor]]
+    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    grad: no-grad
   add:
     tflite: [ADD]
     onnx: [{op: Add}]

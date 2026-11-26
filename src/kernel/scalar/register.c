@@ -27,6 +27,14 @@ infr_status infr_kernel_register_scalar(void) {
         {"max", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_max_f32},
         {"relu", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_relu_f32},
         {"relu", INFR_DTYPE_I8, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_relu_i8},
+        /* Quantize and dequantize are kernels like any other: the graph layer has to be
+         * able to ask for them by name, otherwise "quantization is a first-class citizen"
+         * only holds for the bodies the KAT happens to call directly.
+         *
+         * 量化与反量化就是普通内核：图层必须能按名字要到它们，否则“量化是一等公民”
+         * 只成立于 KAT 恰好直接调用的那几个体上。 */
+        {"quantize", INFR_DTYPE_F32, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR, infr_scalar_quantize_f32},
+        {"dequantize", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR, infr_scalar_dequantize_i8},
         {"scale", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_scale_f32},
         {"sum", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_sum_f32},
     };

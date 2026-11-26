@@ -4,11 +4,17 @@
     "add/fp32/none/scalar": [
       "kernel_parity/add_scalar_fp32"
     ],
+    "dequantize/int8/tensor/scalar": [
+      "kernel_parity/dequantize_scalar_s8"
+    ],
     "fc/fp32/none/scalar": [
       "kernel_parity/fc_scalar_fp32"
     ],
     "max/fp32/none/scalar": [
       "kernel_parity/max_scalar_fp32"
+    ],
+    "quantize/fp32/tensor/scalar": [
+      "kernel_parity/quantize_scalar_fp32"
     ],
     "relu/fp32/none/scalar": [
       "kernel_parity/relu_scalar_fp32"
@@ -16,11 +22,11 @@
     "relu/int8/none/scalar": [
       "kernel_parity/relu_scalar_int8"
     ],
-    "sum/fp32/none/scalar": [
-      "kernel_parity/sum_scalar_fp32"
-    ],
     "scale/fp32/none/scalar": [
       "kernel_parity/scale_scalar_fp32"
+    ],
+    "sum/fp32/none/scalar": [
+      "kernel_parity/sum_scalar_fp32"
     ]
   }
 }

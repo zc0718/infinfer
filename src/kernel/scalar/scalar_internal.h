@@ -34,6 +34,26 @@ infr_status infr_scalar_relu_i8(const void *const *inputs, void *const *outputs,
                                 const infr_quant *quant);
 
 /**
+ * @brief [en] Registry-shaped fp32-to-int8 quantize: `outputs[0]` gets `round(x/scale)+zero_point`.
+ * @brief [zh] 注册表形状的 fp32→int8 量化：`outputs[0]` 得到 `round(x/scale)+zero_point`。
+ * @note [en] The direction lives in the name, so one ABI covers both halves and the
+ *            registry can hand the graph a quantize node without a second signature.
+ * @note [zh] 方向写在名字里，因此一套 ABI 同时覆盖两个方向，注册表可以把量化节点作为
+ *            普通内核交给图层，不必新增签名。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_quantize_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                     const infr_quant *quant);
+
+/**
+ * @brief [en] Registry-shaped int8-to-fp32 dequantize: `outputs[0]` gets `(q - zero_point) * scale`.
+ * @brief [zh] 注册表形状的 int8→fp32 反量化：`outputs[0]` 得到 `(q - zero_point) * scale`。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_dequantize_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                      const infr_quant *quant);
+
+/**
  * @brief [en] One dot product: activations against one weight row, `element_count` = inner dimension.
  * @brief [zh] 一次点积：激活对一行权重，`element_count` 为内维长度。
  * @since 0.1.0

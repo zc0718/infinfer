@@ -81,3 +81,39 @@ infr_status infr_dequantize_i8(const int8_t *in, float *out, uint32_t n, const i
     }
     return INFR_OK;
 }
+
+/* Registry-shaped adapters. The public pair above takes typed pointers because
+ * that is what a caller wants; the registry ABI is pointer arrays because that is
+ * what every other body speaks. Keeping both means neither side has to lie about
+ * its shape, and the arithmetic still lives in exactly one place.
+ *
+ * 注册表形状的适配层。上面的公开函数用类型化指针（调用者想要的就是这个），而注册表
+ * ABI 用指针数组（其它所有体都是这个形状）。两者并存让两侧都不必伪装自己的形状，
+ * 而算术仍然只有一处。
+ */
+
+/**
+ * @brief [en] Registry-shaped quantize: reads `inputs[0]` as floats, writes `outputs[0]` as int8.
+ * @brief [zh] 注册表形状的量化：`inputs[0]` 按 float 读，`outputs[0]` 按 int8 写。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_quantize_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                     const infr_quant *quant) {
+    if (inputs == NULL || outputs == NULL || inputs[0] == NULL || outputs[0] == NULL) {
+        return INFR_ERR_INVALID_ARGUMENT;
+    }
+    return infr_quantize_i8((const float *)inputs[0], (int8_t *)outputs[0], element_count, quant);
+}
+
+/**
+ * @brief [en] Registry-shaped dequantize: reads `inputs[0]` as int8, writes `outputs[0]` as floats.
+ * @brief [zh] 注册表形状的反量化：`inputs[0]` 按 int8 读，`outputs[0]` 按 float 写。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_dequantize_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                      const infr_quant *quant) {
+    if (inputs == NULL || outputs == NULL || inputs[0] == NULL || outputs[0] == NULL) {
+        return INFR_ERR_INVALID_ARGUMENT;
+    }
+    return infr_dequantize_i8((const int8_t *)inputs[0], (float *)outputs[0], element_count, quant);
+}
