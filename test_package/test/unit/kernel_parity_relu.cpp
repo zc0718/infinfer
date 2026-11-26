@@ -196,3 +196,61 @@ TEST(KernelParityReluNeon, Int8MatchesScalarBitwise) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(no_input, out_ptr, 4U, nullptr));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(no_input, out_ptr, 4U, nullptr));
 }
+
+TEST(KernelParityReluArmM, Int8MatchesScalarBitwise) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_arm_m());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("relu", INFR_DTYPE_I8, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+    const infr_kernel_desc* row =
+        infr_kernel_find("relu", INFR_DTYPE_I8, INFR_QUANT_NONE, INFR_TIER_ARM_M);
+    ASSERT_NE(nullptr, scalar) << "relu/int8/none/scalar is not registered";
+    if (row == nullptr) {
+        GTEST_SKIP() << "no SIMD32 in this build: the arm_m row is absent by design";
+    }
+
+    // Same judgement as the NEON case (bitwise: a byte select has no rounding), but the
+    // lengths are chosen for the four-byte word loop this body uses: the multiples of
+    // four exercise it, the others exercise the scalar tail on top of it, and 1/3 pin
+    // the case where the loop never runs at all. A byte-order mistake inside the packed
+    // word shows up at n >= 4, which is why 4 is in the list.
+    const std::uint32_t lengths[] = {0U, 1U, 2U, 3U, 4U, 5U, 7U, 8U, 9U, 16U, 64U, 255U};
+    std::vector<std::int8_t> in(255);
+    for (std::size_t i = 0; i < in.size(); ++i) {
+        in[i] = static_cast<std::int8_t>(static_cast<int>((i * 37U) % 255U) - 127);
+    }
+    in[0] = INT8_MIN;  // must not overflow if a body widens to int and negates
+    in[1] = -1;        // must become 0, not stay
+    in[2] = 0;         // stays 0
+    in[3] = INT8_MAX;
+    // The tail of the 255-element corpus is negative on purpose: the last three elements
+    // are exactly what a body that forgets its scalar tail would return unchanged.
+    in[252] = -3;
+    in[253] = -2;
+    in[254] = -1;
+
+    for (std::uint32_t n : lengths) {
+        std::vector<std::int8_t> want(n == 0U ? 1U : n, 0);
+        std::vector<std::int8_t> got(n == 0U ? 1U : n, 0);
+        const void* inputs[1] = {in.data()};
+        void* want_out[1] = {want.data()};
+        void* got_out[1] = {got.data()};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, nullptr));
+        ASSERT_EQ(INFR_OK, row->fn(inputs, got_out, n, nullptr));
+        for (std::uint32_t i = 0; i < n; ++i) {
+            EXPECT_EQ(static_cast<int>(want[i]), static_cast<int>(got[i]))
+                << "element " << i << " of " << n;
+        }
+    }
+
+    // Refusal parity with the reference: the same pointer checks in the same order, so a
+    // consumer that branches on the status sees one verdict from both rows.
+    std::int8_t out = 0;
+    const void* no_input[1] = {nullptr};
+    void* out_ptr[1] = {&out};
+    void* no_output[1] = {nullptr};
+    const void* src[1] = {in.data()};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(no_input, out_ptr, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(src, no_output, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(no_input, out_ptr, 4U, nullptr));
+}

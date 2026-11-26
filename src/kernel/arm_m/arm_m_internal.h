@@ -34,3 +34,16 @@ infr_status infr_arm_m_fc_i8(const void *const *inputs, void *const *outputs, ui
  */
 infr_status infr_arm_m_fc_i16(const void *const *inputs, void *const *outputs, uint32_t element_count,
                               const infr_quant *quant);
+
+/**
+ * @brief [en] int8 ReLU using the SIMD32 half of the DSP extension (`SADD8` + `SEL`).
+ * @brief [zh] 用 DSP 扩展的 SIMD32 部分（`SADD8` + `SEL`）完成 int8 的 ReLU。
+ * @note [en] A different feature macro from the dot-product rows: byte-parallel arithmetic needs
+ *            `__ARM_FEATURE_SIMD32`, and the registry row is conditional on it exactly as the
+ *            other two are conditional on `__ARM_FEATURE_DSP`.
+ * @note [zh] 与点积行的特性宏不同：按字节并行运算需要 `__ARM_FEATURE_SIMD32`，注册行以它为条件，
+ *            就像另两行以 `__ARM_FEATURE_DSP` 为条件一样。
+ * @since 0.1.0
+ */
+infr_status infr_arm_m_relu_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                               const infr_quant *quant);

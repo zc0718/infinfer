@@ -94,6 +94,9 @@
     "relu/fp32/none/x86": [
       "KernelParityX86/ReluFp32MatchesScalarBitwise"
     ],
+    "relu/int8/none/arm_m": [
+      "KernelParityReluArmM/Int8MatchesScalarBitwise"
+    ],
     "relu/int8/none/arm_neon": [
       "KernelParityReluNeon/Int8MatchesScalarBitwise"
     ],

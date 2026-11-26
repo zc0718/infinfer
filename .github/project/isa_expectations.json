@@ -108,6 +108,12 @@
         "measured": 2,
         "what": "int8/int16 dot via SMLAD/SMLALD"
       },
+      "src/kernel/arm_m/relu.c": {
+        "tier": "arm_m",
+        "min_packed": 2,
+        "measured": 2,
+        "what": "int8 relu via SADD8 + SEL (byte-parallel select)"
+      },
       "src/kernel/arm_neon/add.c": {
         "tier": "arm_neon",
         "min_packed": 1,

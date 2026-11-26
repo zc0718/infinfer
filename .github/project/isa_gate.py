@@ -84,8 +84,11 @@ RVV_RE = re.compile(
     r"|\b[a-z0-9]+\.(vv|vx|vi|vf|vs|wv|wf)\b"
 )
 
-# Cortex-M DSP: the multiply-accumulate forms the arm_m int8/int16 dot products exist for.
-ARMM_RE = re.compile(r"\b(smlad|smladx|smlald|smlaldx|smlal|smlabb|smlabt|usad8|sadd16)\b")
+# Cortex-M DSP: the multiply-accumulate forms the arm_m int8/int16 dot products exist for, plus
+# the SIMD32 byte-parallel pair the elementwise body uses (`sadd8`/`uadd8` set the GE flags per
+# byte, `sel` reads them). All three exist only with the DSP extension, so a match here means the
+# body really did reach for the ISA rather than for the compiler.
+ARMM_RE = re.compile(r"\b(smlad|smladx|smlald|smlaldx|smlal|smlabb|smlabt|usad8|sadd16|sadd8|uadd8|sel)\b")
 
 # Which regular expression answers "is this body using its ISA" for each tier.
 TIER_RE = {"x86": X86_RE, "arm_neon": NEON_RE, "rvv": RVV_RE, "arm_m": ARMM_RE}

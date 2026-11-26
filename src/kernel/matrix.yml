@@ -48,9 +48,10 @@ kernels:
       # Per-pair: two declared pairs, one built -- a flat `done` would claim int8/none.
       x86: { fp32/none: done, int8/none: done }
       arm_neon: { fp32/none: done, int8/none: done }
-      # Per-pair: the DSP extension does have 8-bit SIMD ops (`USAD8`/`SEL` class), so int8 has a
-      # real lever and stays `todo`; fp32 has none on a nofp profile (gaps G-79).
-      arm_m: { fp32/none: na, int8/none: todo }
+      # Per-pair: the DSP extension does have 8-bit SIMD ops, so int8 has a real
+      # lever (`SADD8` sets the GE flags per byte, `SEL` picks by them); fp32 has
+      # none on a nofp profile (gaps G-79).
+      arm_m: { fp32/none: na, int8/none: done }
       rvv: { fp32/none: done, int8/none: done }
     grad: todo
   fc:
