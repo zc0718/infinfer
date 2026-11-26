@@ -77,7 +77,10 @@ kernels:
     tflite: [QUANTIZE]
     onnx: [{op: QuantizeLinear}]
     dtype_quant: [[fp32, tensor]]
-    tiers: { scalar: done, autovec: na, arm_neon: todo, arm_m: todo, rvv: todo }
+    # `arm_neon` stays `todo` on purpose: the reference divides, and AArch32 NEON has no IEEE
+    # float divide, so a reciprocal body would be a different function -- and the claim is per
+    # tier, not per build. See src/kernel/arm_neon/quant.c and gaps G-77.
+    tiers: { scalar: done, autovec: na, arm_neon: todo, arm_m: todo, rvv: done }
     grad: no-grad
     grad_why: >-
       quantisation is a step function, so a derivative needs a straight-through estimator,
@@ -87,7 +90,7 @@ kernels:
     tflite: [DEQUANTIZE]
     onnx: [{op: DequantizeLinear}]
     dtype_quant: [[int8, tensor]]
-    tiers: { scalar: done, autovec: na, arm_neon: todo, arm_m: todo, rvv: todo }
+    tiers: { scalar: done, autovec: na, arm_neon: done, arm_m: todo, rvv: done }
     grad: no-grad
     grad_why: >-
       the same step function in reverse: attributing a gradient to a quantised code is the

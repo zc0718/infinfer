@@ -81,4 +81,23 @@ infr_status infr_rvv_sum_f32(const void *const *inputs, void *const *outputs, ui
 infr_status infr_rvv_relu_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
                              const infr_quant *quant);
 
+/**
+ * @brief [en] fp32 to int8 quantize: IEEE divide, add zero point, round half away from zero, clamp.
+ * @brief [zh] fp32 到 int8 量化：IEEE 除法、加零点、半远离零舍入、钳位。
+ * @note [en] The division is a real division: IEEE divide and multiply-by-reciprocal differ in the
+ *            last bit, and this kernel's answer is an integer produced by rounding.
+ * @note [zh] 这里用真除法：IEEE 除法与"乘倒数"在末位上并不相等，而本内核的答案是舍入后的整数。
+ * @since 0.1.0
+ */
+infr_status infr_rvv_quantize_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                  const infr_quant *quant);
+
+/**
+ * @brief [en] int8 to fp32 dequantize, bitwise equal to the reference.
+ * @brief [zh] int8 到 fp32 反量化，与参考实现逐位相等。
+ * @since 0.1.0
+ */
+infr_status infr_rvv_dequantize_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                   const infr_quant *quant);
+
 #endif /* INFR_SRC_KERNEL_RVV_INTERNAL_H */

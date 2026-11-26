@@ -74,3 +74,15 @@ infr_status infr_arm_neon_sum_f32(const void *const *inputs, void *const *output
  */
 infr_status infr_arm_neon_relu_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
                                   const infr_quant *quant);
+
+/**
+ * @brief [en] int8 to fp32 dequantize: integer subtraction then one IEEE multiply, bitwise equal.
+ * @brief [zh] int8 到 fp32 反量化：整数减法后一次 IEEE 乘法，逐位相等。
+ * @note [en] The quantize direction is deliberately absent (gaps G-77): the reference divides and
+ *            AArch32 NEON has no IEEE divide, so a reciprocal body would be a different function.
+ * @note [zh] 量化方向**故意缺席**（gaps G-77）：参考实现做除法，而 AArch32 NEON 没有 IEEE 除法，
+ *            用倒数写成的体会是另一个函数。
+ * @since 0.1.0
+ */
+infr_status infr_arm_neon_dequantize_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                        const infr_quant *quant);

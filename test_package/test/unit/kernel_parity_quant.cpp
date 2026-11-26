@@ -12,8 +12,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include <infinfer/infinfer.h>
+
+#include "parity_harness.hpp"
 
 namespace {
 
@@ -133,4 +136,62 @@ TEST(KernelParityQuant, RejectsNullBuffersAndNonPositiveScale) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, dequantize_row->fn(quantized_in, restored_out, 2, &bad_scale));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, dequantize_row->fn(quantized_in, restored_out, 2, &unquantized));
     EXPECT_EQ(INFR_OK, dequantize_row->fn(quantized_in, restored_out, 2, &good));
+}
+
+// Census cell: dequantize/int8/tensor/arm_neon.
+//
+// Same criterion as the scalar pair above and as every other NEON row in this
+// tree: the reference does an integer subtraction and then one IEEE multiply, so
+// both steps are exact and the verdict is bit equality rather than a window.
+// Runs on the host only where NEON exists (AArch64 CI legs, or a native ARM
+// machine); elsewhere the row is absent and the case says so instead of passing.
+TEST(KernelParityQuantNeon, DequantizeInt8MatchesScalarBitwise) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_arm_neon());
+    const infr_kernel_desc* scalar = scalar_dequantize();
+    const infr_kernel_desc* neon =
+        infr_kernel_find("dequantize", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_ARM_NEON);
+    ASSERT_NE(nullptr, scalar) << "dequantize/int8/tensor/scalar is not registered";
+    if (neon == nullptr) {
+        GTEST_SKIP() << "no NEON in this build: the arm_neon row is absent by design";
+    }
+
+    const std::uint32_t lengths[] = {0U, 1U, 3U, 7U, 8U, 9U, 15U, 16U, 17U, 64U};
+    std::vector<std::int8_t> q(64);
+    for (std::size_t i = 0; i < q.size(); ++i) {
+        q[i] = static_cast<std::int8_t>(static_cast<int>((i * 61U) % 256U) - 128);
+    }
+    q[0] = INT8_MIN; /* the ends of the range, where a widening mistake shows up */
+    q[1] = INT8_MAX;
+    q[2] = 0;
+
+    /* A zero point outside the int8 range on purpose: the reference subtracts it as an int32, so
+     * a body that subtracts in 16 bits would clip it here and nowhere else. */
+    const struct {
+        float scale;
+        std::int32_t zero_point;
+    } params[] = {{0.5F, 0}, {0.125F, 3}, {2.0F, 70000}, {0.25F, -256}};
+
+    const void* inputs[1] = {q.data()};
+    for (std::uint32_t n : lengths) {
+        for (const auto& p : params) {
+            infr_quant quant = per_tensor(p.scale, p.zero_point);
+            std::vector<float> want(n == 0U ? 1U : n, 0.0F);
+            std::vector<float> got(n == 0U ? 1U : n, 0.0F);
+            void* want_out[1] = {want.data()};
+            void* got_out[1] = {got.data()};
+            ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, &quant));
+            ASSERT_EQ(INFR_OK, neon->fn(inputs, got_out, n, &quant));
+            for (std::uint32_t i = 0; i < n; ++i) {
+                EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i]))
+                    << "length " << n << " element " << i << " zero_point " << p.zero_point;
+            }
+        }
+    }
+
+    float out = 0.0F;
+    void* out_ptr[1] = {&out};
+    infr_quant good = per_tensor(0.5F, 0);
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, neon->fn(inputs, out_ptr, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, nullptr));
 }

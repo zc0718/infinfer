@@ -102,59 +102,11 @@
       }
     },
     "expect": {
-      "src/kernel/x86/add.c": {
-        "tier": "x86",
+      "src/kernel/arm_m/fc.c": {
+        "tier": "arm_m",
         "min_packed": 1,
-        "measured": 10,
-        "what": "fp32 add, 4 lanes"
-      },
-      "src/kernel/x86/fc.c": {
-        "tier": "x86",
-        "min_packed": 1,
-        "measured": 20,
-        "what": "fp32 dot, 4 lanes + shuffle fold"
-      },
-      "src/kernel/x86/fc_i8.c": {
-        "tier": "x86",
-        "min_packed": 1,
-        "measured": 84,
-        "what": "int8 dot: sign mask, unpack to int16, maddwd"
-      },
-      "src/kernel/x86/fc_i16.c": {
-        "tier": "x86",
-        "min_packed": 1,
-        "measured": 133,
-        "what": "int16 dot: zero-interleaved maddwd, int64 accumulate"
-      },
-      "src/kernel/x86/reduce.c": {
-        "tier": "x86",
-        "min_packed": 1,
-        "measured": 30,
-        "what": "max and sum, compare+select so NaN/order match"
-      },
-      "src/kernel/x86/relu.c": {
-        "tier": "x86",
-        "min_packed": 1,
-        "measured": 19,
-        "what": "fp32 relu via cmpgt+and, not maxps"
-      },
-      "src/kernel/x86/relu_i8.c": {
-        "tier": "x86",
-        "min_packed": 1,
-        "measured": 20,
-        "what": "int8 relu via pcmpgtb + mask"
-      },
-      "src/kernel/x86/scale.c": {
-        "tier": "x86",
-        "min_packed": 1,
-        "measured": 11,
-        "what": "broadcast multiply"
-      },
-      "src/kernel/x86/sum.c": {
-        "tier": "x86",
-        "min_packed": 1,
-        "measured": 14,
-        "what": "sum with lane fold"
+        "measured": 2,
+        "what": "int8/int16 dot via SMLAD/SMLALD"
       },
       "src/kernel/arm_neon/add.c": {
         "tier": "arm_neon",
@@ -167,6 +119,12 @@
         "min_packed": 1,
         "measured": 7,
         "what": "fp32 dot via vmlaq_f32"
+      },
+      "src/kernel/arm_neon/quant.c": {
+        "tier": "arm_neon",
+        "min_packed": 1,
+        "measured": 29,
+        "what": "int8 to fp32 dequantize (integer subtract + one IEEE multiply)"
       },
       "src/kernel/arm_neon/reduce.c": {
         "tier": "arm_neon",
@@ -210,6 +168,12 @@
         "measured": 14,
         "what": "fp32 dot with a vector accumulator"
       },
+      "src/kernel/rvv/quant.c": {
+        "tier": "rvv",
+        "min_packed": 1,
+        "measured": 40,
+        "what": "quantize (IEEE divide, round, clamp) and dequantize"
+      },
       "src/kernel/rvv/reduce.c": {
         "tier": "rvv",
         "min_packed": 1,
@@ -240,11 +204,59 @@
         "measured": 12,
         "what": "sum with a vector accumulator"
       },
-      "src/kernel/arm_m/fc.c": {
-        "tier": "arm_m",
+      "src/kernel/x86/add.c": {
+        "tier": "x86",
         "min_packed": 1,
-        "measured": 2,
-        "what": "int8/int16 dot via SMLAD/SMLALD"
+        "measured": 10,
+        "what": "fp32 add, 4 lanes"
+      },
+      "src/kernel/x86/fc.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 20,
+        "what": "fp32 dot, 4 lanes + shuffle fold"
+      },
+      "src/kernel/x86/fc_i16.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 133,
+        "what": "int16 dot: zero-interleaved maddwd, int64 accumulate"
+      },
+      "src/kernel/x86/fc_i8.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 84,
+        "what": "int8 dot: sign mask, unpack to int16, maddwd"
+      },
+      "src/kernel/x86/reduce.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 30,
+        "what": "max and sum, compare+select so NaN/order match"
+      },
+      "src/kernel/x86/relu.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 19,
+        "what": "fp32 relu via cmpgt+and, not maxps"
+      },
+      "src/kernel/x86/relu_i8.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 20,
+        "what": "int8 relu via pcmpgtb + mask"
+      },
+      "src/kernel/x86/scale.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 11,
+        "what": "broadcast multiply"
+      },
+      "src/kernel/x86/sum.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 14,
+        "what": "sum with lane fold"
       }
     },
     "excluded": {

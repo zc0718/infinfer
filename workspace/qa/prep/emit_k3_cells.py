@@ -29,6 +29,8 @@ import sys
 #   REDUCE       in[0] -> out[0] = one reduced value
 #   DOT          in[0], in[1] = two vectors, out[0] = one dot product
 #   DOT_Q        like DOT, plus a resolved infr_quant
+#   QUANTIZE     fp32 in -> int8 out, with a resolved infr_quant
+#   DEQUANTIZE   int8 in -> fp32 out, with a resolved infr_quant
 #
 # BITWISE vs WINDOW is the criterion the parity harness already uses, restated in C:
 #   * elementwise and integer cells do one IEEE operation (or exact integer arithmetic) per
@@ -44,11 +46,19 @@ MODES = {
     "max": ("REDUCE", "BITWISE"),
     "sum": ("REDUCE", "WINDOW"),
     "fc": ("DOT", "WINDOW"),  # overridden to DOT_Q/BITWISE for integer dtypes
+    # Conversions: the input dtype differs from the output dtype, and both are exact (an integer
+    # result from rounding, or an integer subtract followed by one IEEE multiply), so the verdict is
+    # bit equality in both directions.
+    "quantize": ("QUANTIZE", "BITWISE"),
+    "dequantize": ("DEQUANTIZE", "BITWISE"),
 }
 # Keys are the matrix's own tokens (`fp32`, not `f32`): a near-miss here is silent -- it makes every
 # cell look unsupported, which reads as "this tier has nothing to compare" rather than as a typo.
 SUPPORTED = {
     ("fp32", "none"): "INFR_DTYPE_F32, INFR_QUANT_NONE",
+    # fp32 with per-tensor quantisation is the quantize cell: the dtype is still fp32, the
+    # quantisation describes where the output lands.
+    ("fp32", "tensor"): "INFR_DTYPE_F32, INFR_QUANT_PER_TENSOR",
     # int8 with quant `none` is the 8-bit elementwise cells (relu): the dtype is quantised in the
     # graph but the kernel itself takes no requantisation.
     ("int8", "none"): "INFR_DTYPE_I8, INFR_QUANT_NONE",

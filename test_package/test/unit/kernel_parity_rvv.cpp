@@ -295,3 +295,113 @@ TEST(KernelParityRvv, ReluInt8MatchesScalarBitwise) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(no_input, out_ptr, 4U, nullptr));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(no_input, out_ptr, 4U, nullptr));
 }
+
+// Census cells: quantize/fp32/tensor/rvv and dequantize/int8/tensor/rvv.
+//
+// Both directions share the criterion of their scalar counterparts: `quantize`
+// ends in an integer produced by rounding, `dequantize` is an integer subtract
+// followed by one IEEE multiply, so neither has a window to argue about and both
+// are compared bit for bit. `quantize` divides rather than multiplying by a
+// reciprocal; that is the whole reason this tier claims the cell and arm_neon
+// does not (gaps G-77).
+TEST(KernelParityRvv, QuantizeFp32MatchesScalarBitwise) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_rvv());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("quantize", INFR_DTYPE_F32, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* row =
+        infr_kernel_find("quantize", INFR_DTYPE_F32, INFR_QUANT_PER_TENSOR, INFR_TIER_RVV);
+    ASSERT_NE(nullptr, scalar) << "quantize/fp32/tensor/scalar is not registered";
+    if (row == nullptr) {
+        GTEST_SKIP() << kNoVector;
+    }
+
+    const std::uint32_t lengths[] = {0U, 1U, 3U, 4U, 5U, 7U, 8U, 9U, 16U, 17U, 64U};
+    std::vector<float> x(64);
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        const std::uint32_t state = (static_cast<std::uint32_t>(i) * 1103515245U) + 12345U;
+        x[i] = static_cast<float>(static_cast<std::int32_t>((state >> 8) % 4001U) - 2000) / 100.0F;
+    }
+    /* Exactly on a rounding boundary: `scaled + 0.5` lands on an integer, which is where a body
+     * that rounds with a different rule (nearest-even, or a truncating conversion) separates. */
+    x[0] = 0.5F;
+    x[1] = -0.5F;
+    x[2] = 1.5F;
+    x[3] = 254.0F;  /* beyond the int8 range after scaling: the clamp must agree too */
+
+    const float scales[] = {1.0F, 0.5F, 0.0078125F};
+    const void* inputs[1] = {x.data()};
+    for (std::uint32_t n : lengths) {
+        for (float scale : scales) {
+            infr_quant quant = {};
+            quant.kind = INFR_QUANT_PER_TENSOR;
+            quant.scale = scale;
+            quant.zero_point = 5;
+            std::vector<std::int8_t> want(n == 0U ? 1U : n, 0);
+            std::vector<std::int8_t> got(n == 0U ? 1U : n, 0);
+            void* want_out[1] = {want.data()};
+            void* got_out[1] = {got.data()};
+            ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, &quant));
+            ASSERT_EQ(INFR_OK, row->fn(inputs, got_out, n, &quant));
+            for (std::uint32_t i = 0; i < n; ++i) {
+                EXPECT_EQ(static_cast<int>(want[i]), static_cast<int>(got[i]))
+                    << "length " << n << " element " << i << " scale " << scale;
+            }
+        }
+    }
+
+    std::int8_t out = 0;
+    void* out_ptr[1] = {&out};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, nullptr));
+}
+
+TEST(KernelParityRvv, DequantizeInt8MatchesScalarBitwise) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_rvv());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("dequantize", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* row =
+        infr_kernel_find("dequantize", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_RVV);
+    ASSERT_NE(nullptr, scalar) << "dequantize/int8/tensor/scalar is not registered";
+    if (row == nullptr) {
+        GTEST_SKIP() << kNoVector;
+    }
+
+    const std::uint32_t lengths[] = {0U, 1U, 3U, 7U, 8U, 9U, 16U, 17U, 64U};
+    std::vector<std::int8_t> q(64);
+    for (std::size_t i = 0; i < q.size(); ++i) {
+        q[i] = static_cast<std::int8_t>(static_cast<int>((i * 61U) % 256U) - 128);
+    }
+    q[0] = INT8_MIN;
+    q[1] = INT8_MAX;
+
+    const void* inputs[1] = {q.data()};
+    const struct {
+        float scale;
+        std::int32_t zero_point;
+    } params[] = {{0.5F, 0}, {0.125F, 3}, {2.0F, 70000}};
+    for (std::uint32_t n : lengths) {
+        for (const auto& p : params) {
+            infr_quant quant = {};
+            quant.kind = INFR_QUANT_PER_TENSOR;
+            quant.scale = p.scale;
+            quant.zero_point = p.zero_point;
+            std::vector<float> want(n == 0U ? 1U : n, 0.0F);
+            std::vector<float> got(n == 0U ? 1U : n, 0.0F);
+            void* want_out[1] = {want.data()};
+            void* got_out[1] = {got.data()};
+            ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, &quant));
+            ASSERT_EQ(INFR_OK, row->fn(inputs, got_out, n, &quant));
+            for (std::uint32_t i = 0; i < n; ++i) {
+                EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i]))
+                    << "length " << n << " element " << i << " zero_point " << p.zero_point;
+            }
+        }
+    }
+
+    float out = 0.0F;
+    void* out_ptr[1] = {&out};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, nullptr));
+}

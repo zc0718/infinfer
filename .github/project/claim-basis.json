@@ -80,10 +80,10 @@
       "why_it_was_missing": "the tier parity tests under test_package/test/unit are compiled for the target but only run on the host, and the only cross-run path (this KAT) used to compile the scalar sources alone -- so on a target the claim rested on a probe run by hand (gaps G-73)",
       "how": "the k3_tier_parity chain compares the scalar row and the tier row in one process; the cell list is generated from src/kernel/matrix.yml for the tier being built, so the chain cannot claim a cell the matrix does not or skip one it does; a cell the matrix calls done that the tier did not register is a failure (exit 12), and so is a run that compared zero elements",
       "cells": {
-        "arm_neon": 7,
+        "arm_neon": 8,
         "arm_m": 2,
-        "rvv": 7,
-        "_comparisons": 39
+        "rvv": 9,
+        "_cell_comparisons": 45
       },
       "targets": [
         "aarch64-linux:base",
@@ -94,8 +94,8 @@
         "m7-an500:base",
         "rv64-virt:base"
       ],
-      "verdicts": "7 builds PASS, 39 cell comparisons in total (arm_neon 7 cells x 4 builds, arm_m 2 x 2, rvv 7 x 1); 5 builds SKIP with their reason printed (the +nosimd variant, the ARMv7-A baseline without NEON, and m3/m33/rv32 which declare no tier)",
-      "red_proof": "a wrong NEON body (`vaddq_f32` -> `vsubq_f32`) makes aarch64-linux:base fail with qemu exit 23, and a wrong RVV body (`vfadd` -> `vfsub`) makes rv64-virt:base fail with the same code: 23 is 20 + the index of the `add` cell in the generated table, so the exit code names which cell disagreed; both files were restored and their md5 matched before and after",
+      "verdicts": "7 builds PASS, 45 cell comparisons (arm_neon 8 cells x 4 builds = 32, arm_m 2 x 2 = 4, rvv 9 x 1 = 9; every cell is itself compared over 12 corpus lengths); 5 builds SKIP with their reason printed",
+      "red_proof": "a wrong NEON body (`vaddq_f32` -> `vsubq_f32`) makes aarch64-linux:base fail with qemu exit 23, and a wrong RVV body (`vfadd` -> `vfsub`) makes rv64-virt:base fail with the same code: 23 is 20 + the index of the `add` cell in the generated table, so the exit code names which cell disagreed; both files were restored and their md5 matched before and after; additionally a wrong NEON dequantize scale and a wrong RVV quantize clamp each make their target fail with 23 = 20 + the cell index",
       "excluded": {
         "graph_level_ops": "k3 compares kernels only; conv2d/maxpool parity is k2's job and stays there",
         "saturation_corners": "the two quantised dot-product cells run with a clamping AND a non-clamping multiplier so both tiers must saturate alike, but the exact corner values are pinned by the host unit tests, not here"

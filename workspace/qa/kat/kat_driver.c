@@ -344,7 +344,19 @@ int kat_check(void) {
         return KAT_EXIT_TIER_MISSING;
     }
     if (r.mismatched != ~0u) {
+#if defined(KAT_K3_DIAG)
+        /* Diagnostic: name the cell *and* the corpus length in one exit code, 100 + cell*16 +
+         * length index. The default build keeps the single documented code, because a verdict must
+         * be one number; this exists because a target has no console to print to, and bisecting
+         * twelve lengths by rebuild is the alternative.
+         *
+         * 诊断：一个退出码同时给出格与语料长度，100 + cell*16 + 长度下标。默认构建仍是那个单一
+         * 的判定码——判定只能是一个数；这段存在的理由是目标上没有控制台可打印，而替代方案是
+         * 重编十二次来二分长度。 */
+        return 100 + (int)(r.mismatched * 16u) + (int)r.length_index;
+#else
         return KAT_EXIT_TIER_DIFF + (int)(r.mismatched < 8u ? r.mismatched : 8u);
+#endif
     }
     if (r.compared == 0u || r.elements == 0ul) {
         /* Nothing compared is not a pass: it would make an image built without the tier sources

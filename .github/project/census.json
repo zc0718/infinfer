@@ -13,6 +13,12 @@
     "add/fp32/none/x86": [
       "KernelParityX86/AddFp32MatchesScalarBitwise"
     ],
+    "dequantize/int8/tensor/arm_neon": [
+      "KernelParityQuantNeon/DequantizeInt8MatchesScalarBitwise"
+    ],
+    "dequantize/int8/tensor/rvv": [
+      "KernelParityRvv/DequantizeInt8MatchesScalarBitwise"
+    ],
     "dequantize/int8/tensor/scalar": [
       "KernelParityQuant/ScalarDequantizeMatchesDefinition"
     ],
@@ -57,6 +63,9 @@
     ],
     "max/fp32/none/x86": [
       "KernelParityX86/MaxFp32MatchesScalarBitwise"
+    ],
+    "quantize/fp32/tensor/rvv": [
+      "KernelParityRvv/QuantizeFp32MatchesScalarBitwise"
     ],
     "quantize/fp32/tensor/scalar": [
       "KernelParityQuant/ScalarQuantizeMatchesDefinition"

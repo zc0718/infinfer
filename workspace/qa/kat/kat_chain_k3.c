@@ -146,7 +146,14 @@ static void fill_quant(infr_quant *q, float multiplier) {
     q->requant_multiplier = multiplier;
 }
 
-/* Compare one cell at one length. Returns 1 when the two rows agree, 0 when they do not. */
+/* Compare one cell at one length. Returns 1 when the two rows agree, 0 when they do not.
+ *
+ * The conversion cells (quantize, dequantize) do not share their input and output dtype, which is
+ * why the dtypes are derived here rather than read from the cell: everything else keeps one dtype
+ * end to end.
+ *
+ * 比较一格在一个长度上的结果。两行一致返回 1，否则 0。转换类（quantize/dequantize）的输入与输出
+ * dtype 不同，所以这里按调用形态**推导**两端 dtype，而不是照读格里的那一个——其余形态两端同 dtype。 */
 static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, const infr_kernel_desc *row,
                       unsigned n) {
     const void *in_ref[2] = {0, 0};
@@ -158,11 +165,32 @@ static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, cons
     infr_status sb;
     unsigned i;
     unsigned count;
+    int in_i8 = (cell->dtype == INFR_DTYPE_I8);
+    int out_i8 = in_i8;
+    int in_i16 = (cell->dtype == INFR_DTYPE_I16);
+    int out_i16 = in_i16;
+
+    /* A conversion cell reads one dtype and writes the other. */
+    if (cell->call == KAT_K3_CALL_QUANTIZE) {
+        in_i8 = 0;
+        in_i16 = 0;
+        out_i8 = 1;
+    } else if (cell->call == KAT_K3_CALL_DEQUANTIZE) {
+        in_i8 = 1;
+        in_i16 = 0;
+        out_i8 = 0;
+        out_i16 = 0;
+    }
 
     /* Dot products accumulate, so every distinct parameter set is its own comparison. */
-    unsigned passes = (cell->call == KAT_K3_CALL_DOT_Q) ? (unsigned)K3_MULT_COUNT : 1u;
+    unsigned passes = (cell->call == KAT_K3_CALL_DOT_Q || cell->call == KAT_K3_CALL_QUANTIZE ||
+                       cell->call == KAT_K3_CALL_DEQUANTIZE)
+                          ? (unsigned)K3_MULT_COUNT
+                          : 1u;
     unsigned pass;
     for (pass = 0; pass < passes; ++pass) {
+        /* The quantised cells read multiplier and zero point; `K3_MULT_COUNT` is the same table for
+         * all of them, so scale and zero point follow the pass index. */
         fill_quant(&q, k3_multipliers[pass]);
 
         switch (cell->call) {
@@ -188,7 +216,7 @@ static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, cons
             in_row[1] = g_w;
             break;
         case KAT_K3_CALL_DOT_Q:
-            if (cell->dtype == INFR_DTYPE_I8) {
+            if (in_i8) {
                 in_ref[0] = g_xi;
                 in_ref[1] = g_wi;
                 in_row[0] = g_xi;
@@ -200,10 +228,21 @@ static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, cons
                 in_row[1] = g_ws;
             }
             break;
+        case KAT_K3_CALL_QUANTIZE:
+            in_ref[0] = g_x;
+            in_row[0] = g_x;
+            break;
+        case KAT_K3_CALL_DEQUANTIZE:
+            in_ref[0] = g_xi;
+            in_row[0] = g_xi;
+            break;
         default:
-            if (cell->dtype == INFR_DTYPE_I8) {
+            if (in_i8) {
                 in_ref[0] = g_xi;
                 in_row[0] = g_xi;
+            } else if (in_i16) {
+                in_ref[0] = g_xs;
+                in_row[0] = g_xs;
             } else {
                 in_ref[0] = g_x;
                 in_row[0] = g_x;
@@ -211,23 +250,24 @@ static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, cons
             break;
         }
 
-        switch (cell->dtype) {
-        case INFR_DTYPE_I8:
+        if (out_i8) {
             out_ref[0] = g_qa;
             out_row[0] = g_qb;
-            break;
-        case INFR_DTYPE_I16:
+        } else if (out_i16) {
             out_ref[0] = g_sa;
             out_row[0] = g_sb;
-            break;
-        default:
+        } else {
             out_ref[0] = g_fa;
             out_row[0] = g_fb;
-            break;
         }
 
         {
-            const infr_quant *qp = (cell->call == KAT_K3_CALL_DOT_Q) ? &q : 0;
+            /* Every quantised entry point takes the resolved parameters; the rest take NULL. */
+            const infr_quant *qp = (cell->call == KAT_K3_CALL_DOT_Q ||
+                                    cell->call == KAT_K3_CALL_QUANTIZE ||
+                                    cell->call == KAT_K3_CALL_DEQUANTIZE)
+                                       ? &q
+                                       : 0;
             sa = ref->fn(in_ref, out_ref, n, qp);
             sb = row->fn(in_row, out_row, n, qp);
         }
@@ -248,17 +288,17 @@ static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, cons
             continue;
         }
 
-
+        /* Only the reduction and dot cells produce a single value; conversions are elementwise. */
         count = (cell->call == KAT_K3_CALL_REDUCE || cell->call == KAT_K3_CALL_DOT ||
                  cell->call == KAT_K3_CALL_DOT_Q)
                     ? 1u
                     : n;
         for (i = 0; i < count; ++i) {
-            if (cell->dtype == INFR_DTYPE_I8) {
+            if (out_i8) {
                 if (g_qa[i] != g_qb[i]) {
                     return 0;
                 }
-            } else if (cell->dtype == INFR_DTYPE_I16) {
+            } else if (out_i16) {
                 if (g_sa[i] != g_sb[i]) {
                     return 0;
                 }
@@ -287,6 +327,7 @@ infr_status kat_k3_run(kat_k3_result *out) {
     out->missing = 0u;
     out->mismatched = ~0u;
     out->length = 0u;
+    out->length_index = 0u;
     out->elements = 0ul;
     g_elements_compared = 0ul;
 
@@ -321,6 +362,7 @@ infr_status kat_k3_run(kat_k3_result *out) {
             if (!compare_at(cell, ref, row, k3_lengths[li])) {
                 out->mismatched = c;
                 out->length = k3_lengths[li];
+                out->length_index = li;
                 return INFR_OK;
             }
         }

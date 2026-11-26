@@ -36,7 +36,9 @@ typedef enum kat_k3_call {
     KAT_K3_CALL_SCALE = 2,  /* in[0], in[1] = one broadcast factor */
     KAT_K3_CALL_REDUCE = 3, /* in[0] -> out[0] = one reduced value: sum, max */
     KAT_K3_CALL_DOT = 4,    /* in[0], in[1] -> out[0]: fp32 dot product */
-    KAT_K3_CALL_DOT_Q = 5   /* in[0], in[1], quant -> out[0]: integer dot product */
+    KAT_K3_CALL_DOT_Q = 5,  /* in[0], in[1], quant -> out[0]: integer dot product */
+    KAT_K3_CALL_QUANTIZE = 6,   /* fp32 in -> int8 out, quant */
+    KAT_K3_CALL_DEQUANTIZE = 7  /* int8 in -> fp32 out, quant */
 } kat_k3_call;
 
 /** The verdict for a cell. 一格的判据。 */
@@ -65,6 +67,7 @@ typedef struct kat_k3_result {
     unsigned mismatched;/* First disagreeing cell index, or ~0u. 第一个不一致的格下标，无则 ~0u。 */
     unsigned length;    /* Length of the corpus element that disagreed. 出错的语料长度。 */
     unsigned long elements; /* Output elements actually compared. 真正比较过的输出元素个数。 */
+    unsigned length_index;  /* Index into the length table, for the -DKAT_K3_DIAG exit code. */
 } kat_k3_result;
 
 /** Run every generated cell: scalar row vs tier row, same input, same process.
