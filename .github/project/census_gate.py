@@ -48,6 +48,10 @@ anything -- which is why PLAN P1.2 makes the two files mutually accountable:
      were implemented, but the index pointed at nothing, so "which test proves
      this cell" had no answer -- and a rename could have produced that state with
      every other gate green.
+  R9 `grad` is a claim with consequences: `no-grad` needs a written `grad_why`
+     (otherwise it is indistinguishable from `todo`), `done` needs a `grad_tests`
+     list naming tests that exist, and `grad_tests` on a non-`done` row is red
+     (a test named for an unfinished claim is decoration).
 
 **What this gate cannot know yet.** It checks that the named test is *written*, not that it is
 *green* or that it really compares the tier against the reference -- that is what running the
@@ -203,6 +207,60 @@ def resolve_tier(kernel, tier, spec, legal_pairs, problems):
     return resolved if len(resolved) == len(declared) else None
 
 
+def check_grad(name, entry, problems):
+    """R9: `grad` is a claim, so it has to cost something.
+
+    The field existed from the start and only R2 looked at it -- a token from a closed set. A
+    token is not a decision, and the two ways this field can lie are opposite:
+
+      R9a `no-grad` is a decision that the derivative is not part of this kernel's job (argmax
+          has no unique one; requantisation needs a straight-through estimator, which is a
+          graph-layer choice). Without a written reason it reads exactly like "nobody thought
+          about it yet", which is what `todo` already means.
+      R9b `done` is a claim that a gradient exists, so it must name the test that pins it. No
+          kernel claims `done` today, which is the point of adding the rule now: the first
+          gradient kernel (PLAN P6) meets the rule before it can be claimed, not after.
+      R9c the reverse -- naming gradient tests on a row that does not claim `done` -- is red too,
+          because a test listed for an unfinished claim is decoration, not evidence.
+    """
+    grad = entry.get("grad")
+    why = entry.get("grad_why")
+    tests = entry.get("grad_tests")
+    if "grad_why" in entry and not (isinstance(why, str) and why.strip()):
+        problems.append(f"matrix: kernel '{name}' has a blank grad_why")
+    if grad == "no-grad" and not (isinstance(why, str) and why.strip()):
+        problems.append(
+            f"matrix: kernel '{name}' claims grad: no-grad without a grad_why -- the difference "
+            f"between 'not differentiable' and 'not considered' is the whole value of the token"
+        )
+    if grad == "done":
+        if not isinstance(tests, list) or not [t for t in tests if isinstance(t, str) and t.strip()]:
+            problems.append(f"matrix: kernel '{name}' claims grad: done without naming a grad test")
+    elif tests is not None:
+        problems.append(
+            f"matrix: kernel '{name}' lists grad_tests while grad is '{grad}' -- a test named for "
+            f"an unfinished claim is decoration"
+        )
+
+
+def check_grad_evidence(data, tests, problems):
+    """R9b, second half: a named gradient test has to exist.
+
+    Same reasoning as R8 -- a name is not evidence. Kept separate from `check_grad` because only
+    this half needs the parsed test ids, and `check_matrix` is also called by the emitters, which
+    must work without reading the test tree.
+    """
+    for name, entry in sorted((data.get("kernels") or {}).items()):
+        if not isinstance(entry, dict) or entry.get("grad") != "done":
+            continue
+        for test in entry.get("grad_tests") or []:
+            if isinstance(test, str) and test.strip() and test not in tests:
+                problems.append(
+                    f"matrix: kernel '{name}' names grad test '{test}', which does not exist in "
+                    f"test_package/test/"
+                )
+
+
 def check_matrix(data):
     """R1-R4, R7.
 
@@ -270,6 +328,7 @@ def check_matrix(data):
                 resolved_tiers[tier] = resolved
         if entry["grad"] not in GRADS:
             problems.append(f"matrix: kernel '{name}' has unknown grad '{entry['grad']}'")
+        check_grad(name, entry, problems)
 
         legal_tiers = [tier for tier in TIERS if tier in resolved_tiers]
         cells[name] = [(dtype, quant, tier) for (dtype, quant) in legal_pairs for tier in legal_tiers]
@@ -367,16 +426,19 @@ def run_check(matrix_path, census_path, tests=None):
     problems, cells, status_by_key, _ = check_matrix(data)
     if problems:
         return problems, []
+    if tests is None:
+        # Production callers read the tree. The self-test passes a fixture set, and passing
+        # `tests` explicitly is the only way to run the rules without one.
+        tests = collect_tests(ROOT)
+    check_grad_evidence(data, tests, problems)
+    if problems:
+        return problems, []
     try:
         census = json.loads(Path(census_path).read_text(encoding="utf-8"))
     except OSError as exc:
         return [f"census: cannot read {census_path}: {exc}"], []
     except ValueError as exc:
         return [f"census: {census_path} is not valid JSON: {exc}"], []
-    if tests is None:
-        # Production callers read the tree. The self-test passes a fixture set, and passing
-        # `tests` explicitly is the only way to run the rules without one.
-        tests = collect_tests(ROOT)
     return check_census(census, cells, status_by_key, tests)
 
 
@@ -631,6 +693,48 @@ def selftest():
             },
             good_census,
             "kat must be 'pending' or the KAT that judges it",
+        ),
+        (
+            # R9a: `no-grad` is a decision, and without a reason it reads as `todo`.
+            "R9a no-grad without a reason",
+            mutate_matrix(grad="no-grad"),
+            good_census,
+            "claims grad: no-grad without a grad_why",
+        ),
+        (
+            # The positive twin: the same token is accepted once the decision is written down.
+            # Without this, tightening R9a could reject every legal `no-grad` row and no fixture
+            # would notice.
+            "R9a no-grad with a reason is green",
+            mutate_matrix(grad="no-grad", grad_why="output is an index, not a value"),
+            good_census,
+            None,
+        ),
+        (
+            # R9b: `done` claims a derivative exists, so it has to name what proves it.
+            "R9b done without a grad test",
+            mutate_matrix(grad="done"),
+            good_census,
+            "claims grad: done without naming a grad test",
+        ),
+        (
+            "R9b a grad test that is not a test",
+            mutate_matrix(grad="done", grad_tests=["KernelParityRelu/Imaginary"]),
+            good_census,
+            "which does not exist in test_package/test/",
+        ),
+        (
+            "R9b done with a real grad test is green",
+            mutate_matrix(grad="done", grad_tests=["kernel_parity/relu_scalar_fp32"]),
+            good_census,
+            None,
+        ),
+        (
+            # R9c: the reverse -- a test listed for a claim nobody makes is decoration.
+            "R9c grad tests on an unfinished claim",
+            mutate_matrix(grad="todo", grad_tests=["kernel_parity/relu_scalar_fp32"]),
+            good_census,
+            "a test named for an unfinished claim is decoration",
         ),
         (
             # R8: the cell is implemented and R5 is satisfied by the presence of a name, but the

@@ -79,12 +79,19 @@ kernels:
     dtype_quant: [[fp32, tensor]]
     tiers: { scalar: done, autovec: na, arm_neon: todo, arm_m: todo, rvv: todo }
     grad: no-grad
+    grad_why: >-
+      quantisation is a step function, so a derivative needs a straight-through estimator,
+      and where to pretend the step is linear is a graph-layer decision (PLAN P6), not one
+      this kernel can make on its own
   dequantize:
     tflite: [DEQUANTIZE]
     onnx: [{op: DequantizeLinear}]
     dtype_quant: [[int8, tensor]]
     tiers: { scalar: done, autovec: na, arm_neon: todo, arm_m: todo, rvv: todo }
     grad: no-grad
+    grad_why: >-
+      the same step function in reverse: attributing a gradient to a quantised code is the
+      same straight-through decision as quantize, made once at the graph layer
   add:
     tflite: [ADD]
     onnx: [{op: Add}]
@@ -111,6 +118,9 @@ kernels:
     # exactly that one pair and nothing else.
     tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: todo, rvv: done }
     grad: no-grad
+    grad_why: >-
+      this reduce-max returns the value, not the index, so a subgradient has no target to
+      route to; argmax routing needs the index-returning kernel, which is not declared here
 composed:
   conv2d:
     tflite: [CONV_2D]
