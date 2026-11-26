@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "infinfer/compliance-record.schema.json",
+  "title": "compliance material record",
+  "type": "object",
+  "required": ["id", "kind", "title", "relevance", "status", "source_url", "verified_at"],
+  "properties": {
+    "id":            { "type": "string", "pattern": "^(S|P)-[0-9]{3}$" },
+    "kind":          { "enum": ["standard", "spec", "patent", "paper"] },
+    "title":         { "type": "string", "minLength": 4 },
+    "identifiers":   { "type": "array", "items": { "type": "string" },
+                       "description": "e.g. 'ISO/IEC 9899:2018', 'DDI0403E.b', 'opset 18'" },
+    "relevance":     { "type": "string", "description": "与哪一层/哪个声称相关：api|kernel|target|claim" },
+    "status":        { "enum": ["have", "to-collect", "blocked", "to-search", "not-needed-yet"] },
+    "source_url":    { "type": "string", "format": "uri" },
+    "local_file":    { "type": "string", "description": "materials/ 下的相对路径；status=have 时必填" },
+    "clauses_used":  { "type": "array", "items": { "type": "string" },
+                       "description": "实际引用的条款号，例如 '5.2.4.2', 'A2.7'" },
+    "verified_at":   { "type": "string", "format": "date" },
+    "notes":         { "type": "string" }
+  },
+  "allOf": [
+    { "if": { "properties": { "status": { "const": "have" } } },
+      "then": { "required": ["local_file"] } },
+    { "if": { "properties": { "status": { "const": "blocked" } } },
+      "then": { "required": ["notes"], "properties": { "notes": { "minLength": 8 } } } }
+  ]
+}

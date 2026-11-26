@@ -1,0 +1,29 @@
+{
+  "id": "qemu-m33-an505",
+  "qemu": "qemu-system-arm",
+  "machine": "mps2-an505",
+  "cpu": "cortex-m33",
+  "load": "loader",
+  "load_addr": "0x10000000",
+  "exit": "semihost-sys-exit",
+  "timeout_s": 20,
+  "toolchain": {
+    "triplet": "arm-none-eabi",
+    "package": "arm-toolchain/11.3.rel1",
+    "version_probe": "11.3"
+  },
+  "hardware_ref": [
+    "baremetal-cortex-m33"
+  ],
+  "ld": {
+    "flash": {
+      "origin": "0x10000000",
+      "length": "32K"
+    },
+    "ram": {
+      "origin": "0x80000000",
+      "length": "0x1000000"
+    }
+  },
+  "notes": "AN505 resets at 0x10000000, which is a 32K SRAM window (armsse.sram0); -kernel does not land at the reset vector, so the image must be linked there and placed with the generic loader. QEMU 8.2 also cannot deliver an exception vector out of sram0: the fetch reads 0 at both 0xC (VTOR=0) and 0x1000000C (VTOR set by the image), while ordinary loads and instruction fetch do see the table; the same table copied into ssram (0x00401000) IS readable by the exception path, so the blocker is the region, not the address. Data RAM is mps.ram at 0x80000000..0x80FFFFFF (16M), confirmed with `info mtree` on this model; the 0x00400000..0x007FFFFF windows are tz-mpc-upstream MPC wrappers over ssram-1 (2M), NOT general RAM. Measured consequence of getting this wrong: writes into 0x00400000..0x0040054f kill the run (a write-only loop over that range is fatal, the same loop over 0x00400550+ is fine), and a stack top of 0x00800000 sits outside every mapped region - pushes are dropped and pops return garbage, so a chain with a deep stack (k2: 436-byte frame plus the convolution) loses its return address, branches to 0, executes zeros up to the end of the window and dies of UNDEFINSTR (CFSR=0x00010000, HFSR=0x40000000 FORCED). Shallow chains (k0/k1) survived that for a long time, which is why the placement looked correct. _estack is now ORIGIN(RAM)+LENGTH(RAM) inside mps.ram."
+}

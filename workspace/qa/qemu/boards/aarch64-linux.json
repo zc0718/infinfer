@@ -1,0 +1,53 @@
+{
+  "id": "qemu-aarch64-linux",
+  "mode": "userspace",
+  "qemu": "qemu-aarch64",
+  "timeout_s": 60,
+  "toolchain": {
+    "triplet": "aarch64-none-linux-gnu",
+    "package": "arm-toolchain/11.3.rel1",
+    "version_probe": "11.3"
+  },
+  "hardware_ref": [
+    "arm64-linux-userspace"
+  ],
+  "tier": {
+    "name": "arm_neon",
+    "claims": [
+      "base",
+      "os",
+      "no-autovec"
+    ],
+    "skip_why": "the no-simd variant is a deliberate no-SIMD build (-march=armv8-a+nosimd): it proves the library still works without SIMD, not that NEON agrees with the reference, and its NEON bodies compile to nothing by design",
+    "why": "NEON is part of the ARMv8-A baseline, so -march=armv8-a already admits it: no extra flag needed, and a build that somehow lost it would fail the registry check rather than pass quietly. The -Os and -fno-tree-vectorize variants still have NEON available, so they claim the tier too; that is how the body is checked under two different optimisation shapes"
+  },
+  "notes": "User-mode emulation (qemu-aarch64) of a statically linked AArch64 Linux ELF, built by the house arm-toolchain (aarch64-none-linux-gnu). Every fact here was measured before the profile was written, because a board profile is a claim about the whole chain and the m33 cell cost a day of chasing a wrong one: `file` reports 'ELF 64-bit LSB executable, ARM aarch64, version 1 (GNU/Linux), statically linked'; the k0 KAT exits 0, i.e. bit-identical to the host verdict; no linker script, no loader and no semihosting are involved - the C runtime owns startup, so the freestanding path in kat_driver.c must stay off. That switch is keyed on __ARM_ARCH_PROFILE == 'M', not on __arm__: AArch32 Linux defines __arm__ too, and taking the bare-metal path there leaves glibc's crt1.o with an undefined `main` (measured). Coverage: LP64, the Linux userspace ABI, and the ARMv8-A SIMD baseline that -march=armv8-a implies.",
+  "variants": [
+    {
+      "id": "os",
+      "opt": "-Os",
+      "why": "size-optimised code takes different inlining/unrolling decisions"
+    },
+    {
+      "id": "no-autovec",
+      "flags": [
+        "-fno-tree-vectorize"
+      ],
+      "why": "the scalar path must stay correct when the vectoriser is off"
+    },
+    {
+      "id": "no-simd",
+      "flags": [
+        "-march=armv8-a+nosimd"
+      ],
+      "why": "AArch64 code must also be correct without SIMD",
+      "asserts": [
+        {
+          "tool": "objdump-objects",
+          "what": "no SIMD instructions in our objects",
+          "forbid_re": "\\b(fmla|fmls|ld1|st1|zip1|zip2|uzp1|uzp2|trn1|addv|saddlv|dup|ins)\\b"
+        }
+      ]
+    }
+  ]
+}

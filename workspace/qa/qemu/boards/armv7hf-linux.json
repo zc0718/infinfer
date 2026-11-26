@@ -1,0 +1,44 @@
+{
+  "id": "qemu-armv7hf-linux",
+  "mode": "userspace",
+  "qemu": "qemu-arm",
+  "timeout_s": 60,
+  "toolchain": {
+    "triplet": "arm-none-linux-gnueabihf",
+    "package": "arm-toolchain/11.3.rel1",
+    "version_probe": "11.3"
+  },
+  "hardware_ref": [
+    "armv7hf-linux-userspace"
+  ],
+  "tier": {
+    "name": "arm_neon",
+    "claims": [
+      "neon-vfpv4"
+    ],
+    "skip_why": "the baseline ARMv7-A profile is compiled without NEON on purpose (that baseline is a coverage axis of its own); the tier is claimed in the neon-vfpv4 variant",
+    "why": "the vendor matrix claims fpu: neon-vfpv4 for Cortex-A7, so that variant is where this tier is real"
+  },
+  "notes": "User-mode emulation (qemu-arm) of a statically linked AArch32 Linux ELF, built by the house arm-toolchain (arm-none-linux-gnueabihf). Measured before the profile was written: `file` reports 'ELF 32-bit LSB executable, ARM, EABI5, statically linked'; the k0 KAT exits 0, bit-identical to the host verdict. Coverage that the aarch64 board cannot give: ILP32 (size_t/pointer widths), the ARMv7-A baseline without NEON, and - the reason this board exists at all - the **hard-float** calling convention, where float arguments travel in VFP registers; a soft-float build of the same code passes arguments in core registers, so the two are genuinely different ABIs and only this leg exercises the VFP one. Same freestanding caveat as the aarch64 profile: startup belongs to glibc here, so kat_driver.c must not take the M-profile path (keyed on __ARM_ARCH_PROFILE == 'M').",
+  "variants": [
+    {
+      "id": "neon-vfpv4",
+      "flags": [
+        "-mfpu=neon-vfpv4"
+      ],
+      "why": "closes the `fpu: neon-vfpv4` claim the vendor matrix makes for the Cortex-A7 boards",
+      "asserts": [
+        {
+          "tool": "readelf",
+          "what": "FP arch reached VFPv4",
+          "expect": "VFPv4"
+        },
+        {
+          "tool": "readelf",
+          "what": "NEON with fused multiply-add",
+          "expect": "with Fused-MAC"
+        }
+      ]
+    }
+  ]
+}

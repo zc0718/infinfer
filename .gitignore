@@ -7,7 +7,29 @@ __pycache__/
 *.pyc
 
 # process artifacts (audit/plan docs live in the working copy only)
-/workspace/
+#
+# 2026-11-26, owner's instruction (gaps G-75): while every development step is local and nothing has
+# been pushed, `/workspace/` stays **tracked**. Keeping the execution subset out of git made every
+# KAT, board-profile and tier-parity conclusion "local_only": reproducible on this machine and
+# invisible to anyone else, including a fresh clone. The receipts live next to the code now.
+#
+# 2026-11-26，按业主指示（gaps G-75）：在全部开发都在本地、尚未 push 的阶段，`/workspace/` **入库**。
+# 把执行子集留在 git 之外，会让每一条 KAT / 板型 / 档位 parity 结论都变成 "local_only"：只在这台
+# 机器上可复现，别人（包括新 clone）看不到。证据现在和代码放在一起。
+#
+# Restore the single `/workspace/` rule before the first push, or decide per subtree then. This is a
+# temporary arrangement, and it is written down rather than remembered.
+# /workspace/
+
+# What stays out of git inside workspace/ is not "our work": it is vendored upstream trees and
+# derived output. Ignoring these by name (rather than ignoring the whole directory) is what makes the
+# line above safe -- 726 MB of third-party sources would otherwise enter the repository.
+# workspace/ 里仍然不入库的不是"我们的工作"，而是随仓上游代码与派生产物；按名字忽略这些（而不是忽略
+# 整个目录）正是上面那一条能安全注释掉的原因——否则 726 MB 第三方源码会进仓。
+/workspace/referential_repos/
+/workspace/qa/kat/build/
+/workspace/qa/kat/generated/
+/workspace/qa/qemu/build/
 
 # agent-skill adapter views (generated symlinks/junctions; canonical source is .github/skills)
 # Default: .agents only. Optional: .claude / .codex via `sync --harness claude|codex`.

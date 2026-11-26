@@ -1,0 +1,18 @@
+{
+  "id": "qemu-m3-an385",
+  "qemu": "qemu-system-arm",
+  "machine": "mps2-an385",
+  "cpu": "cortex-m3",
+  "load": "raw",
+  "exit": "semihost-sys-exit",
+  "timeout_s": 20,
+  "toolchain": {
+    "triplet": "arm-none-eabi",
+    "package": "arm-toolchain/11.3.rel1",
+    "version_probe": "11.3"
+  },
+  "hardware_ref": [
+    "baremetal-cortex-m3"
+  ],
+  "notes": "Raw bin must carry the vector table at offset 0 (SP, then PC|1)."
+}

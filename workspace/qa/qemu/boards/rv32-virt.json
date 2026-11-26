@@ -1,0 +1,19 @@
+{
+  "id": "qemu-rv32-virt",
+  "qemu": "qemu-system-riscv32",
+  "machine": "virt",
+  "march": "rv32imac",
+  "mabi": "ilp32",
+  "load": "elf",
+  "exit": "finisher",
+  "timeout_s": 20,
+  "toolchain": {
+    "triplet": "riscv-none-elf",
+    "package": "rv-toolchain/14.3.rel1",
+    "version_probe": "14.2"
+  },
+  "hardware_ref": [
+    "rv-scalar"
+  ],
+  "notes": "Load at 0x80000000, -mcmodel=medany; exit by writing 0x5555 to 0x100000."
+}

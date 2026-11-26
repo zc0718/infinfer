@@ -1,0 +1,32 @@
+{
+  "id": "qemu-rv64-virt",
+  "qemu": "qemu-system-riscv64",
+  "machine": "virt",
+  "march": "rv64imac",
+  "mabi": "lp64",
+  "load": "elf",
+  "exit": "finisher",
+  "timeout_s": 20,
+  "toolchain": {
+    "triplet": "riscv-none-elf",
+    "package": "rv-toolchain/14.3.rel1",
+    "version_probe": "14.2"
+  },
+  "hardware_ref": [
+    "rvv"
+  ],
+  "tier": {
+    "name": "rvv",
+    "claims": [
+      "base"
+    ],
+    "march": "rv64gcv",
+    "mabi": "lp64d",
+    "qemu_args": [
+      "-cpu",
+      "rv64,v=true,vext_spec=v1.0"
+    ],
+    "why": "the scalar KAT runs on rv64imac with the default `-cpu rv64`, which has misa.V clear and traps every vector instruction; the tier build asks for V explicitly on both sides, compiler and model"
+  },
+  "notes": "Same protocol as rv32; build with -march=rv64gcv when exercising the RVV tier."
+}

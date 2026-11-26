@@ -1,0 +1,25 @@
+{
+  "id": "qemu-m4-an386",
+  "qemu": "qemu-system-arm",
+  "machine": "mps2-an386",
+  "cpu": "cortex-m4",
+  "load": "raw",
+  "exit": "semihost-sys-exit",
+  "timeout_s": 20,
+  "toolchain": {
+    "triplet": "arm-none-eabi",
+    "package": "arm-toolchain/11.3.rel1",
+    "version_probe": "11.3"
+  },
+  "hardware_ref": [
+    "baremetal-cortex-m4"
+  ],
+  "tier": {
+    "name": "arm_m",
+    "claims": [
+      "base"
+    ],
+    "why": "Cortex-M4 has the DSP extension the arm_m bodies use (SMLAD/SMLALD); -mcpu=cortex-m4 is already the build flag"
+  },
+  "notes": "MPS2 AN386 image (Cortex-M4 with FPU/DSP)."
+}
