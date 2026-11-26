@@ -8,7 +8,8 @@
     "states its own layering), `.github/skills/**` (agent guidance is project-specific), and every",
     "content path -- README, metadata.json, include/, src/, api/, benchmark/ sources, docs,",
     "test_package/test/**. See workspace/audit/gaps.md G-10/G-24 for why the template's own",
-    "scaffold_check.py cannot serve this purpose."
+    "scaffold_check.py cannot serve this purpose.",
+    "`tolerance_budget` tracks the number of forks that actually exist: it was 3 at birth, 4 while the CMakeLists fork stood, back to 3 when that fork was reverted, and 2 now that the board-matrix entry turned out to be a deploy contract rather than a fork. Raising it is the one edit that must never be made to turn a gate green; it needs the owner's explicit sign-off, outside a feature commit."
   ],
   "scaffold": "0.3.11",
   "checked": {
@@ -87,7 +88,7 @@
     "test_package/conanfile.py": "28ca75ff819233055d95334554904c6b1c6ea1eb0665d08ccece714aaac6bf39",
     "CMakeLists.txt": "65cbd4dddf3c0879bd39e9ea4f9f4e635a91e2d4851d5ee30eece008c18dc7b1"
   },
-  "tolerance_budget": 3,
+  "tolerance_budget": 2,
   "tolerated": [
     {
       "path": ".github/workflows/ci-orchestrator.yml",
