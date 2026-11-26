@@ -17,6 +17,15 @@
     "workspace/audit/**",
     "workspace/PLAN-*.md"
   ],
+  "markdown": [
+    "workspace/audit/gaps.md",
+    "workspace/PLAN-*.md"
+  ],
   "ignore_file": ".gitignore",
-  "why": "process notes: self-criticism, internal sequencing, owner instructions. Kept locally, never shipped."
+  "why": "process notes: self-criticism, internal sequencing, owner instructions. Kept locally, never shipped.",
+  "why_markdown": [
+    "Documents whose whole value is being readable: a table that renders as bare `|` text is not a ledger.",
+    "The gap ledger grew by appending single rows separated by blank lines; a Markdown table ends at the first blank",
+    "line, so most of it rendered as prose (owner: \"preview 不出来\", 2026-11-26). P4/P5 keep it that way."
+  ]
 }

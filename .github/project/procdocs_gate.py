@@ -21,6 +21,11 @@ Rules:
      bypassed by `git add -f`
   P3 the documents still exist on disk: they are working papers, so deleting them is not the way to
      make P1 pass. "Self-discipline" here means kept but never shipped.
+  P4 every table in a listed Markdown document is well formed: a block of consecutive `|` lines has a
+     delimiter row under its header and the same number of **unescaped** pipes on every line. A
+     Markdown table ends at the first blank line, so a row separated by a blank one is not a row any
+     more -- it renders as bare `|` text, which is how the ledger became unreadable (2026-11-26).
+  P5 ids are unique: two records claiming the same `G-<n>` means one of them lost its number.
 
 Usage:
 
@@ -31,6 +36,7 @@ Usage:
 import argparse
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -96,6 +102,72 @@ def on_disk(root, patterns):
     return found
 
 
+def unescaped_pipes(line):
+    """Count `|` that mark a cell boundary. `\\|` is a literal pipe inside a cell (GFM)."""
+    return len(re.findall(r"(?<!\\)\|", line))
+
+
+def table_blocks(lines):
+    """Maximal runs of lines that start with `|`, as (start, end) index pairs."""
+    blocks = []
+    start = None
+    for index, line in enumerate(lines):
+        if line.startswith("|"):
+            if start is None:
+                start = index
+        elif start is not None:
+            blocks.append((start, index))
+            start = None
+    if start is not None:
+        blocks.append((start, len(lines)))
+    return blocks
+
+
+def check_markdown_tables(root, patterns):
+    """P4 + P5 over the listed documents."""
+    problems = []
+    reported = []
+    for pattern in patterns:
+        for path in sorted(p for p in root.rglob("*") if p.is_file() and matches(str(p.relative_to(root)), pattern)):
+            text = path.read_text(encoding="utf-8")
+            lines = text.split("\n")
+            blocks = table_blocks(lines)
+            shaped = 0
+            for start, end in blocks:
+                rows = lines[start:end]
+                where = f"{path.relative_to(root)}:{start + 1}"
+                if len(rows) < 2 or not re.fullmatch(r"\|(:?-+:?\|)+\s*", rows[1].replace(" ", "")):
+                    problems.append(
+                        f"procdocs: {where} -- this table has no header + delimiter row, so it renders "
+                        f"as bare `|` text (a blank line ends a table: keep rows consecutive)"
+                    )
+                    continue
+                counts = {unescaped_pipes(row) for row in rows}
+                if len(counts) != 1:
+                    offenders = [
+                        f"line {start + 1 + offset} ({unescaped_pipes(row)} pipes)"
+                        for offset, row in enumerate(rows)
+                        if unescaped_pipes(row) != unescaped_pipes(rows[0])
+                    ]
+                    problems.append(
+                        f"procdocs: {where} -- rows disagree on the column count: {', '.join(offenders[:3])}. "
+                        f"A `|` inside a cell (usually a code sample) must be written `\\|`."
+                    )
+                    continue
+                shaped += 1
+            ids = re.findall(r"^\|\s*(G-\d+)\s*\|", text, flags=re.MULTILINE)
+            duplicates = sorted({gap for gap in ids if ids.count(gap) > 1})
+            if duplicates:
+                problems.append(
+                    f"procdocs: {path.relative_to(root)} -- duplicated id(s): {', '.join(duplicates)}; "
+                    f"one of them lost its number"
+                )
+            reported.append(
+                f"{path.relative_to(root)}: {shaped} table(s) well formed, {len(ids)} id(s) unique"
+            )
+    return problems, reported
+
+
 def check(root, data):
     problems = []
     reported = []
@@ -142,6 +214,11 @@ def check(root, data):
             )
         else:
             reported.append(f"{pattern}: {len(hits)} file(s) kept locally")
+
+    # P4 + P5 -- the papers have to stay readable and unnumbered-twice.
+    markdown_problems, markdown_reported = check_markdown_tables(root, data.get("markdown", []))
+    problems.extend(markdown_problems)
+    reported.extend(markdown_reported)
     return problems, reported
 
 
@@ -223,6 +300,49 @@ def selftest():
         else:
             failures += 1
             print(f"[procdocs:selftest] FAIL expected src/code.c to be reported, got {problems}")
+
+        # P4/P5 fixtures run on their own file so the P1..P3 fixtures stay untouched.
+        doc = root / "workspace/audit/ledger.md"
+        table_data = {"protected": ["workspace/audit/**"], "ignore_file": ".gitignore",
+                      "markdown": ["workspace/audit/ledger.md"]}
+        head = "| # | what |\n|---|---|\n"
+
+        def tables(body):
+            doc.write_text(body, encoding="utf-8")
+            return check(root, table_data)[0]
+
+        # A row after a blank line is not a row: the table ended, and the row renders as bare text.
+        problems = tables(head + "| G-1 | a |\n" + "\n" + "| G-2 | b |\n")
+        if any("no header + delimiter row" in p for p in problems):
+            print("[procdocs:selftest] PASS P4 a blank line inside a table is red")
+        else:
+            failures += 1
+            print(f"[procdocs:selftest] FAIL P4 expected the blank-line report, got {problems}")
+
+        # An unescaped pipe inside a cell adds a column.
+        problems = tables(head + "| G-1 | `a | b` |\n")
+        if any("disagree on the column count" in p for p in problems):
+            print("[procdocs:selftest] PASS P4 a `|` in a cell is red")
+        else:
+            failures += 1
+            print(f"[procdocs:selftest] FAIL P4 expected the column-count report, got {problems}")
+
+        # ...and the GFM escape is green: this is the twin that stops the rule from banning code samples.
+        problems = tables(head + "| G-1 | `a \\| b` |\n| G-2 | c |\n")
+        if not problems:
+            print("[procdocs:selftest] PASS P4 an escaped `\\|` in a cell is green")
+        else:
+            failures += 1
+            print(f"[procdocs:selftest] FAIL P4 expected a clean run, got {problems}")
+
+        # Two records with the same number: one of them has lost its identity.
+        problems = tables(head + "| G-1 | a |\n| G-1 | b |\n")
+        if any("duplicated id" in p for p in problems):
+            print("[procdocs:selftest] PASS P5 a duplicated id is red")
+        else:
+            failures += 1
+            print(f"[procdocs:selftest] FAIL P5 expected the duplicate report, got {problems}")
+        doc.unlink()
 
     if failures:
         print(f"[procdocs:selftest] FAIL ({failures} fixture(s))", file=sys.stderr)
