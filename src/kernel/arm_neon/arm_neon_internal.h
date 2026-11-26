@@ -54,3 +54,13 @@ infr_status infr_arm_neon_add_f32(const void *const *inputs, void *const *output
  */
 infr_status infr_arm_neon_scale_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
                                     const infr_quant *quant);
+
+/**
+ * @brief [en] fp32 sum into one value: four running lanes, then a two-step fold, then a tail.
+ * @brief [zh] fp32 求和到单值：四条流水车道、两级折叠、再加标量尾。
+ * @note [en] Not bitwise: the reference accumulates in one float, so the grouping differs.
+ * @note [zh] 非逐位：参考实现用一个 float 累加，分组不同。
+ * @since 0.1.0
+ */
+infr_status infr_arm_neon_sum_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                  const infr_quant *quant);

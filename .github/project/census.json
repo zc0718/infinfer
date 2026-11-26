@@ -52,6 +52,9 @@
     "scale/fp32/none/scalar": [
       "kernel_parity/scale_scalar_fp32"
     ],
+    "sum/fp32/none/arm_neon": [
+      "kernel_parity/sum_arm_neon_fp32"
+    ],
     "sum/fp32/none/scalar": [
       "kernel_parity/sum_scalar_fp32"
     ]

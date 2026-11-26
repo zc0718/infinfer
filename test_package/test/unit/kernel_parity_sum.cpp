@@ -2,6 +2,8 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
+#include <vector>
 
 #include <infinfer/infinfer.h>
 
@@ -69,4 +71,50 @@ TEST(KernelParitySum, RejectsMissingBuffers) {
     const void* inputs[1] = {in};
     void* no_output[1] = {nullptr};
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, no_output, 1, nullptr));
+}
+
+TEST(KernelParitySumNeon, Fp32WithinTheFloatWindow) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_arm_neon());
+    const infr_kernel_desc* scalar = scalar_sum();
+    const infr_kernel_desc* neon =
+        infr_kernel_find("sum", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_ARM_NEON);
+    ASSERT_NE(nullptr, scalar) << "sum/fp32/none/scalar is not registered";
+    if (neon == nullptr) {
+        GTEST_SKIP() << "no NEON in this build: the arm_neon row is absent by design";
+    }
+
+    // Not bitwise, and deliberately so: the reference accumulates in ONE float from
+    // left to right, while four lanes keep four partial sums. The two bodies therefore
+    // round differently by construction, so this is judged with the float window the
+    // parity harness uses for every fp32 reduction -- the same call G-57 made for the
+    // dot product, and the opposite of what the `add`/`scale`/`relu`/`max` rows claim.
+    const std::uint32_t lengths[] = {0U, 1U, 3U, 4U, 5U, 7U, 64U, 257U};
+    std::vector<float> in(257);
+    for (std::size_t i = 0; i < in.size(); ++i) {
+        const std::uint32_t state = (static_cast<std::uint32_t>(i) * 1103515245U) + 12345U;
+        in[i] = static_cast<float>(static_cast<std::int32_t>((state >> 9) % 20001U) - 10000) / 100.0F;
+    }
+
+    for (std::uint32_t length : lengths) {
+        float want = 1234.0F;
+        float got = 1234.0F;
+        const void* inputs[1] = {in.data()};
+        void* want_out[1] = {&want};
+        void* got_out[1] = {&got};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, length, nullptr));
+        ASSERT_EQ(INFR_OK, neon->fn(inputs, got_out, length, nullptr));
+        // Zero length is a zero sum in both bodies, never a refusal.
+        if (length == 0U) {
+            EXPECT_EQ(infr_test::float_bits(0.0F), infr_test::float_bits(got));
+        }
+        infr_test::expect_float_buffers_near(&want, &got, 1U, "sum");
+    }
+
+    // The refusal both bodies owe a caller, at the same call.
+    float out = 0.0F;
+    const void* no_input[1] = {nullptr};
+    void* out_ptr[1] = {&out};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, neon->fn(no_input, out_ptr, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(no_input, out_ptr, 4U, nullptr));
 }
