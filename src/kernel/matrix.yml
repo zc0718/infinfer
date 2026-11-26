@@ -16,6 +16,20 @@
 # tier tokens:  scalar | autovec | arm_neon | arm_m | rvv
 # tier/grad status: todo | done | na | no-grad
 #
+# A `tiers` entry takes one of two forms:
+#   <tier>: <status>              a kernel-level claim: it applies to every
+#                                 declared (dtype, quant) pair
+#   <tier>: {<dtype>/<quant>: <status>, ...}
+#                                 a per-pair claim: it must name exactly the
+#                                 kernel's declared pairs (the census gate
+#                                 rejects a missing pair as well as an unknown
+#                                 key, so neither a typo nor an omission can be
+#                                 read as a status)
+# The second form exists because a tier can be real for one pair and absent for
+# another: `arm_m` is a DSP dot product, so int8 has one and fp32 has no FPU on
+# the Cortex-M profile (workspace/audit/gaps.md G-48/G-51). Writing the first
+# form where the pairs differ is how a matrix starts lying.
+#
 # `done` is a claim: the census gate requires a test name for every `done` cell and
 # turns red when one is missing. `todo` is a backlog item: it is reported as
 # pending and does not fail the gate (`--strict` promotes it at release time).
@@ -32,7 +46,15 @@ kernels:
     tflite: [FULLY_CONNECTED]
     onnx: [{op: Gemm}, {op: MatMul}]
     dtype_quant: [[fp32, none], [int8, tensor]]
-    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    # Per-pair on purpose (gaps G-51): the DSP path is the int8 dot product.
+    # fp32/arm_m is `todo`, not `na` -- it is unbuilt, and on this profile it
+    # has no FPU to be built on.
+    tiers:
+      scalar: done
+      autovec: todo
+      arm_neon: todo
+      arm_m: { fp32/none: todo, int8/tensor: done }
+      rvv: todo
     grad: todo
   quantize:
     tflite: [QUANTIZE]

@@ -12,6 +12,15 @@ anything -- which is why PLAN P1.2 makes the two files mutually accountable:
   R1 matrix.yml parses, declares `schema: 1`, and has a non-empty `kernels` map.
   R2 every kernel declares tflite / onnx / dtype_quant / tiers / grad, and every
      token comes from the closed sets at the top of this file.
+  R2a a `tiers` entry is a status token (a kernel-level claim: it applies to every
+     declared pair) or a mapping from `dtype/quant` to a status token (a claim
+     about that pair only). The second form exists because a tier can be real for
+     one pair and absent for another -- arm_m is a DSP dot product, so int8 has
+     one and fp32 has no FPU on the Cortex-M profile (gaps G-48/G-51).
+  R2b a per-pair mapping states exactly the kernel's declared pairs: a key that is
+     not a declared pair is red (a typo must not silently become a different
+     claim) and a declared pair left out is red (silence is not a status, or the
+     difference between "we have it" and "we do not" would be an omission).
   R3 a kernel does not declare the same (dtype, quant) pair twice.
   R4 an ONNX op claimed by more than one row (kernel or composed) must carry
      `where` on every claiming entry (ONNX reuses `Conv` for conv and dwconv; see
@@ -130,6 +139,54 @@ def check_composed(composed, kernel_names, claims, problems):
         collect_onnx_claims(name, entry, claims, problems, "composed")
 
 
+def pair_key(dtype, quant):
+    """The one spelling of a (dtype, quant) pair inside a `tiers` mapping."""
+    return f"{dtype}/{quant}"
+
+
+def resolve_tier(kernel, tier, spec, legal_pairs, problems):
+    """R2a/R2b: turn one `tiers` entry into {pair_key: status}, or None when red.
+
+    A status token is the original kernel-level claim and fans out to every
+    declared pair. A mapping is a per-pair claim and has to name every declared
+    pair, so the reader never has to guess whether an absent key means "todo" or
+    was forgotten.
+    """
+    if isinstance(spec, str):
+        if spec not in STATUSES:
+            problems.append(f"matrix: kernel '{kernel}' tier '{tier}' has unknown status '{spec}'")
+            return None
+        return {pair_key(dtype, quant): spec for dtype, quant in legal_pairs}
+    if not isinstance(spec, dict):
+        problems.append(
+            f"matrix: kernel '{kernel}' tier '{tier}' must be a status token or a (dtype, quant) mapping"
+        )
+        return None
+
+    declared = {pair_key(dtype, quant) for dtype, quant in legal_pairs}
+    resolved = {}
+    for key, status in spec.items():
+        if key not in declared:
+            problems.append(
+                f"matrix: kernel '{kernel}' tier '{tier}' names '{key}', which is not a declared pair of this kernel"
+            )
+            continue
+        if status not in STATUSES:
+            problems.append(
+                f"matrix: kernel '{kernel}' tier '{tier}' names '{key}' with unknown status '{status}'"
+            )
+            continue
+        resolved[key] = status
+
+    missing = sorted(declared - set(resolved))
+    if missing:
+        problems.append(
+            f"matrix: kernel '{kernel}' tier '{tier}' must state every declared (dtype, quant) pair; "
+            f"missing {', '.join(missing)}"
+        )
+    return resolved if len(resolved) == len(declared) else None
+
+
 def check_matrix(data):
     """R1-R4, R7.
 
@@ -187,18 +244,21 @@ def check_matrix(data):
         if not isinstance(tiers, dict) or not tiers:
             problems.append(f"matrix: kernel '{name}' tiers must be a non-empty mapping")
             continue
-        for tier, status in sorted(tiers.items()):
+        resolved_tiers = {}
+        for tier, spec in sorted(tiers.items()):
             if tier not in TIERS:
                 problems.append(f"matrix: kernel '{name}' has unknown tier '{tier}'")
-            if status not in STATUSES:
-                problems.append(f"matrix: kernel '{name}' tier '{tier}' has unknown status '{status}'")
+                continue
+            resolved = resolve_tier(name, tier, spec, legal_pairs, problems)
+            if resolved is not None:
+                resolved_tiers[tier] = resolved
         if entry["grad"] not in GRADS:
             problems.append(f"matrix: kernel '{name}' has unknown grad '{entry['grad']}'")
 
-        legal_tiers = [tier for tier in tiers if tier in TIERS]
+        legal_tiers = [tier for tier in TIERS if tier in resolved_tiers]
         cells[name] = [(dtype, quant, tier) for (dtype, quant) in legal_pairs for tier in legal_tiers]
         for dtype, quant, tier in cells[name]:
-            status_by_key[f"{name}/{dtype}/{quant}/{tier}"] = tiers[tier]
+            status_by_key[cell_key(name, dtype, quant, tier)] = resolved_tiers[tier][pair_key(dtype, quant)]
 
         collect_onnx_claims(name, entry, claims, problems, "kernel")
 
@@ -339,6 +399,33 @@ def selftest():
             mutate_matrix(tiers={"avx512": "todo"}),
             {"schema": 1, "cells": {}},
             "unknown tier 'avx512'",
+        ),
+        (
+            "R2a per-pair status token",
+            mutate_matrix(tiers={"scalar": {"fp32/none": "maybe"}}),
+            good_census,
+            "names 'fp32/none' with unknown status 'maybe'",
+        ),
+        (
+            "R2a tier value shape",
+            mutate_matrix(tiers={"scalar": ["done"]}),
+            good_census,
+            "tier 'scalar' must be a status token or a (dtype, quant) mapping",
+        ),
+        (
+            "R2b per-pair tier names an undeclared pair",
+            mutate_matrix(tiers={"scalar": {"int8/none": "done"}}),
+            good_census,
+            "tier 'scalar' names 'int8/none', which is not a declared pair of this kernel",
+        ),
+        (
+            "R2b per-pair tier must state every declared pair",
+            mutate_matrix(
+                dtype_quant=[["fp32", "none"], ["int8", "tensor"]],
+                tiers={"scalar": {"fp32/none": "done"}},
+            ),
+            good_census,
+            "must state every declared (dtype, quant) pair; missing int8/tensor",
         ),
         (
             "R3 duplicate pair",
@@ -503,6 +590,59 @@ def selftest():
             print(f"[census:selftest] FAIL expected exactly the autovec cell to be pending, got {pending_keys}")
         else:
             print("[census:selftest] PASS an unbuilt tier is pending, not red")
+
+        # G-51: `tiers` has to be able to carry a claim per (dtype, quant), because
+        # the same tier is real for one pair and absent for another -- arm_m is a DSP
+        # dot product, int8 has one, fp32 has no FPU on this profile. Both halves are
+        # proven, because the risk is not that the new form is too small but that the
+        # old one quietly stops meaning "every pair":
+        #   - the per-pair form lets fc/int8/tensor/arm_m be `done` while its fp32
+        #     sibling stays pending (a wrong key cannot hide there either: R2b)
+        #   - the plain form still fans out to every pair, so it cannot be used to
+        #     dodge a cell that has no implementation.
+        per_pair_matrix = {
+            "schema": 1,
+            "kernels": {
+                "fc": {
+                    "tflite": ["FULLY_CONNECTED"],
+                    "onnx": [{"op": "Gemm"}],
+                    "dtype_quant": [["fp32", "none"], ["int8", "tensor"]],
+                    "tiers": {
+                        "scalar": "done",
+                        "arm_m": {"fp32/none": "todo", "int8/tensor": "done"},
+                    },
+                    "grad": "todo",
+                }
+            },
+        }
+        per_pair_census = {
+            "schema": 1,
+            "cells": {
+                "fc/fp32/none/scalar": ["kernel_parity/fc_scalar_fp32"],
+                "fc/int8/tensor/scalar": ["kernel_parity/fc_int8_tensor"],
+                "fc/int8/tensor/arm_m": ["kernel_parity/fc_arm_m_int8"],
+            },
+        }
+        narrow_problems, narrow_pending = run_check(
+            write("pair.yml", per_pair_matrix), write("pair.json", per_pair_census)
+        )
+        if narrow_problems:
+            failures += 1
+            print(f"[census:selftest] FAIL a per-pair tier should isolate the done cell, got {narrow_problems}")
+        elif narrow_pending != ["fc/fp32/none/arm_m"]:
+            failures += 1
+            print(f"[census:selftest] FAIL expected only fc/fp32/none/arm_m pending, got {narrow_pending}")
+        else:
+            print("[census:selftest] PASS a per-pair tier claims one pair without claiming its sibling")
+
+        widened = json.loads(json.dumps(per_pair_matrix))
+        widened["kernels"]["fc"]["tiers"]["arm_m"] = "done"
+        wide_problems, _ = run_check(write("wide.yml", widened), write("wide.json", per_pair_census))
+        if [p for p in wide_problems if "fc/fp32/none/arm_m" in p and "missing from census.json" in p]:
+            print("[census:selftest] PASS the plain form still fans out to every pair")
+        else:
+            failures += 1
+            print(f"[census:selftest] FAIL a kernel-level 'done' must demand every pair, got {wide_problems}")
 
         for index, (label, matrix, census, phrase) in enumerate(fixtures):
             matrix_path = write(f"matrix-{index}.yml", matrix)

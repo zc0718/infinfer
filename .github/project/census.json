@@ -10,6 +10,9 @@
     "fc/fp32/none/scalar": [
       "kernel_parity/fc_scalar_fp32"
     ],
+    "fc/int8/tensor/arm_m": [
+      "kernel_parity/fc_arm_m_int8"
+    ],
     "fc/int8/tensor/scalar": [
       "kernel_parity/fc_int8_tensor"
     ],
