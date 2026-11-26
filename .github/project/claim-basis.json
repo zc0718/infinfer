@@ -10,21 +10,26 @@
       "host": "zc Linux, QEMU 8.2.2",
       "date": "2026-11-26",
       "chains": {
-        "k0_actquant": "PASS",
-        "k1_mlp3": "PASS",
-        "k2_conv_micro": "PASS"
+        "k0_actquant": "PASS on all six targets",
+        "k1_mlp3": "PASS on all six targets",
+        "k2_conv_micro": "PASS on five targets; open on m33-an505 (reports a CPU exception, tracked separately)"
       },
       "targets": [
         "m3-an385",
         "m4-an386",
         "m7-an500",
         "rv32-virt",
-        "rv64-virt"
+        "rv64-virt",
+        "m33-an505"
       ],
       "excluded": {
-        "m33-an505": "known open issue: the image faults before the check runs; tracked separately"
+        "m33-an505/k2_conv_micro": "open: the C++ runtime chain still takes a CPU exception on this model; k0 and k1 pass, so the operator path itself is fine"
       },
-      "reproduce": "python3 workspace/qa/kat/run_kat.py --chain all  (needs workspace/, so a fresh clone must skip it and say so)"
+      "reproduce": "python3 workspace/qa/kat/run_kat.py --chain all  (needs workspace/, so a fresh clone must skip it and say so)",
+      "toolchain": {
+        "arm": "arm-toolchain/11.3.rel1 (resolved by declared version probe from the Conan cache)",
+        "riscv": "rv-toolchain/14.3.rel1 (resolved by declared version probe; xpack reports GCC 14.2.0)"
+      }
     }
   ]
 }
