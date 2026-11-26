@@ -18,11 +18,10 @@
     "`redistributed` drives D4: our Conan package does not embed its dependencies, so this is false",
     "for all six today and NOTICE names none of them -- correctly. The rule exists so that vendoring",
     "a dependency into the tree cannot happen without an attribution line appearing.",
-    "`notice_file` is this repository's own file, not the template's NOTICE: the template text is pinned by scaffold gate G5, so a rule whose remedy was 'edit NOTICE' would be a rule that cannot be obeyed without a scaffold change. D4 reads only the marked section of our file."
+    "Attribution is a field, not a file (2026-11-26, owner challenge): D4 used to read a notice file, which forced a new root-level document to exist for a hypothetical -- nothing here is redistributed today, so its marked section was empty. `attribution` sits next to the licence it belongs to; when a component is actually vendored, that text is what a generated notice file would carry."
   ],
   "conandata": "conandata.yml",
   "metadata": "metadata.json",
-  "notice_file": "THIRD_PARTY_NOTICES.md",
   "allowed_licences": [
     "Apache-2.0",
     "BSD-3-Clause",
@@ -47,7 +46,8 @@
       "used_from": {
         "path": "src/ctest.c",
         "contains": "#include <zlib.h>"
-      }
+      },
+      "attribution": ""
     },
     {
       "conan": "pcre2",
@@ -65,7 +65,8 @@
       "used_from": {
         "path": "src/ctest.c",
         "contains": "#include <pcre2.h>"
-      }
+      },
+      "attribution": ""
     },
     {
       "conan": "eigen",
@@ -83,7 +84,8 @@
       "used_from": {
         "path": "src/cpptest.cpp",
         "contains": "#include <Eigen/Dense>"
-      }
+      },
+      "attribution": ""
     },
     {
       "conan": "etl",
@@ -101,7 +103,8 @@
       "used_from": {
         "path": "src/etl.cpp",
         "contains": "#include <etl/algorithm.h>"
-      }
+      },
+      "attribution": ""
     },
     {
       "conan": "gtest",
@@ -119,7 +122,8 @@
       "used_from": {
         "path": "test_package/test/unit/req.cpp",
         "contains": "#include <gtest/gtest.h>"
-      }
+      },
+      "attribution": ""
     },
     {
       "conan": "pybind11",
@@ -137,11 +141,8 @@
       "used_from": {
         "path": "api/python_bindings.cpp",
         "contains": "#include <pybind11/pybind11.h>"
-      }
+      },
+      "attribution": ""
     }
-  ],
-  "notice_section": [
-    "<!-- redistributed:begin -->",
-    "<!-- redistributed:end -->"
   ]
 }

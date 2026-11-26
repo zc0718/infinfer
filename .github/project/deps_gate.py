@@ -4,7 +4,7 @@
   conandata.yml            what Conan resolves
   metadata.json            what the template's CMake reads, in four buckets
   metadata.baremetal_white_list   which ones may appear on a bare-metal target
-  NOTICE                   what we redistribute
+  attribution              what we would print if we shipped it (a field, not a file)
 
 Nothing compared them until now, and each pair can drift silently: a package added to
 `conandata.yml` and forgotten in `metadata.json` simply never gets linked, which looks
@@ -19,11 +19,11 @@ Rules:
   D3 every entry declares an SPDX licence from `allowed_licences`; a licence that could
      not be verified on the machine (`license_status: unverified`) is only acceptable for
      something we do not redistribute
-  D4 `redistributed` and being named in the attribution section are the same predicate, in both
-     directions: an attribution line for something we do not ship is as wrong as shipping
-     something without one. Only the text between the markers in `notice_section` counts -- the
-     file also carries a human inventory that names everything, and counting that would make the
-     rule fire on its own documentation
+  D4 `redistributed` and carrying an `attribution` are the same predicate, in both directions: an
+     attribution line for something we do not ship is as wrong as shipping something without one.
+     Attribution is a field next to the licence rather than a separate notice file, because a
+     dedicated file would exist for a hypothetical: nothing here is redistributed today, so its
+     body would be empty and a new root-level document would still be a decision nobody needed
   D5 "it is used" is measured rather than claimed: `used_from.path` must exist and contain
      `used_from.contains`; an entry with no consumer must carry `why_unused` instead
   D6 `metadata.baremetal_white_list` names entries that are marked `baremetal_ok` -- the
@@ -139,27 +139,6 @@ def check(root, data_path=None):
                         f"deps: metadata declares '{bucket}/{key}' with no entry in deps.json"
                     )
 
-    notice_path = root / data.get("notice_file", "THIRD_PARTY_NOTICES.md")
-    notice_text = ""
-    section = data.get("notice_section")
-    if notice_path.is_file():
-        whole = notice_path.read_text(encoding="utf-8")
-        if isinstance(section, list) and len(section) == 2:
-            begin, end = section
-            if begin in whole and end in whole:
-                notice_text = whole.split(begin, 1)[1].split(end, 1)[0].lower()
-            else:
-                problems.append(
-                    f"deps: {notice_path.name} has no '{begin}' / '{end}' pair, so D4 cannot tell "
-                    f"an attribution line from the rest of the file"
-                )
-        else:
-            notice_text = whole.lower()
-    else:
-        problems.append(
-            f"deps: {notice_path.name} is missing -- it is the file the attribution rule reads"
-        )
-
     for entry in entries:
         name = entry.get("conan", "<no name>")
 
@@ -180,16 +159,16 @@ def check(root, data_path=None):
 
         # D4 -- attribution and shipping are the same predicate.
         redistributed = bool(entry.get("redistributed"))
-        named = name.lower() in notice_text
-        if redistributed and not named:
+        attribution = str(entry.get("attribution", "")).strip()
+        if redistributed and not attribution:
             problems.append(
-                f"deps: '{name}' is marked redistributed but {notice_path.name} never names it -- "
-                f"an attribution that is not written down does not travel with the artifact"
+                f"deps: '{name}' is marked redistributed but carries no attribution -- an "
+                f"attribution that is not written down does not travel with the artifact"
             )
-        if named and not redistributed:
+        if attribution and not redistributed:
             problems.append(
-                f"deps: {notice_path.name} names '{name}' but the entry says it is not redistributed -- "
-                f"one of the two is wrong"
+                f"deps: '{name}' carries an attribution while the entry says it is not "
+                f"redistributed -- one of the two is wrong"
             )
 
         # D5 -- usage is a measurement.
@@ -232,17 +211,6 @@ def selftest():
         root = pathlib.Path(workdir)
         (root / "src").mkdir()
         (root / "src/uses.c").write_text("#include <zlib.h>\nint x;\n", encoding="utf-8")
-        notice = root / "THIRD_PARTY_NOTICES.md"
-
-        def set_notice(section_body):
-            notice.write_text(
-                "This project is Apache-2.0.\n<!-- redistributed:begin -->\n"
-                + section_body
-                + "<!-- redistributed:end -->\n| zlib | Zlib | inventory row |\n",
-                encoding="utf-8",
-            )
-
-        set_notice("")
         (root / "conandata.yml").write_text(
             "requirements:\n  - \"zlib/1.3.1\"\n  # - \"dlib/19.24.2\"\n", encoding="utf-8"
         )
@@ -273,8 +241,6 @@ def selftest():
         def run(entries=None, allowed=("Zlib",)):
             data = {
                 "allowed_licences": list(allowed),
-                "notice_file": "THIRD_PARTY_NOTICES.md",
-                "notice_section": ["<!-- redistributed:begin -->", "<!-- redistributed:end -->"],
                 "entries": entries if entries is not None else [entry()],
             }
             path = root / "deps-fixture.json"
@@ -342,26 +308,23 @@ def selftest():
             failures += 1
             print(f"[deps:selftest] FAIL D3 expected the evidence report, got {problems}")
 
-        set_notice("This package ships zlib.\n")
-        problems = run([entry(redistributed=True)])
+        problems = run([entry(redistributed=True, attribution="zlib (C) Jean-loup Gailly and Mark Adler")])
         if not problems:
-            print("[deps:selftest] PASS D4 redistributed + named in NOTICE is green (positive twin)")
+            print("[deps:selftest] PASS D4 redistributed with an attribution is green (positive twin)")
         else:
             failures += 1
             print(f"[deps:selftest] FAIL D4 expected a clean run, got {problems}")
 
-        problems = run([entry(redistributed=False)])
+        problems = run([entry(redistributed=False, attribution="zlib (C) Jean-loup Gailly")])
         if any("but the entry says it is not redistributed" in p for p in problems):
-            print("[deps:selftest] PASS D4 a NOTICE mention without redistribution is red")
+            print("[deps:selftest] PASS D4 an attribution without redistribution is red")
         else:
             failures += 1
             print(f"[deps:selftest] FAIL D4 expected the reverse report, got {problems}")
 
         problems = run([entry(redistributed=True)])
-        set_notice("")
-        problems = run([entry(redistributed=True)])
-        if any("never names it" in p for p in problems):
-            print("[deps:selftest] PASS D4 redistribution without a NOTICE line is red")
+        if any("carries no attribution" in p for p in problems):
+            print("[deps:selftest] PASS D4 redistribution without an attribution line is red")
         else:
             failures += 1
             print(f"[deps:selftest] FAIL D4 expected the missing-attribution report, got {problems}")
