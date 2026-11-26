@@ -195,6 +195,17 @@ TEST(KernelParityFcInt8, RejectsUnresolvedQuantization) {
     unquantized.kind = INFR_QUANT_NONE;
     unquantized.requant_multiplier = 1.0F;
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, outputs, 1, &unquantized));
+
+    // The pointer guard runs before the quantization guard, so a caller that got both
+    // wrong gets the pointer verdict -- pinned because "which error wins" is part of
+    // the contract a consumer branches on.
+    const void* no_input[2] = {nullptr, w};
+    const void* no_weights[2] = {x, nullptr};
+    void* no_output[1] = {nullptr};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(nullptr, outputs, 1, &unquantized));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(no_input, outputs, 1, &unquantized));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(no_weights, outputs, 1, &unquantized));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, no_output, 1, &unquantized));
 }
 
 /*
@@ -334,6 +345,16 @@ TEST(KernelParityFcInt16, RejectsUnresolvedQuantization) {
     unquantized.kind = INFR_QUANT_NONE;
     unquantized.requant_multiplier = 1.0F;
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, outputs, 1, &unquantized));
+
+    // Same pointer-before-quantization ordering as the int8 row: a consumer that
+    // branches on the status must see the same verdict from both quantized cells.
+    const void* no_input[2] = {nullptr, w};
+    const void* no_weights[2] = {x, nullptr};
+    void* no_output[1] = {nullptr};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(nullptr, outputs, 1, &unquantized));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(no_input, outputs, 1, &unquantized));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(no_weights, outputs, 1, &unquantized));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, no_output, 1, &unquantized));
 }
 
 TEST(KernelParityFcArmM, Int8MatchesScalarBitwise) {

@@ -107,6 +107,8 @@ TEST(KernelParityQuant, RejectsNullBuffersAndNonPositiveScale) {
     int8_t out[2] = {};
     const infr_quant good = per_tensor(1.0F, 0);
     const infr_quant bad_scale = per_tensor(0.0F, 0);
+    infr_quant unquantized = per_tensor(1.0F, 0);
+    unquantized.kind = INFR_QUANT_NONE;
     const void* null_input[1] = {nullptr};
     const void* inputs[1] = {in};
     void* null_output[1] = {nullptr};
@@ -115,4 +117,20 @@ TEST(KernelParityQuant, RejectsNullBuffersAndNonPositiveScale) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, quantize_row->fn(null_input, outputs, 2, &good));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, quantize_row->fn(inputs, null_output, 2, &good));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, quantize_row->fn(inputs, outputs, 2, &bad_scale));
+    // A NULL parameter block is the branch no realistic call reaches, and the one
+    // that would dereference first if the guard were ever reordered.
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, quantize_row->fn(inputs, outputs, 2, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, quantize_row->fn(inputs, outputs, 2, &unquantized));
+
+    const infr_kernel_desc* dequantize_row = scalar_dequantize();
+    ASSERT_NE(nullptr, dequantize_row);
+    const void* quantized_in[1] = {out};
+    float restored[2] = {};
+    void* restored_out[1] = {restored};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, dequantize_row->fn(null_input, restored_out, 2, &good));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, dequantize_row->fn(quantized_in, null_output, 2, &good));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, dequantize_row->fn(quantized_in, restored_out, 2, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, dequantize_row->fn(quantized_in, restored_out, 2, &bad_scale));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, dequantize_row->fn(quantized_in, restored_out, 2, &unquantized));
+    EXPECT_EQ(INFR_OK, dequantize_row->fn(quantized_in, restored_out, 2, &good));
 }
