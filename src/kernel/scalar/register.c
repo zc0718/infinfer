@@ -27,6 +27,7 @@ infr_status infr_kernel_register_scalar(void) {
         {"max", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_max_f32},
         {"relu", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_relu_f32},
         {"relu", INFR_DTYPE_I8, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_relu_i8},
+        {"scale", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_scale_f32},
         {"sum", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR, infr_scalar_sum_f32},
     };
     uint32_t i;

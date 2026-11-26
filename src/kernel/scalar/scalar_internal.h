@@ -65,6 +65,14 @@ infr_status infr_scalar_sum_f32(const void *const *inputs, void *const *outputs,
 infr_status infr_scalar_max_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
                                 const infr_quant *quant);
 
+/**
+ * @brief [en] Multiply by the factor carried in `inputs[1][0]` (broadcast scalar).
+ * @brief [zh] 乘以 `inputs[1][0]` 承载的因子（广播标量）。
+ * @since 0.1.0
+ */
+infr_status infr_scalar_scale_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                  const infr_quant *quant);
+
 /* The fc contract in one line: `inputs[0]` against `inputs[1]`, one float into
  * `outputs[0]`; the graph layer loops over rows, because INV-3 keeps shape out
  * of this signature.

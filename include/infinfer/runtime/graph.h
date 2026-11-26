@@ -225,3 +225,27 @@ infr_status infr_max_pool2d_output_shape(const infr_pool_params *params, const i
  */
 infr_status infr_max_pool2d_f32(const infr_tensor *input, const infr_pool_params *params, infr_tensor *output,
                                 infr_workspace *workspace);
+
+/**
+ * @brief [en] Global average pooling: mean over H and W, per channel.
+ * @brief [zh] 全局平均池化：对 H、W 求均值，逐通道。
+ * @param [in] input Rank-4 NHWC input, `[1, in_h, in_w, channels]`.
+ * @param [in,out] output Rank-4 NHWC output that must already be `[1, 1, 1, channels]`.
+ * @param [in,out] workspace Scratch source; rewound before returning, on every path.
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, a non-rank-4 tensor,
+ *         a channel mismatch, or an output that is not `[1,1,1,C]`;
+ *         INFR_ERR_UNSUPPORTED for a dtype or quantisation outside the stated subset;
+ *         INFR_ERR_BUFFER_TOO_SMALL when the workspace cannot hold `in_h*in_w` floats.
+ * @note [en] Composed as `sum` then `scale`, both from the registry: the mean is not a
+ *            kernel, it is a reduction plus a multiply by `1/(H*W)`. The factor lives
+ *            in a one-element buffer because the kernel contract has no scalar slot.
+ * @note [zh] 由注册表里的 `sum` 与 `scale` 组合而成：均值不是 kernel，它是一次归约
+ *            再乘 `1/(H*W)`。因子放在单元素缓冲区里，因为 kernel 契约没有标量位置。
+ * @note [en] The division happens once per channel, not once per element: `sum` is
+ *            exact in ascending order and the single multiply is what makes the result
+ *            reproducible across targets.
+ * @note [zh] 除法按通道只做一次、不是逐元素做：`sum` 按升序累加是确定的，而只乘一次
+ *            正是跨目标可复现的原因。
+ * @since 0.1.0
+ */
+infr_status infr_mean_hw_f32(const infr_tensor *input, infr_tensor *output, infr_workspace *workspace);

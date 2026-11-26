@@ -46,6 +46,12 @@ kernels:
     dtype_quant: [[fp32, none]]
     tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
     grad: todo
+  scale:
+    tflite: [MUL]
+    onnx: [{op: Mul, where: "one operand is a scalar"}]
+    dtype_quant: [[fp32, none]]
+    tiers: { scalar: done, autovec: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    grad: todo
   max:
     tflite: [REDUCE_MAX]
     onnx: [{op: ReduceMax}]
@@ -71,6 +77,6 @@ composed:
   mean:
     tflite: [MEAN]
     onnx: [{op: ReduceMean}]
-    uses: [sum]
+    uses: [sum, scale]
     kat: pending
 
