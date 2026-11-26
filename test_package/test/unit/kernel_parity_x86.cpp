@@ -296,3 +296,63 @@ TEST(kernel_parity, relu_x86_i8) {
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(no_input, out_ptr, 4U, nullptr));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(no_input, out_ptr, 4U, nullptr));
 }
+
+TEST(kernel_parity, fc_x86_i8) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_x86());
+    const infr_kernel_desc* scalar =
+        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* row =
+        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_X86);
+    ASSERT_NE(nullptr, scalar) << "fc/int8/tensor/scalar is not registered";
+    if (row == nullptr) {
+        GTEST_SKIP() << kNoVector;
+    }
+
+    // Bitwise, and the reason is worth stating because the summation ORDER differs: the
+    // reference accumulates in one int32 from left to right, this widens bytes to int16 and
+    // folds with _mm_madd_epi16 into four int32 lanes. Integer addition is associative, so the
+    // totals are equal exactly rather than approximately -- the same argument the DSP tier
+    // rests on. The requantisation tail is not re-implemented either: both call the reference's
+    // own clamp, so a rounding drift has nowhere to come from.
+    const std::uint32_t lengths[] = {0U, 1U, 3U, 15U, 16U, 17U, 32U, 33U, 64U, 255U};
+    std::vector<std::int8_t> x(255);
+    std::vector<std::int8_t> w(255);
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        x[i] = static_cast<std::int8_t>(static_cast<int>((i * 37U) % 255U) - 127);
+        w[i] = static_cast<std::int8_t>(static_cast<int>((i * 53U + 11U) % 255U) - 127);
+    }
+    x[0] = INT8_MIN; /* the value that breaks a widening done with a plain zero-fill */
+    w[0] = INT8_MIN;
+    x[1] = -1;
+    w[1] = 127;
+    x[2] = 0;
+    w[2] = INT8_MIN;
+
+    infr_quant quant{};
+    quant.kind = INFR_QUANT_PER_TENSOR;
+    quant.scale = 1.0F;
+    quant.zero_point = -7;
+    quant.requant_multiplier = 0.0035F; /* non-trivial: exercises the double rounding path */
+
+    const void* inputs[2] = {x.data(), w.data()};
+    for (std::uint32_t n : lengths) {
+        std::int8_t want = 42;
+        std::int8_t got = 42;
+        void* want_out[1] = {&want};
+        void* got_out[1] = {&got};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, &quant));
+        ASSERT_EQ(INFR_OK, row->fn(inputs, got_out, n, &quant));
+        EXPECT_EQ(static_cast<int>(want), static_cast<int>(got)) << "length " << n;
+    }
+
+    // Both bodies owe the caller the same refusals: no quant at all, and an unresolved one.
+    std::int8_t out = 0;
+    void* out_ptr[1] = {&out};
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, nullptr));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, nullptr));
+    infr_quant unresolved{};
+    unresolved.requant_multiplier = 1.0F; /* kind still NONE */
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, &unresolved));
+    EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, &unresolved));
+}

@@ -28,6 +28,11 @@ infr_status infr_kernel_register_x86(void) {
 #if defined(__SSE2__)
     static const infr_kernel_desc builtins[] = {
         {.name = "fc", .dtype = INFR_DTYPE_F32, .quant = INFR_QUANT_NONE, .tier = INFR_TIER_X86, .fn = infr_x86_fc_f32},
+        {.name = "fc",
+         .dtype = INFR_DTYPE_I8,
+         .quant = INFR_QUANT_PER_TENSOR,
+         .tier = INFR_TIER_X86,
+         .fn = infr_x86_fc_i8},
         {.name = "relu",
          .dtype = INFR_DTYPE_F32,
          .quant = INFR_QUANT_NONE,

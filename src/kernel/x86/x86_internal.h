@@ -82,4 +82,17 @@ infr_status infr_x86_sum_f32(const void *const *inputs, void *const *outputs, ui
 infr_status infr_x86_relu_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
                              const infr_quant *quant);
 
+
+/**
+ * @brief [en] int8 dot product: SSE2 has no 8-bit multiply-add, so bytes are widened to int16.
+ * @brief [zh] int8 点积：SSE2 没有 8 位乘加，因此把字节扩宽成 int16。
+ * @note [en] Requires a resolved `quant` (non-NONE kind and a positive requant multiplier),
+ *            exactly like the reference; an unresolved one is an argument error, not a no-op.
+ * @note [zh] 需要一个已解析的 `quant`（kind 非 NONE、requant 乘数为正），与参考实现完全一致；
+ *            未解析的参数是参数错误，不是空操作。
+ * @since 0.1.0
+ */
+infr_status infr_x86_fc_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                           const infr_quant *quant);
+
 #endif /* INFR_SRC_KERNEL_X86_INTERNAL_H */

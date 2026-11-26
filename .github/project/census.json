@@ -40,6 +40,9 @@
     "fc/int8/tensor/scalar": [
       "kernel_parity/fc_int8_tensor"
     ],
+    "fc/int8/tensor/x86": [
+      "kernel_parity/fc_x86_i8"
+    ],
     "max/fp32/none/arm_neon": [
       "kernel_parity/max_arm_neon_fp32"
     ],
