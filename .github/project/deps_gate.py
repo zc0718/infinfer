@@ -198,6 +198,26 @@ def check(root, data_path=None):
                 f"deps: baremetal_white_list names '{key}', which no entry marks as baremetal_ok"
             )
 
+    # D7 (PLAN gate/license) -- this project's own licence, not a dependency's.
+    if metadata.is_file():
+        own = str(load_json(metadata).get("license", "")).strip()
+        if not own:
+            problems.append("deps: metadata.json declares no license")
+        elif own not in allowed:
+            problems.append(
+                f"deps: metadata.json declares license '{own}', which is not in allowed_licences "
+                f"{sorted(allowed)} -- we would be shipping under a licence we do not accept"
+            )
+        licence_file = root / data.get("license_file", "LICENSE")
+        if not licence_file.is_file():
+            problems.append(f"deps: '{licence_file.name}' is missing, so the declared licence has no text")
+        elif own:
+            heading = {"Apache-2.0": "Apache License", "MIT": "MIT License"}.get(own)
+            if heading and heading.lower() not in licence_file.read_text(encoding="utf-8").lower():
+                problems.append(
+                    f"deps: metadata.json says '{own}' but {licence_file.name} does not read like it"
+                )
+
     reported.append(f"{len(entries)} dependency entr(ies), {len(buckets)} metadata bucket(s), "
                     f"{len(whitelist)} bare-metal allowance(s)")
     return problems, reported
@@ -214,8 +234,10 @@ def selftest():
         (root / "conandata.yml").write_text(
             "requirements:\n  - \"zlib/1.3.1\"\n  # - \"dlib/19.24.2\"\n", encoding="utf-8"
         )
+        (root / "LICENSE").write_text("Apache License\nVersion 2.0\n", encoding="utf-8")
         (root / "metadata.json").write_text(
             json.dumps({
+                "license": "Apache-2.0",
                 "dependencies": {"common": {"ZLIB": ["ZLIB::ZLIB"]}},
                 "baremetal_white_list": ["ZLIB"],
             }), encoding="utf-8"
@@ -238,7 +260,7 @@ def selftest():
             base.update(overrides)
             return base
 
-        def run(entries=None, allowed=("Zlib",)):
+        def run(entries=None, allowed=("Zlib", "Apache-2.0")):
             data = {
                 "allowed_licences": list(allowed),
                 "entries": entries if entries is not None else [entry()],
@@ -316,7 +338,7 @@ def selftest():
             print(f"[deps:selftest] FAIL D4 expected a clean run, got {problems}")
 
         problems = run([entry(redistributed=False, attribution="zlib (C) Jean-loup Gailly")])
-        if any("but the entry says it is not redistributed" in p for p in problems):
+        if any("while the entry says it is not redistributed" in p for p in problems):
             print("[deps:selftest] PASS D4 an attribution without redistribution is red")
         else:
             failures += 1
@@ -356,6 +378,21 @@ def selftest():
         else:
             failures += 1
             print(f"[deps:selftest] FAIL D6 expected the whitelist report, got {problems}")
+
+        # D7 is about *this* project's licence, not a dependency's: it must be one we accept, and
+        # LICENSE has to read like it.
+        meta_path = root / "metadata.json"
+        saved = meta_path.read_text(encoding="utf-8")
+        meta = json.loads(saved)
+        meta["license"] = "GPL-3.0"
+        meta_path.write_text(json.dumps(meta), encoding="utf-8")
+        problems = run()
+        meta_path.write_text(saved, encoding="utf-8")
+        if any("metadata.json declares license 'GPL-3.0'" in p for p in problems):
+            print("[deps:selftest] PASS D7 a project licence outside the set is red")
+        else:
+            failures += 1
+            print(f"[deps:selftest] FAIL D7 expected the licence report, got {problems}")
 
         problems = run([])
         if any("entry list is empty" in p for p in problems):

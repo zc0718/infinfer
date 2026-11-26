@@ -1,0 +1,262 @@
+{
+  "_comment": [
+    "PLAN P3's gate list as data, plus the gates this project built outside that list.",
+    "`p3_gate.py` keeps the two ends together: a covered entry must name a file that exists and",
+    "that ci.sh runs, a deferred entry must say why and what would make it buildable, and every",
+    "gate file in this directory must be named. There is no entry without a decision.",
+    "`plan_targets` repeats the plan's own list so deleting an entry cannot silently shrink it."
+  ],
+  "schema": 1,
+  "plan_targets": [
+    "build",
+    "deps",
+    "ports",
+    "oracle",
+    "accuracy",
+    "grad",
+    "targets",
+    "license",
+    "compliance",
+    "vendor",
+    "budget",
+    "claim",
+    "docfmt",
+    "docdup",
+    "gaps",
+    "ci-policy",
+    "evidence"
+  ],
+  "entries": [
+    {
+      "id": "accuracy",
+      "from": "plan",
+      "status": "deferred",
+      "why": "accuracy is a property of the quantisation pipeline, and there is no pipeline to measure yet (PLAN P5.4)",
+      "trigger": "when PTQ produces blobs, accuracy gates end-to-end top-1 against the float reference"
+    },
+    {
+      "id": "budget",
+      "from": "plan",
+      "status": "deferred",
+      "why": "no RAM budget table exists (PLAN P4.4); the only memory evidence today is the workspace-bounds contract tests",
+      "trigger": "when the per-target memory table lands, the gate reconciles it with the arena sizes the tests use"
+    },
+    {
+      "id": "build",
+      "from": "plan",
+      "status": "covered",
+      "by": "toolchain_gate.py:T6",
+      "what": "the C/C++ standard and CMake minimum the metadata declares are the ones CMakeLists.txt sets"
+    },
+    {
+      "id": "ci-policy",
+      "from": "plan",
+      "status": "covered",
+      "by": "ci_policy_gate.py:Y1-Y3",
+      "what": "workflows do not dump the secret context, pin their actions, and never follow a moving branch"
+    },
+    {
+      "id": "claim",
+      "from": "plan",
+      "status": "covered",
+      "by": "claim_gate.py:C1-C7",
+      "what": "every claim in claim-basis.json has a reachable basis commit, a real gate and live counts"
+    },
+    {
+      "id": "compliance",
+      "from": "plan",
+      "status": "covered",
+      "by": "compliance_gate.py:K1-K4",
+      "what": "the standards ledger is complete and its `have` pointers resolve; the patent ledger stays empty and invents no numbers"
+    },
+    {
+      "id": "deps",
+      "from": "plan",
+      "status": "covered",
+      "by": "deps_gate.py:D1-D6",
+      "what": "conandata.yml <-> metadata.json four buckets <-> baremetal_white_list <-> attribution"
+    },
+    {
+      "id": "docdup",
+      "from": "plan",
+      "status": "deferred",
+      "why": "the doc system has not started (PLAN P5); the three layers it would compare are still the template's",
+      "trigger": "when sphinx/README content is ours, the gate refuses a sentence that appears in two layers"
+    },
+    {
+      "id": "docfmt",
+      "from": "plan",
+      "status": "covered",
+      "by": "docannot_gate.py:D7+D8",
+      "what": "@param names match the declaration's parameters; no revision-log table in a file header"
+    },
+    {
+      "id": "evidence",
+      "from": "plan",
+      "status": "covered",
+      "by": "claim_gate.py:C2+C5",
+      "what": "a local-only conclusion must carry commit/host/date and a reproduce line, and the commit must be an ancestor of HEAD"
+    },
+    {
+      "id": "gaps",
+      "from": "plan",
+      "status": "covered",
+      "by": "gaps_gate.py:G1-G3",
+      "what": "every cited G-<n> exists in the local ledger; skip with a reason when the ledger is absent"
+    },
+    {
+      "id": "grad",
+      "from": "plan",
+      "status": "covered",
+      "by": "census_gate.py:R9",
+      "what": "the grad column is a decision: no-grad needs a reason, done needs a named test; the numeric finite-difference check belongs to P6"
+    },
+    {
+      "id": "license",
+      "from": "plan",
+      "status": "covered",
+      "by": "deps_gate.py:D7",
+      "what": "the licence this project declares is one we accept, and the LICENSE text is the one it names"
+    },
+    {
+      "id": "oracle",
+      "from": "plan",
+      "status": "deferred",
+      "why": "there is no reference pipeline to compare against: no blob importer, no reference interpreter (PLAN P5.3/P5.4)",
+      "trigger": "when the blob format and the Python reference writer exist, oracle compares them against onnxruntime on a fixed corpus"
+    },
+    {
+      "id": "ports",
+      "from": "plan",
+      "status": "covered",
+      "by": "census_gate.py:R10",
+      "what": "every non-scalar done cell has a scalar reference for the same (name, dtype, quant)"
+    },
+    {
+      "id": "targets",
+      "from": "plan",
+      "status": "deferred",
+      "why": "the board admission matrix is not in this tree (supportable-board-matrix.yml belongs to the platform work), so there is no list to admit into",
+      "trigger": "when a target list lands, the gate admits only targets that build with a house toolchain and pass KAT"
+    },
+    {
+      "id": "vendor",
+      "from": "plan",
+      "status": "deferred",
+      "why": "no vendor backend exists (PLAN P2.5 not started), so an `nm` check for vendor symbols would pass without checking anything",
+      "trigger": "when backend/cmsis_nn.c or csi_nn2.c lands, the gate asserts their symbols are absent when the option is off"
+    },
+    {
+      "id": "apicontract",
+      "from": "project",
+      "status": "covered",
+      "by": "apicontract_gate.py",
+      "what": "every infr_* declaration is reachable from C and C++ under the same name"
+    },
+    {
+      "id": "census",
+      "from": "project",
+      "status": "covered",
+      "by": "census_gate.py",
+      "what": "matrix <-> census <-> test ids, plus the grad and scalar-reference rules"
+    },
+    {
+      "id": "coverage",
+      "from": "project",
+      "status": "covered",
+      "by": "coverage_gate.py",
+      "what": "the coverage floors, computed from counts rather than reported rates"
+    },
+    {
+      "id": "docannot",
+      "from": "project",
+      "status": "covered",
+      "by": "docannot_gate.py",
+      "what": "docstring contract on include/ + src/ (D1-D8)"
+    },
+    {
+      "id": "docvoice",
+      "from": "project",
+      "status": "covered",
+      "by": "docvoice_gate.py",
+      "what": "no development-domain vocabulary (INV-n / Pn.n / plan wording) in the shipped surface"
+    },
+    {
+      "id": "header_dialect",
+      "from": "project",
+      "status": "covered",
+      "by": "header_dialect_gate.py",
+      "what": "installed headers stay C99-pedantic includable"
+    },
+    {
+      "id": "initform",
+      "from": "project",
+      "status": "covered",
+      "by": "initform_gate.py",
+      "what": "public structs are initialised with field names"
+    },
+    {
+      "id": "isa",
+      "from": "project",
+      "status": "covered",
+      "by": "isa_gate.py",
+      "what": "two measured claims about what the compiler vectorises and what the hand-written tiers use"
+    },
+    {
+      "id": "p3",
+      "from": "project",
+      "status": "covered",
+      "by": "p3_gate.py",
+      "what": "this inventory: every gate is built and wired, or deferred with a why and a trigger"
+    },
+    {
+      "id": "procdocs",
+      "from": "project",
+      "status": "covered",
+      "by": "procdocs_gate.py",
+      "what": "process documents cannot be published, and stay renderable"
+    },
+    {
+      "id": "registry",
+      "from": "project",
+      "status": "covered",
+      "by": "registry_gate.py",
+      "what": "the matrix's third list: register.c rows must match the done cells"
+    },
+    {
+      "id": "rootlayout",
+      "from": "project",
+      "status": "covered",
+      "by": "rootlayout_gate.py",
+      "what": "INV-11's root allowlist, in both directions"
+    },
+    {
+      "id": "sanitize",
+      "from": "project",
+      "status": "covered",
+      "by": "sanitize_gate.py",
+      "what": "ASan + UBSan over the runtime and kernel boundaries"
+    },
+    {
+      "id": "scaffold",
+      "from": "project",
+      "status": "covered",
+      "by": "scaffold_gate.py",
+      "what": "the template contract: pinned bytes, declared forks, pinned template prose"
+    },
+    {
+      "id": "scope",
+      "from": "project",
+      "status": "covered",
+      "by": "scope_gate.py",
+      "what": "what lives where: layer and directory scope rules"
+    },
+    {
+      "id": "toolchain",
+      "from": "project",
+      "status": "covered",
+      "by": "toolchain_gate.py",
+      "what": "house vs third-party toolchains, and what CI cannot run (T1-T6)"
+    }
+  ]
+}

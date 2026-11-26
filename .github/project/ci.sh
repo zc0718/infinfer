@@ -28,9 +28,22 @@ if ! python3 -c "import yaml" >/dev/null 2>&1; then
 fi
 
 status=0
-for gate in docannot_gate.py census_gate.py registry_gate.py isa_gate.py apicontract_gate.py rootlayout_gate.py scope_gate.py toolchain_gate.py initform_gate.py sanitize_gate.py header_dialect_gate.py coverage_gate.py procdocs_gate.py claim_gate.py gaps_gate.py deps_gate.py; do
+GATES="docannot_gate.py census_gate.py registry_gate.py isa_gate.py apicontract_gate.py rootlayout_gate.py scope_gate.py toolchain_gate.py initform_gate.py sanitize_gate.py header_dialect_gate.py coverage_gate.py procdocs_gate.py claim_gate.py gaps_gate.py deps_gate.py docvoice_gate.py scaffold_gate.py ci_policy_gate.py compliance_gate.py p3_gate.py"
+for gate in ${GATES}; do
     echo "--- .github/project/${gate}"
     python3 ".github/project/${gate}" || status=1
+done
+
+# The gates' own proofs. A gate that cannot be shown to fail is a gate nobody should trust, and its
+# fixture is the thing that breaks silently when a rule's wording changes -- measured: adding the
+# deps licence rule turned four of its fixtures red, and nothing noticed, because `--selftest` was
+# only ever run by hand. All 21 run in under two seconds.
+# 门禁自己的证明。一条证明不了会红的闸不值得信任，而规则的措辞一改，坏掉的正是它的 fixture——
+# 实测：给 `deps` 加许可规则后它的四条 fixture 变红，而没人发现，因为 `--selftest` 只被手工跑过。
+# 21 条合计不到两秒。
+for gate in ${GATES}; do
+    echo "--- .github/project/${gate} --selftest"
+    python3 ".github/project/${gate}" --selftest || status=1
 done
 
 if [ "${status}" -ne 0 ]; then

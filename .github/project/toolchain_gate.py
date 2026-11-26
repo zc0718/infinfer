@@ -46,6 +46,7 @@ G-46 的由来是同一棵树被两套编译器构建：KAT 矩阵全部从 Cona
 """
 import argparse
 import json
+import re
 import shutil
 import sys
 import tempfile
@@ -201,18 +202,76 @@ def rule_heavy_checks(root, manifest):
     return problems
 
 
+def rule_build_shape(root):
+    """T6 (PLAN `gate/build`): the build shape the metadata declares is the one CMake sets.
+
+    `metadata.build_cstd` / `build_cppstd` / `cmake_version` are read by the recipe and by CI, while
+    `CMakeLists.txt` states the same three things to CMake. Nothing compared them, and the failure is
+    quiet in both directions: a tree that builds as C11 while the metadata says otherwise breaks only
+    on the day someone trusts the metadata.
+    """
+    problems = []
+    meta_path = Path(root) / "metadata.json"
+    cmake_path = Path(root) / "CMakeLists.txt"
+    if not meta_path.is_file() or not cmake_path.is_file():
+        return problems
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    cmake = cmake_path.read_text(encoding="utf-8")
+
+    # The template does not hard-code the standard: `CMakeLists.txt` reads `build_cstd` out of
+    # metadata.json itself (`string(JSON BUILD_CSTD ...)`) and passes `${BUILD_CSTD}` to the
+    # targets. So the rule is not "two literals must match" -- that version of it compared a
+    # quantity with no second copy and could never fail. What can fail is the wiring: a build that
+    # hard-codes a different number, or one that stops reading the metadata field at all.
+    for field, var, prop in (("build_cstd", "BUILD_CSTD", "C_STANDARD"),
+                             ("build_cppstd", "BUILD_CPPSTD", "CXX_STANDARD")):
+        declared = str(meta.get(field, "")).strip()
+        if not declared:
+            continue
+        wired = f'"{field}"' in cmake and "${" + var + "}" in cmake
+        literal = re.search(rf"{prop}\s+(\d+)\b", cmake)
+        if not wired:
+            if not literal:
+                problems.append(
+                    f"T6 metadata.{field} is {declared} but CMakeLists.txt neither reads it nor sets "
+                    f"{prop} to a number -- the field is not connected to the build")
+            elif literal.group(1) != declared:
+                problems.append(
+                    f"T6 metadata.{field} is {declared} but CMakeLists.txt hard-codes {prop} "
+                    f"{literal.group(1)} -- one of the two is fiction")
+
+    # `metadata.cmake_version` is the CMake the *recipe installs* (conanfile.py: build_requires
+    # cmake/{_cmake}), not the minimum `CMakeLists.txt` demands. The two are different quantities
+    # with names that look alike, which this rule found by being wrong first: it compared them for
+    # equality and reported a real-looking defect that was not one. What does have to hold is that
+    # the installed CMake is new enough for the declared build.
+    installed = str(meta.get("cmake_version", "")).strip()
+    match = re.search(r"cmake_minimum_required\s*\(\s*VERSION\s+([\d.]+)", cmake)
+    if installed and match:
+
+        def as_tuple(text):
+            return tuple(int(part) for part in re.findall(r"\d+", text))
+
+        if as_tuple(installed) < as_tuple(match.group(1)):
+            problems.append(
+                f"T6 the recipe installs cmake/{installed} but CMakeLists.txt requires "
+                f"{match.group(1)} -- the build tool the recipe pins cannot configure this tree")
+    return problems
+
+
 def check(root):
     manifest = load_manifest(root)
     return (rule_owned_surface(root, manifest)
             + rule_declarations(root, manifest)
             + rule_debt_is_current(root, manifest)
             + rule_boards_agree(root, manifest)
-            + rule_heavy_checks(root, manifest))
+            + rule_heavy_checks(root, manifest)
+            + rule_build_shape(root))
 
 
 def _fixture(root, manifest, surface_file, surface_text, debt_file=None,
-             debt_text=None, board_text=None):
-    """Lay out a miniature tree: a manifest, one owned file, one debt file."""
+             debt_text=None, board_text=None, extra=None):
+    """Lay out a miniature tree: a manifest, one owned file, one debt file, plus `extra`."""
     root = Path(root)
     (root / ".github/project").mkdir(parents=True, exist_ok=True)
     (root / MANIFEST).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
@@ -220,7 +279,7 @@ def _fixture(root, manifest, surface_file, surface_text, debt_file=None,
     boards_dir = manifest.get("boards_dir")
     if boards_dir and board_text is not None:
         pairs.append((f"{boards_dir}/fixture.json", board_text))
-    for relative, text in pairs:
+    for relative, text in pairs + list((extra or {}).items()):
         if relative is None or text is None:
             continue
         path = root / relative
@@ -256,8 +315,8 @@ def selftest():
     cases = []
 
     def case(name, expected, manifest=None, surface="import os\n",
-             debt="apt-compiler\n", board=good_board):
-        return (name, expected, manifest or base_manifest, surface, debt, board)
+             debt="apt-compiler\n", board=good_board, extra=None):
+        return (name, expected, manifest or base_manifest, surface, debt, board, extra)
 
     cases.append(case("clean tree is green", None))
     cases.append(case(
@@ -284,6 +343,14 @@ def selftest():
         board='{"toolchain": {"package": "arm-toolchain/11.3.rel1", '
               '"triplet": "riscv-none-elf"}}'))
     cases.append(case(
+        "T6 a C standard the build hard-codes differently", "T6 ",
+        extra={"metadata.json": '{"build_cstd": "99"}',
+               "CMakeLists.txt": "set(CMAKE_C_STANDARD 11)\n"}))
+    cases.append(case(
+        "T6 a metadata standard the build never reads", "T6 ",
+        extra={"metadata.json": '{"build_cstd": "11"}',
+               "CMakeLists.txt": "set(CMAKE_POSITION_INDEPENDENT_CODE ON)\n"}))
+    cases.append(case(
         "a heavy check without a location is red", "T5 ",
         manifest={**base_manifest, "heavy_checks": [{
             "id": "cross-build", "command": "conan create .",
@@ -292,11 +359,11 @@ def selftest():
         }]}))
 
     failures = 0
-    for name, expected, manifest, surface, debt, board in cases:
+    for name, expected, manifest, surface, debt, board, extra in cases:
         temp = tempfile.mkdtemp(prefix="toolchain-selftest-")
         try:
             _fixture(temp, manifest, "workspace/app/tool.py", surface,
-                     ".github/workflows/ci.yml", debt, board)
+                     ".github/workflows/ci.yml", debt, board, extra)
             problems = check(temp)
             if expected is None:
                 if problems:

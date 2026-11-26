@@ -340,7 +340,28 @@ def check_matrix(data):
     check_onnx_claims(claims, problems)
     check_composed(data.get("composed"), set(kernels), claims, problems)
     check_onnx_claims(claims, problems)
+    check_scalar_reference(status_by_key, problems)
     return problems, cells, status_by_key, set(kernels)
+
+
+def check_scalar_reference(status_by_key, problems):
+    """R10 (PLAN `gate/ports`): a tier cell is only a cell if the scalar reference covers it.
+
+    The parity story of this repository is "compare the tier against the scalar row on the same
+    target" -- k3 does exactly that. A `done` cell in a vector/DSP tier whose scalar counterpart is
+    not `done` has nothing to be compared with: the claim would rest on a reference that does not
+    exist, and the chain would either skip it silently or fail for the wrong reason.
+    """
+    for key, status in sorted(status_by_key.items()):
+        kernel, dtype, quant, tier = key.split("/")
+        if tier == "scalar" or status != "done":
+            continue
+        reference = status_by_key.get(cell_key(kernel, dtype, quant, "scalar"))
+        if reference != "done":
+            problems.append(
+                f"matrix: '{key}' is done but the scalar reference is '{reference}' -- a tier cell "
+                f"with no reference has nothing to be parity-checked against"
+            )
 
 
 def cell_key(kernel, dtype, quant, tier):
@@ -504,6 +525,7 @@ def selftest():
         "kernel_parity/fc_scalar_fp32": "fixture/fc.cpp",
         "kernel_parity/fc_int8_tensor": "fixture/fc_int8.cpp",
         "kernel_parity/fc_arm_m_int8": "fixture/fc_arm_m.cpp",
+        "kernel_parity/relu_x86_fp32": "fixture/relu_x86.cpp",
     }
 
     def mutate_matrix(**changes):
@@ -599,6 +621,13 @@ def selftest():
             },
             {"schema": 1, "cells": {}},
             "must carry a non-empty 'where'",
+        ),
+        (
+            # R10 (PLAN gate/ports): a tier cell is only a cell if the scalar reference covers it.
+            "R10 a tier cell without a scalar reference",
+            mutate_matrix(tiers={"scalar": "todo", "x86": "done"}),
+            {"schema": 1, "cells": {"relu/fp32/none/x86": ["kernel_parity/relu_x86_fp32"]}},
+            "but the scalar reference is 'todo'",
         ),
         (
             "R5 missing cell",

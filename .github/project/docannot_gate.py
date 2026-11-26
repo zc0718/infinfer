@@ -185,6 +185,39 @@ def audit(root):
             if len(spoken.get(name, set())) < 2:
                 problems.append(
                     f"D6 {rel}: @param {name} is not bilingual (needs an [en] line and a [zh] line)")
+    # D7 (PLAN D5): the names in @param must be the names in the declaration. A documented
+    # parameter that no longer exists reads as documentation while describing nothing.
+    proto = re.compile(r"\(([^;{]*?)\)\s*[;{]")
+    for path in files:
+        rel = pathlib.Path(path).relative_to(root).as_posix()
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for block in BLOCK.finditer(text):
+            documented = set(re.findall(r"^ \* @param\s+(\w+)\s+\[(?:en|zh)\]", block.group(1), re.M))
+            if not documented:
+                continue
+            after = text[block.end():block.end() + 600]
+            match = proto.search(after)
+            if not match or match.group(1).strip() == "void":
+                continue
+            actual = set()
+            for part in match.group(1).split(","):
+                names = re.findall(r"[A-Za-z_]\w*", part)
+                if names:
+                    actual.add(names[-1])
+            if documented != actual:
+                problems.append(
+                    f"D7 {rel}:{text[:block.start()].count(chr(10)) + 1}: @param documents "
+                    f"{sorted(documented)} but the declaration takes {sorted(actual)}")
+
+    # D8 (PLAN D2): no revision-log table in a file header. It duplicates the history git already
+    # keeps, and every copy of it drifts.
+    for path in files:
+        rel = pathlib.Path(path).relative_to(root).as_posix()
+        head = "\n".join(path.read_text(encoding="utf-8", errors="replace").split("\n")[:40])
+        if re.search(r"\|\s*(Version|版本)\s*\|", head) and re.search(r"\|\s*(Author|作者)\s*\|", head):
+            problems.append(
+                f"D8 {rel}: the file header carries a revision-log table; git keeps that history, "
+                "and a second copy of it drifts")
     return problems
 
 
@@ -208,6 +241,14 @@ def selftest():
          "/**\n * @brief [en] ok\n * @brief [zh] 好\n * @since 0.1.0\n"
          " * @param [in] a the input\n */\nvoid f(int a);\n",
          "uses a direction tag"),
+        ("D7 a @param that the declaration does not take is red", "src/d7.c",
+         "/**\n * @brief [en] ok\n * @brief [zh] 好\n * @since 0.1.0\n"
+         " * @param a [en] x\n * @param a [zh] 甲\n"
+         " * @param ghost [en] y\n * @param ghost [zh] 乙\n */\nvoid f(int a);\n",
+         "but the declaration takes"),
+        ("D8 a revision-log table in the header is red", "src/d8.c",
+         "/*\n * | Date | Version | Author |\n * |---|---|---|\n */\n",
+         "revision-log table"),
         ("D6 a monolingual @param is red", "src/d6b.c",
          "/**\n * @brief [en] ok\n * @brief [zh] 好\n * @since 0.1.0\n"
          " * @param a [en] the input\n */\nvoid f(int a);\n",
