@@ -1,0 +1,90 @@
+{
+  "id": "k2_conv_micro",
+  "source": "hand-written integer-LCG weights (no closed-source tool)",
+  "built_with": "numpy 2.5.4 float64 reference",
+  "subset": [
+    "conv2d",
+    "relu",
+    "max_pool2d",
+    "dwconv2d",
+    "mean",
+    "fc"
+  ],
+  "graph": [
+    {
+      "op": "conv2d",
+      "kernel": 3,
+      "stride": 1,
+      "pad": 1,
+      "out_channels": 8,
+      "groups": 1
+    },
+    {
+      "op": "relu"
+    },
+    {
+      "op": "max_pool2d",
+      "kernel": 2,
+      "stride": 2,
+      "pad": 0
+    },
+    {
+      "op": "conv2d",
+      "kernel": 3,
+      "stride": 1,
+      "pad": 1,
+      "out_channels": 16,
+      "groups": 8
+    },
+    {
+      "op": "relu"
+    },
+    {
+      "op": "mean"
+    },
+    {
+      "op": "fc",
+      "out_channels": 10
+    }
+  ],
+  "weights": {
+    "order": [
+      "conv_w",
+      "conv_b",
+      "dw_w",
+      "dw_b",
+      "fc_w",
+      "fc_b"
+    ],
+    "dtype": "fp32"
+  },
+  "input": {
+    "file": "input.bin",
+    "dtype": "fp32",
+    "shape": [
+      1,
+      16,
+      16,
+      1
+    ],
+    "sha256": "aa198d5c143b8699cd5fd69bc852a4ccec52a8f7c4853628f90d40721a3ad46a"
+  },
+  "blob": {
+    "file": "model.blob",
+    "sha256": "6de3183e7136e385e7c5f8e7bc376bf3b4cd338083e05bf1f8879ac615390dc4"
+  },
+  "expect": {
+    "file": "expect_fp32.bin",
+    "dtype": "fp32",
+    "shape": [
+      1,
+      10
+    ],
+    "sha256": "e9b95ab1ed92af04a8d5f2e36e7d57f05ba64e937446730a1fa1e7bddecd8707"
+  },
+  "tolerance": {
+    "kind": "float",
+    "max_rel": 1e-05,
+    "max_abs": 1e-06
+  }
+}

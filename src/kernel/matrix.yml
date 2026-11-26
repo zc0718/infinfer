@@ -63,20 +63,20 @@ composed:
     tflite: [CONV_2D]
     onnx: [{op: Conv, where: "group == 1"}]
     uses: [fc, add]
-    kat: pending
+    kat: graph_kat_k2_conv_micro
   dwconv2d:
     tflite: [DEPTHWISE_CONV_2D]
     onnx: [{op: Conv, where: "group == in_channels"}]
     uses: [fc, add]
-    kat: pending
+    kat: graph_kat_k2_conv_micro
   max_pool2d:
     tflite: [MAX_POOL_2D]
     onnx: [{op: MaxPool}]
     uses: [max]
-    kat: pending
+    kat: graph_kat_k2_conv_micro
   mean:
     tflite: [MEAN]
     onnx: [{op: ReduceMean}]
     uses: [sum, scale]
-    kat: pending
+    kat: graph_kat_k2_conv_micro
 
