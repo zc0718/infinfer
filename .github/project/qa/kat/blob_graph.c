@@ -86,8 +86,8 @@ static int bind_slot(const unsigned char *bytes, const kat_blob_slot *slot, floa
     if (infr_shape_init(&shape, (uint8_t)slot->rank, slot->dims) != INFR_OK) {
         return 0;
     }
-    data = slot->byte_len != 0U ? (void *)(uintptr_t)(const void *)(bytes + slot->offset)
-                                : (void *)(arena + slot->arena);
+    data =
+        slot->byte_len != 0U ? (void *)(uintptr_t)(const void *)(bytes + slot->offset) : (void *)(arena + slot->arena);
     return infr_tensor_init(tensor, data, INFR_DTYPE_F32, &shape) == INFR_OK;
 }
 
@@ -102,13 +102,12 @@ static const float *constant_of(const unsigned char *bytes, const kat_blob_slot 
  * 一个槽的数字，不管它住在哪里：常量在 blob 的 flash 映像里，运行期槽在 arena 里。逐通道门
  * 两种都需要——存起来的因子向量，以及上一个节点算出来的那个（真的 SE 块是算出来的；常量门
  * 不是 SE）。 */
-static const float *floats_of(const unsigned char *bytes, const kat_blob_slot *slot,
-                              const float *arena) {
+static const float *floats_of(const unsigned char *bytes, const kat_blob_slot *slot, const float *arena) {
     return slot->byte_len != 0U ? constant_of(bytes, slot) : (arena + slot->arena);
 }
 
-int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *input, uint32_t input_len,
-                 float *arena, uint32_t arena_len, infr_workspace *workspace, kat_blob_view *view) {
+int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *input, uint32_t input_len, float *arena,
+                 uint32_t arena_len, infr_workspace *workspace, kat_blob_view *view) {
     static const unsigned char magic[8] = {'I', 'N', 'F', 'R', 'K', 'A', 'T', '\0'};
     /* `static`, not automatic: at 256 slots these tables are ~18 KB, which is a normal
      * .bss reservation on an MCU but a stack overflow waiting to happen. The price is
@@ -333,8 +332,7 @@ int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *inp
             infr_tensor in_t;
             infr_tensor w_t;
             infr_conv2d_params params;
-            if (!bind_slot(bytes, &slots[node->in_slot], arena, &in_t) ||
-                !bind_slot(bytes, w_slot, arena, &w_t)) {
+            if (!bind_slot(bytes, &slots[node->in_slot], arena, &in_t) || !bind_slot(bytes, w_slot, arena, &w_t)) {
                 return KAT_BLOB_ERR_SLOT;
             }
             if (w_slot->rank != 4U || node->p[3] == 0U || in_t.shape.dims[3] % node->p[3] != 0U) {
@@ -468,9 +466,8 @@ int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *inp
                 const float *in_data = arena + a_slot->arena;
                 const float *factors = floats_of(bytes, b_slot, arena);
                 uint32_t pixel;
-                if (node->op != KAT_BLOB_OP_MUL || count == 0U || channels == 0U ||
-                    pixels * channels != count || slot_floats(a_slot) != count ||
-                    slot_floats(b_slot) != channels) {
+                if (node->op != KAT_BLOB_OP_MUL || count == 0U || channels == 0U || pixels * channels != count ||
+                    slot_floats(a_slot) != count || slot_floats(b_slot) != channels) {
                     return KAT_BLOB_ERR_SHAPE;
                 }
                 gate = infr_kernel_find("mul", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
@@ -538,5 +535,228 @@ int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *inp
     }
     view->out = arena + slots[nodes[node_count - 1U].out_slot].arena;
     view->out_len = slot_floats(&slots[nodes[node_count - 1U].out_slot]);
+    return KAT_BLOB_OK;
+}
+
+/* ---------------------------------------------------------------------------------------------
+ * v3, int8. One operator, byte-addressed arena, and the field offsets the format froze.
+ *
+ * The offsets are written out as `+16`, `+44` and so on rather than reached through a packed
+ * struct: a struct would make the compiler pick the padding, and the format's whole promise is
+ * that the bytes are where the specification says. The C++ twin uses the same numbers, and the
+ * host test that compares them is what keeps the two from drifting.
+ *
+ * 字段偏移写成 `+16`、`+44` 这样的字面量而不是走 packed struct：struct 会让编译器决定填充，
+ * 而格式的全部承诺就是"字节在规范说的位置"。C++ 那份用的是同一组数字，比对两者的宿主测试
+ * 就是它们不漂移的保证。
+ * ------------------------------------------------------------------------------------------- */
+
+#define KAT_I8_SLOT_HEADER 60U
+#define NO_SLOT_I8 0xFFFFFFFFU
+#define KAT_I8_MAX_SLOTS 8U
+#define KAT_I8_MAX_NODES 4U
+#define KAT_I8_DTYPE_F32 1U
+#define KAT_I8_DTYPE_I8 2U
+#define KAT_I8_DTYPE_I32 3U
+
+typedef struct kat_i8_slot {
+    uint32_t dtype;
+    uint32_t rank;
+    uint32_t dims[4];
+    uint32_t byte_len;
+    uint32_t payload;
+    uint8_t quant_kind;
+    float scale;
+    int32_t zero_point;
+    uint32_t scales_at;
+    uint32_t scale_count;
+} kat_i8_slot;
+
+static float rd_f32(const unsigned char *p) {
+    float value = 0.0F;
+    memcpy(&value, p, sizeof value);
+    return value;
+}
+
+static int32_t rd_i32(const unsigned char *p) { return (int32_t)rd_u32(p); }
+
+int kat_blob_run_i8(const unsigned char *bytes, uint32_t byte_len, const int8_t *input, uint32_t input_len,
+                    unsigned char *arena, uint32_t arena_len, infr_workspace *workspace, int8_t *out,
+                    uint32_t out_len) {
+    static const unsigned char magic[8] = {'I', 'N', 'F', 'R', 'K', 'A', 'T', '\0'};
+    kat_i8_slot slots[KAT_I8_MAX_SLOTS];
+    uint32_t node_out_slot[KAT_I8_MAX_NODES];
+    uint32_t node_op[KAT_I8_MAX_NODES];
+    uint32_t node_in_slot[KAT_I8_MAX_NODES];
+    uint32_t node_w_slot[KAT_I8_MAX_NODES];
+    uint32_t node_b_slot[KAT_I8_MAX_NODES];
+    uint32_t node_p[KAT_I8_MAX_NODES][4];
+    uint32_t node_count;
+    uint32_t slot_count;
+    uint32_t offset;
+    uint32_t index;
+    uint32_t input_slot = NO_SLOT_I8;
+    uint32_t conv = NO_SLOT_I8;
+    int32_t bias_local[32];
+    float scales_local[32];
+    infr_shape in_shape;
+    infr_shape w_shape;
+    infr_shape out_shape;
+    infr_tensor in_tensor;
+    infr_tensor w_tensor;
+    infr_tensor out_tensor;
+    infr_conv2d_params params;
+    infr_status status;
+    uint32_t in_count = 1U;
+    uint32_t out_count = 1U;
+    uint32_t axis;
+    const kat_i8_slot *w_slot;
+    const kat_i8_slot *b_slot;
+    const kat_i8_slot *out_slot;
+
+    if (bytes == NULL || input == NULL || arena == NULL || workspace == NULL || out == NULL) {
+        return KAT_BLOB_ERR_INPUT;
+    }
+    if (byte_len < 24U || memcmp(bytes, magic, sizeof magic) != 0) {
+        return KAT_BLOB_ERR_HEADER;
+    }
+    if (rd_u32(bytes + 8) != 3U) {
+        return KAT_BLOB_ERR_VERSION;
+    }
+    node_count = rd_u32(bytes + 12);
+    slot_count = rd_u32(bytes + 16);
+    if (node_count > KAT_I8_MAX_NODES || slot_count > KAT_I8_MAX_SLOTS) {
+        return KAT_BLOB_ERR_TABLE;
+    }
+    offset = 24U;
+    if (byte_len < offset + (node_count * 36U)) {
+        return KAT_BLOB_ERR_TABLE;
+    }
+    for (index = 0U; index < node_count; ++index) {
+        const unsigned char *p = bytes + offset + (index * 36U);
+        uint32_t k;
+        node_op[index] = (uint32_t)p[0];
+        node_in_slot[index] = rd_u32(p + 4);
+        node_out_slot[index] = rd_u32(p + 8);
+        node_w_slot[index] = rd_u32(p + 12);
+        node_b_slot[index] = rd_u32(p + 16);
+        for (k = 0U; k < 4U; ++k) {
+            node_p[index][k] = rd_u32(p + 20U + (4U * k));
+        }
+    }
+    offset += node_count * 36U;
+    for (index = 0U; index < slot_count; ++index) {
+        const unsigned char *p = bytes + offset;
+        uint32_t k;
+        if (byte_len < offset + KAT_I8_SLOT_HEADER) {
+            return KAT_BLOB_ERR_SLOT;
+        }
+        slots[index].dtype = rd_u32(p + 16);
+        slots[index].rank = rd_u32(p + 20);
+        for (k = 0U; k < 4U; ++k) {
+            slots[index].dims[k] = rd_u32(p + 24U + (4U * k));
+        }
+        slots[index].byte_len = rd_u32(p + 40);
+        slots[index].quant_kind = p[44];
+        slots[index].scale = rd_f32(p + 48);
+        slots[index].zero_point = rd_i32(p + 52);
+        slots[index].scale_count = rd_u32(p + 56);
+        offset += KAT_I8_SLOT_HEADER;
+        slots[index].payload = offset;
+        if (byte_len < offset + slots[index].byte_len) {
+            return KAT_BLOB_ERR_SLOT;
+        }
+        offset += slots[index].byte_len;
+        slots[index].scales_at = offset;
+        if (byte_len < offset + (slots[index].scale_count * 4U)) {
+            return KAT_BLOB_ERR_SLOT;
+        }
+        offset += slots[index].scale_count * 4U;
+        if (slots[index].dtype != KAT_I8_DTYPE_F32 && slots[index].dtype != KAT_I8_DTYPE_I8 &&
+            slots[index].dtype != KAT_I8_DTYPE_I32) {
+            return KAT_BLOB_ERR_SLOT;
+        }
+    }
+    if (offset != byte_len) {
+        return KAT_BLOB_ERR_SLOT;
+    }
+
+    for (index = 0U; index < node_count; ++index) {
+        if (node_op[index] == 0U) { /* input */
+            input_slot = node_out_slot[index];
+        } else if (node_op[index] == 1U) { /* conv2d */
+            if (conv != NO_SLOT_I8) {
+                return KAT_BLOB_ERR_OP;
+            }
+            conv = index;
+        } else {
+            return KAT_BLOB_ERR_OP;
+        }
+    }
+    if (input_slot == NO_SLOT_I8 || conv == NO_SLOT_I8) {
+        return KAT_BLOB_ERR_OP;
+    }
+    w_slot = &slots[node_w_slot[conv]];
+    b_slot = &slots[node_b_slot[conv]];
+    out_slot = &slots[node_out_slot[conv]];
+
+    for (axis = 0U; axis < slots[input_slot].rank; ++axis) {
+        in_count *= slots[input_slot].dims[axis];
+    }
+    for (axis = 0U; axis < out_slot->rank; ++axis) {
+        out_count *= out_slot->dims[axis];
+    }
+    if (in_count != input_len || out_count != out_len || arena_len < out_count) {
+        return KAT_BLOB_ERR_ARENA;
+    }
+    if (w_slot->scale_count > 32U || b_slot->dims[0] > 32U) {
+        return KAT_BLOB_ERR_SLOT;
+    }
+    if (infr_shape_init(&in_shape, (uint8_t)slots[input_slot].rank, slots[input_slot].dims) != INFR_OK ||
+        infr_shape_init(&w_shape, (uint8_t)w_slot->rank, w_slot->dims) != INFR_OK ||
+        infr_shape_init(&out_shape, (uint8_t)out_slot->rank, out_slot->dims) != INFR_OK) {
+        return KAT_BLOB_ERR_SHAPE;
+    }
+    if (infr_tensor_init(&in_tensor, (void *)(uintptr_t)(const void *)input, INFR_DTYPE_I8, &in_shape) != INFR_OK ||
+        infr_tensor_init(&w_tensor, (void *)(uintptr_t)(const void *)(bytes + w_slot->payload), INFR_DTYPE_I8,
+                         &w_shape) != INFR_OK ||
+        infr_tensor_init(&out_tensor, arena, INFR_DTYPE_I8, &out_shape) != INFR_OK) {
+        return KAT_BLOB_ERR_SLOT;
+    }
+    in_tensor.quant.kind = INFR_QUANT_PER_TENSOR;
+    in_tensor.quant.scale = slots[input_slot].scale;
+    in_tensor.quant.zero_point = slots[input_slot].zero_point;
+    w_tensor.quant.kind = w_slot->quant_kind == 2U ? INFR_QUANT_PER_CHANNEL : INFR_QUANT_PER_TENSOR;
+    w_tensor.quant.scale = w_slot->scale;
+    w_tensor.quant.zero_point = w_slot->zero_point;
+    for (index = 0U; index < w_slot->scale_count; ++index) {
+        scales_local[index] = rd_f32(bytes + w_slot->scales_at + (4U * index));
+    }
+    if (w_slot->scale_count != 0U) {
+        w_tensor.quant.channel_scales = scales_local;
+    }
+    out_tensor.quant.kind = INFR_QUANT_PER_TENSOR;
+    out_tensor.quant.scale = out_slot->scale;
+    out_tensor.quant.zero_point = out_slot->zero_point;
+
+    for (index = 0U; index < b_slot->dims[0]; ++index) {
+        bias_local[index] = rd_i32(bytes + b_slot->payload + (4U * index));
+    }
+
+    params.kernel_h = node_p[conv][0];
+    params.kernel_w = node_p[conv][0];
+    params.stride_h = node_p[conv][1];
+    params.stride_w = node_p[conv][1];
+    params.pad_h = node_p[conv][2];
+    params.pad_w = node_p[conv][2];
+    params.in_channels = slots[input_slot].dims[3];
+    params.out_channels = out_slot->dims[3];
+    params.groups = node_p[conv][3] != 0U ? node_p[conv][3] : 1U;
+
+    status = infr_conv2d_i8(&in_tensor, &w_tensor, bias_local, &params, &out_tensor, workspace);
+    if (status != INFR_OK) {
+        return KAT_BLOB_ERR_OP;
+    }
+    memcpy(out, arena, out_count);
     return KAT_BLOB_OK;
 }

@@ -12,12 +12,17 @@
 #if defined(KAT_CHAIN_K2M)
 #include "kat_chain_k2m.h"
 #endif
+#if defined(KAT_CHAIN_K2I8)
+#include "kat_chain_k2i8.h"
+#endif
 #if defined(KAT_CHAIN_K3)
 #include "kat_chain_k3.h"
 #endif
 #if !defined(KAT_EMIT) && !defined(KAT_CHAIN_K3)
 #if defined(KAT_CHAIN_K2M)
 #include "generated/kat_k2m_image.h"
+#elif defined(KAT_CHAIN_K2I8)
+#include "generated/kat_k2i8_image.h"
 #elif defined(KAT_CHAIN_K2)
 #include "generated/kat_k2_image.h"
 #elif defined(KAT_CHAIN_K1)
@@ -76,6 +81,11 @@ typedef kat_k2m_result kat_result;
 #define kat_run kat_k2m_run
 #define kat_expect_len kat_k2m_expect_len
 #define kat_expect kat_k2m_expect
+#elif defined(KAT_CHAIN_K2I8)
+typedef kat_k2i8_result kat_result;
+#define kat_run kat_k2i8_run
+#define kat_expect_len kat_k2i8_expect_len
+#define kat_expect kat_k2i8_expect
 #elif defined(KAT_CHAIN_K2)
 typedef kat_k2_result kat_result;
 #define kat_run kat_k2_run
@@ -175,7 +185,7 @@ int main(int argc, char **argv) {
  * 自带启动代码 = M-profile ARM 与裸机 RISC-V。**不能用 `__arm__` 作判据**：AArch32
  * Linux 同样定义它——实测 armv7hf Linux 构建因此编成了裸机路径、不提供 `main`，
  * glibc 的 crt1.o 报 “undefined reference to main”。Linux 用户态有 C 运行时，走 `main()`。 */
-#if (defined(__arm__) && defined(__ARM_ARCH_PROFILE) && (__ARM_ARCH_PROFILE == 'M')) || \
+#if (defined(__arm__) && defined(__ARM_ARCH_PROFILE) && (__ARM_ARCH_PROFILE == 'M')) ||                                \
     (defined(__riscv) && !defined(__linux__))
 #define KAT_FREESTANDING 1
 #else
@@ -571,9 +581,7 @@ __asm__(".section .text.start,\"ax\"\n"
  *
  * 宿主与 Linux 用户态：启动已由 C 运行时完成，`main` 的返回值就是判定，由 shell
  * 转成退出码。 */
-int main(void) {
-    return kat_check();
-}
+int main(void) { return kat_check(); }
 
 #endif
 

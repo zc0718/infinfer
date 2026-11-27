@@ -111,8 +111,35 @@ typedef struct kat_blob_view {
  *            遍历槽表时就会检查。
  * @since 0.1.0
  */
-int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *input, uint32_t input_len,
-                 float *arena, uint32_t arena_len, infr_workspace *workspace, kat_blob_view *view);
+int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *input, uint32_t input_len, float *arena,
+                 uint32_t arena_len, infr_workspace *workspace, kat_blob_view *view);
+
+/**
+ * @brief [en] Run a **v3** blob whose only operator is `input -> conv2d -> output`, all int8.
+ * @brief [zh] 跑一张 **v3** blob，唯一算子是 `input -> conv2d -> output`、全 int8。
+ * @param bytes [en] The blob's bytes; must be version 3.
+ * @param bytes [zh] blob 的字节；必须是版本 3。
+ * @param input [en] The activation bytes, element count matching the input slot.
+ * @param input [zh] 激活字节，元素数须与输入槽一致。
+ * @param arena [en] Byte-addressed scratch. An int8 slot is one byte per element, so this is
+ *            sized in bytes and only has to hold the output slot: the weights and the bias are
+ *            constants inside the blob's own image.
+ * @param arena [zh] 按字节寻址的临时空间。int8 槽每元素一字节，所以这里按字节定尺寸，且只需要
+ *            装下输出槽——权重与偏置是常量，住在 blob 自己的映像里。
+ * @param out [en] Receives the output slot's bytes.
+ * @param out [zh] 接收输出槽的字节。
+ * @return KAT_BLOB_OK, or one of the negative codes above naming the stage that refused.
+ * @note [en] A separate entry point rather than a branch inside `kat_blob_run`, for the same
+ *            reason the C++ twin has a separate reader: the fp32 executor accounts for its arena
+ *            in floats, and an int8 arena is bytes. Two accounting systems in one function would
+ *            mean one of them is wrong on some path.
+ * @note [zh] 单独一个入口，而不是在 `kat_blob_run` 里加分支，理由与 C++ 那份单独一个读取器
+ *            相同：fp32 执行器按 float 记账，而 int8 的 arena 是字节。两套记账塞进一个函数，
+ *            总有一条路径会算错。
+ * @since 0.2.0
+ */
+int kat_blob_run_i8(const unsigned char *bytes, uint32_t byte_len, const int8_t *input, uint32_t input_len,
+                    unsigned char *arena, uint32_t arena_len, infr_workspace *workspace, int8_t *out, uint32_t out_len);
 
 #ifdef __cplusplus
 }

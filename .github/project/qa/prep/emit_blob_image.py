@@ -39,8 +39,14 @@ def main() -> int:
         print(f"emit_blob_image: {args.blob} is not an INFRKAT blob", file=sys.stderr)
         return 1
     (version,) = [int.from_bytes(data[8:12], "little")]
-    if version != 2:
-        print(f"emit_blob_image: unsupported version {version} (expected 2)", file=sys.stderr)
+    # Both versions travel the same way: this file's job is bytes in, bytes out, so it must not
+    # grow a second opinion about which versions exist. The readers are the ones that care.
+    #
+    # 两个版本走同一条路：本文件的职责是字节进、字节出，所以它不该长出"哪些版本存在"的第二套
+    # 判断。在乎版本的是读取器。
+    if version not in (blobfmt.VERSION_V2, blobfmt.VERSION):
+        print(f"emit_blob_image: unsupported version {version} "
+              f"(expected {blobfmt.VERSION_V2} or {blobfmt.VERSION})", file=sys.stderr)
         return 1
 
     upper = args.name.upper()
@@ -52,8 +58,19 @@ def main() -> int:
     # 这里的 arena 大小**从 blob 推出来**，不是手写的：两份执行器各自算同一个数，KAT 在
     # 每个目标上断言两者相等。把计划值烘进来，"计划说 180 KB"才变成一条能变红的断言能守住
     # 的东西。
-    arena = blobfmt.plan_arena(*blobfmt.layout(data)[:2])
-    counts, refs, ops = blobfmt.layout(data)
+    # A v3 blob is sized in bytes because an int8 slot is one byte per element; a v2 blob is sized
+    # in floats because every slot in it is fp32. The downstream arithmetic is the same, only the
+    # unit changes -- which is why this reads the version instead of assuming one.
+    #
+    # v3 blob 按字节定尺寸（int8 槽每元素一字节），v2 按 float（里面每个槽都是 fp32）。下游算
+    # 法相同，只是单位变了——所以这里读版本，而不是假定。
+    if version == blobfmt.VERSION:
+        counts, _dtypes, refs, ops = blobfmt.layout_bytes(data)
+        unit = "bytes"
+    else:
+        counts, refs, ops = blobfmt.layout(data)
+        unit = "floats"
+    arena = blobfmt.plan_arena(counts, refs)
     in_floats, out_floats = blobfmt.endpoints(counts, refs, ops)
     # FNV-1a folded to 8 bits. `blob_graph.c` recomputes it over the bytes it actually
     # parsed, so a stale `.incbin` (right length, wrong file) is caught on the target
