@@ -88,7 +88,7 @@
     "test_package/conanfile.py": "28ca75ff819233055d95334554904c6b1c6ea1eb0665d08ccece714aaac6bf39",
     "CMakeLists.txt": "65cbd4dddf3c0879bd39e9ea4f9f4e635a91e2d4851d5ee30eece008c18dc7b1"
   },
-  "tolerance_budget": 7,
+  "tolerance_budget": 8,
   "tolerated": [
     {
       "path": ".github/workflows/ci-orchestrator.yml",
@@ -131,6 +131,12 @@
       "patch": ".github/project/patches/scaffold-forks.patch",
       "why": "the blueprint describes the framework's dependency and compile-option machinery; leaving it silent about the two tracks would make the framework's own description inconsistent with what it now does",
       "exit": "drop with the other entries when upstream documents the mechanism itself"
+    },
+    {
+      "path": ".github/workflows/full-test-automation.yml",
+      "why": "the reconciler required both legs to instrument the same translation units. A project with per-architecture tiers builds src/kernel/x86 on Linux and src/kernel/arm_neon on macOS, so the sets differ by construction and the job failed on a correct tree (measured: 12 files each side). The patch reads coverage.platform_scopes from metadata.json and subtracts the declared prefixes, so every other difference still fails.",
+      "exit": "drop this entry and its patch hunk when upstream subtracts declared platform scopes itself; then put tolerance_budget back to 7",
+      "patch": ".github/project/patches/scaffold-forks.patch"
     }
   ],
   "owned_dirs": [

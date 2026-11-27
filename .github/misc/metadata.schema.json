@@ -70,6 +70,11 @@
           "items": { "type": "string" },
           "description": "Path prefixes counted as the core scope, relative to the repository root."
         },
+        "platform_scopes": {
+          "type": "object",
+          "description": "Path prefixes only one platform can instrument, keyed by the runner's OS name. A tier that builds only on one architecture (src/kernel/x86, src/kernel/arm_neon) makes the legs' translation-unit sets differ by construction; the reconciler subtracts these prefixes before comparing, so every other difference still fails.",
+          "additionalProperties": { "type": "array", "items": { "type": "string" } }
+        },
         "floors": {
           "type": "object",
           "description": "Keyed by the runner's OS name as GitHub reports it (Linux, macOS, Windows).",

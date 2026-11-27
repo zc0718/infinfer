@@ -18,10 +18,8 @@
   "activate_code_coverage": true,
   "coverage": {
     "core_scopes": ["src/runtime/", "src/kernel/scalar/"],
-    "floors": {"Linux": {
-  "core": 91.0,
-  "all": 91.0
-}},
+    "platform_scopes": {"Linux": ["src/kernel/x86/"], "macOS": ["src/kernel/arm_neon/"]},
+    "floors": {"Linux": {"core": 91.0, "all": 91.0}},
     "default_floor": {"core": 80.0, "all": 70.0}
   },
   "is_shared": false,

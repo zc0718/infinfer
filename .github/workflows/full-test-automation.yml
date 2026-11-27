@@ -214,6 +214,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # The declaration, not the code: which prefixes only one platform can instrument comes from
+      # metadata.json, so the comparison below stays data-driven instead of being relaxed.
+      - name: Check out the declaration
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: metadata.json
+
       - name: Download every leg's coverage report
         uses: actions/download-artifact@v8
         with:
@@ -239,12 +246,30 @@ jobs:
 
           labels = sorted(legs)
           tus = lambda label: {f for f in legs[label]['data']['files'] if f.startswith(TU_ROOTS)}
-          base, base_tus = labels[0], tus(labels[0])
+
+          # A tier that only builds on one architecture (`src/kernel/x86`, `src/kernel/arm_neon`)
+          # makes the raw sets differ by construction. `coverage.platform_scopes` names those
+          # prefixes per platform, so the comparison keeps its teeth for every other file instead
+          # of being relaxed to "whatever the two legs happen to produce".
+          meta = json.loads(pathlib.Path('metadata.json').read_text(encoding='utf-8'))
+          declared = (meta.get('coverage') or {}).get('platform_scopes') or {}
+          platform = lambda label: ('Linux' if 'ubuntu' in label else
+                                    'macOS' if 'macos' in label else
+                                    'Windows' if 'windows' in label else '')
+          own = lambda label: tuple(declared.get(platform(label)) or ())
+          shared = lambda label: {f for f in tus(label) if not f.startswith(own(label))}
+
+          base = labels[0]
+          base_tus = shared(base)
           for other in labels[1:]:
-              if base_tus != tus(other):
+              if base_tus != shared(other):
                   print(f'::error::{base} and {other} instrumented different translation units: '
-                        f'{base} only {sorted(base_tus - tus(other))}, {other} only {sorted(tus(other) - base_tus)}')
+                        f'{base} only {sorted(base_tus - shared(other))}, '
+                        f'{other} only {sorted(shared(other) - base_tus)}')
                   sys.exit(1)
+          for label in labels:
+              if own(label):
+                  print(f'{label}: subtracted {len(own(label))} declared platform scope(s)')
           if not base_tus:
               print(f'::warning::{base} reports no file under {TU_ROOTS}, so the unit check was vacuous')
 

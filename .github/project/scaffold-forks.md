@@ -123,3 +123,19 @@ shutil.copy2(v1, coverage_folder + sep + _get_file_name(v1))   # basename only
 腿各跑一次（默认腿 174 tests）。
 
 **退出条件.** 上游用同样方式表达条件依赖（一个条目含开关、目标与来源）时移除。
+
+## F6 · `.github/workflows/full-test-automation.yml`：和解器按声明扣除平台专属前缀（2026-11-27）
+
+**改哪儿.** `reconcile` job 里加一步 checkout（只为读 `metadata.json`），比较前把
+`coverage.platform_scopes[<平台>]` 列出的前缀从两腿的 TU 集合里减掉；其余任何差异仍然判红。
+
+**为什么它属于模板而不是本项目.** 上游把“两腿 instrument 同一批 TU”当成对所有项目都成立的事实，
+但只要有按架构分 tier 的实现（本项目：`src/kernel/x86/` 只在 Linux 编，`src/kernel/arm_neon/` 只在
+macOS 编），正确构建就一定红。实测两侧各 12 个文件。把“哪些前缀属于哪个平台”变成 metadata 里的
+声明，判据就从“两腿必须一样”变成“两腿在共享面上必须一样”——后者才是这条检查真正想守的东西。
+
+**怎么验证.** 本地 `python3 .github/project/ci.sh` 全绿（scaffold gate 校验本文件的上游 sha 与
+patch 一致性）；在线跑一次 Tests 腿，`Reconcile coverage` 绿且摘要里出现
+`subtracted N declared platform scope(s)`。
+
+**退出条件.** 上游自己按声明扣除平台专属前缀时移除。
