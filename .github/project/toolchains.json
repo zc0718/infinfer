@@ -161,5 +161,50 @@
       "why": "template-owned benchmark driver: it reaches for system cross compilers when it runs the on-board bench",
       "exit": "authorised scaffold edit, or keep it and state in the release notes that the bench path (never the shipped library) uses a host compiler"
     }
+  ],
+  "tool_sources": [
+    {
+      "name": "arm-toolchain",
+      "kind": "toolchain",
+      "obtain": "house conan package (arm-toolchain/11.3.rel1)",
+      "provides": [
+        "arm-none-eabi-gcc"
+      ],
+      "env": "INFR_ISA_ARM_NONE_EABI_GCC_CC",
+      "used_by": [
+        "isa_gate.py (arm_m tier)",
+        "run_kat.py (baremetal chains)",
+        "cross builds"
+      ],
+      "if_absent": "the checks that need it skip with this reason; a host build never asks for it"
+    },
+    {
+      "name": "rv-toolchain",
+      "kind": "toolchain",
+      "obtain": "house conan package (riscv64 toolchain) or ~/Projects/HeT-FTI/rv-toolchain",
+      "provides": [
+        "riscv64-unknown-elf-gcc"
+      ],
+      "env": "INFR_ISA_RISCV64_UNKNOWN_ELF_GCC_CC",
+      "used_by": [
+        "isa_gate.py (rvv tier)",
+        "run_kat.py (rv64 chains)"
+      ],
+      "if_absent": "the checks that need it skip with this reason"
+    },
+    {
+      "name": "qemu",
+      "kind": "tool",
+      "obtain": "apt: qemu-system-arm / qemu-system-misc / qemu-user",
+      "provides": [
+        "qemu-system-arm"
+      ],
+      "env": "",
+      "used_by": [
+        "qa/kat/run_kat.py (target legs)",
+        "the board matrix"
+      ],
+      "if_absent": "target legs are skipped with this reason; the host legs still run"
+    }
   ]
 }

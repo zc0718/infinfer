@@ -144,11 +144,22 @@ def resolve_tool(spec):
     on_path = shutil.which(binary)
     if on_path:
         return on_path, on_path.replace("-gcc", "-objdump"), "PATH"
+    # The register is the declared answer; the cache glob below is the fallback for a toolchain
+    # a host has but this file has not been told about yet. Asking the register first is what
+    # turns "it worked on my machine" into "package-sources.json says where it comes from".
+    try:
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+        import sources  # noqa: E402  (sibling module, path set above)
+        found, how, _absent = sources.resolve_binary(binary)
+        if found:
+            return found, found.replace("-gcc", "-objdump"), how
+    except Exception:  # noqa: BLE001 -- a resolver problem must not break the gate
+        pass
     cache = pathlib.Path.home() / ".conan2/p"
     for pattern in (f"b/*/p/bin/{binary}", f"*/p/bin/{binary}"):
         for hit in sorted(cache.glob(pattern)):
-            return str(hit), str(hit).replace("-gcc", "-objdump"), "~/.conan2 cache"
-    return None, None, f"PATH, ${{{env_key}}}, ~/.conan2 cache"
+            return str(hit), str(hit).replace("-gcc", "-objdump"), "~/.conan2 cache (undeclared)"
+    return None, None, f"PATH, ${{{env_key}}}, package-sources.json, ~/.conan2 cache"
 
 
 def check_autovec(data, workdir, compiler="cc"):

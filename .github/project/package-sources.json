@@ -13,7 +13,8 @@
     "bound to one configuration and either skipped or, worse, linked anyway on a foreign host.",
     "",
     "An absent local recipe is not an error: the leg that needs it says so and is skipped, which",
-    "is what lets a clean clone build."
+    "is what lets a clean clone build.",
+    "Compilers and emulators are declared in toolchains.json:tool_sources -- they are governed by the toolchain rules, not by the package rules."
   ],
   "schema": 1,
   "packages": [
