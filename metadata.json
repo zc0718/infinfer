@@ -110,7 +110,17 @@
   "trigger_tests": true,
   "saving_tests_log": true,
   "enable_python_bindings": false,
-  "with_cmsis_nn": false,
+  "compile_options": {
+    "with_cmsis_nn": {
+      "default": false,
+      "requirement": "cmsis-nn",
+      "dependency_key": "cmsis-nn",
+      "defines": [
+        "INFR_WITH_CMSIS_NN"
+      ],
+      "why": "optional vendor backend for Cortex-M; off by default so a clean clone needs no extra remote"
+    }
+  },
   "on_board_validation": {
     "os": [
       "Linux"

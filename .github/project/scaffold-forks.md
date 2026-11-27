@@ -23,48 +23,44 @@
 
 ---
 
-## F2 · `conanfile.py`：编译期开关 `with_cmsis_nn`（2026-11-27）
+## F2 · `conanfile.py`：编译期选项的**通用注入点**（2026-11-27）
 
-**改哪儿.** 五处：`options`/`default_options` 增加 `with_cmsis_nn`；新增 `_with_cmsis_nn()`
-（读 **option** 而不是 metadata，这样 `-o with_cmsis_nn=True` 能覆盖文件里的默认值）；
-`requirements()` 关掉时跳过 `cmsis-nn`；`generate()` 把 `WITH_CMSIS_NN` 交给 toolchain；
-`_preparing_deps_links()` 关掉时把 `cmsis-nn` 从链目标里摘掉。
-补丁：`patches/conanfile-with-cmsis-nn-option.patch`（5 个 hunk）。
+**改哪儿.** 新增模块级 `_COMPILE_OPTIONS = _metadata.get('compile_options') or {}`；
+`options`/`default_options` 由这张表生成；新增 `_compile_option_enabled()` 与 `_gated_requirement()`；
+`requirements()` 跳过被关闭选项门控的包；`generate()` 把开启选项的 `defines` 拼成 `COMPILE_DEFINES`
+交给 toolchain；`_preparing_deps_links()` 在分叉之前按表摘掉关闭选项的 `dependency_key`。
 
-**为什么.** 模板把功能开关建模成 metadata 布尔值，但**没有任何机制让一个依赖变成条件的**：
-`requirements()` 无条件 `self.requires(req)`。于是"可选厂商后端"只能二选一——要么永远依赖
-CMSIS-NN（Cortex-M 之外的每个目标都被迫下载），要么永远不接。厂商后端又恰恰只对 MCU 有意义，
-所以这个开关是它存在的前提。
+**为什么.** 模板把功能开关建模成 metadata 布尔值，但**没有任何机制让一个依赖变成条件的**，
+也没有"开关贡献一个编译定义"的位置。于是任何需要可选依赖的项目只能把厂商名硬编码进
+`conanfile.py`——**私域需求污染上游**，这种补丁上游不会收。改成数据驱动后，本文件只认识
+`compile_options` 这张表的**形状**，不认识表里任何一行。
 
-**怎么验证.** ① 关（默认）：`conan create . -s build_type=Release` 不解析 cmsis-nn，
-174 tests 绿；② 开：`conan create . -s build_type=Release -o with_cmsis_nn=True` 解析并链接
-`cmsis-nn/8.0.0`，`src/backend/cmsis_nn.c` 用真实头文件编译，覆盖率 91.9%；
-③ 补丁忠实性：`patch -p1` 打到上游 v0.3.11 原字节后 `diff -q` 与当前文件相同。
+**怎么验证.** ① 补丁忠实性：`patch -p1` 打到上游 v0.3.11 后与当前三文件逐字节相同；
+② 关（默认）：`conan create .` 不解析 `cmsis-nn`，174 tests 绿；
+③ 开：`conan create . -o with_cmsis_nn=True` 解析并链接 `cmsis-nn/8.0.0`，覆盖率 91.9%；
+④ `grep -c cmsis conanfile.py` 必须为 **0**——机制里不许出现任何厂商名。
 
-**退出条件.** 上游 v0.4+ 提供"由 metadata 驱动的条件依赖"机制后，删本条、删补丁、
-删 `tolerance_budget` 里为它加的那一位。
+**退出条件.** 上游提供等价机制后删本条与补丁中对应部分；`compile_options` 的数据留在
+`metadata.json`（那是本工程自己的面，不是分叉）。
 
-## F3 · `CMakeLists.txt`：`INFR_WITH_CMSIS_NN` 跟随开关（2026-11-27）
+## F3 · `CMakeLists.txt`：消费 `COMPILE_DEFINES`（2026-11-27）
 
-**改哪儿.** `add_library(${LIB_NAME}_c ...)` 之后增加一段 `if(WITH_CMSIS_NN)` /
-`target_compile_definitions(... PRIVATE INFR_WITH_CMSIS_NN)`。
-补丁：`patches/CMakeLists-with-cmsis-nn-option.patch`（1 个 hunk）。
+**改哪儿.** `add_library(${LIB_NAME}_c ...)` 之后增加 `if(DEFINED COMPILE_DEFINES ...)` →
+`target_compile_definitions(${LIB_NAME}_c PRIVATE ${COMPILE_DEFINES})`。
 
-**为什么.** `src/backend/cmsis_nn.c` 整份内容都在 `#if defined(INFR_WITH_CMSIS_NN)` 里，
-关闭时必须编译成**零符号**；这需要一个能跟着功能开关走的编译定义，而模板的钩子只覆盖
-`ENABLE_COVERAGE` 这类固定变量，没有"跟随 metadata/option 的定义"的位置。
-变量走 Conan toolchain（不是让 CMake 自己去读 metadata），否则 `-o` 覆盖到不了编译器。
+**为什么.** 开关必须在**编译期**决定 `src/backend/cmsis_nn.c` 是否编译出内容；而这个定义必须
+跟着 Conan option 走（`-o` 覆盖才有效），所以值来自 toolchain 变量，CMake 自己不去读 metadata。
 
-**怎么验证.** 同 F2 的两条构建；另外 `python3 .github/project/vendor_gate.py` 断言关闭时
-`nm` 里没有该后端符号、打开时有（V1/V2）。
+**怎么验证.** 同 F2 的两条构建；并 `python3 .github/project/vendor_gate.py` 断言关闭时 `nm`
+里没有该后端符号、打开时有。
 
-**退出条件.** 与 F2 同批移除——上游提供编译选项钩子后，两条一起消失。
+**退出条件.** 与 F2 同批移除。
 
 ## F1 · `test_package/conanfile.py`：覆盖率收集按对象目录分槽（2026-11-26）
 
 **改哪儿.** `_code_coverage_gcc()` 里把 `.gcda`/`.gcno` 复制进收集目录的那两行，从"按 basename
 平铺"改成"每个对象目录一个槽位"；新增模块级 `_slot_name()`（对象目录的 sha256 前 16 位）。
-补丁：`patches/test_package-conanfile-coverage-slots.patch`（43 行，`@@ -16,6 +16,20 @@` 与 `@@ -481,8 +495,14 @@` 两处）。
+补丁：与 F2/F3 同一份 `patches/scaffold-forks.patch`（本仓只留一份补丁文件，第一节即本项）。
 
 **为什么.** 模板的收集器把每个 `.gcda`/`.gcno` **按 basename** 复制到同一个目录：
 

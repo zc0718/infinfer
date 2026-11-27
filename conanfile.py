@@ -100,6 +100,14 @@ def _pragma_in_import(x: list[str]) -> tuple[bool, int]:
     return _has_pragma, _idx
 
 
+# Compile-time options are declared as data, not as code: `metadata.json:compile_options` maps
+# an option name to what it gates -- the requirement it switches on, the dependency bucket key to
+# drop while it is off, and the compile definitions it contributes. This scaffold knows no
+# particular option; a project that needs one fills the table, which keeps its own requirements
+# out of this file.
+_COMPILE_OPTIONS = _metadata.get('compile_options') or {}
+
+
 class PackageRecipe(ConanFile):
 
     # header-only packages must not advertise a compiled-library identity
@@ -107,9 +115,11 @@ class PackageRecipe(ConanFile):
 
     # Binary configuration
     settings = "os", "compiler", "build_type", "arch"
-    options = {"shared": [True, False], "fPIC": [True, False], "with_cmsis_nn": [True, False]}
-    default_options = {"shared": _metadata.get('is_shared'), "fPIC": True,  # inherit from config
-                       "with_cmsis_nn": _metadata.get('with_cmsis_nn')}
+    options = {"shared": [True, False], "fPIC": [True, False]}
+    options.update({_name: [True, False] for _name in _COMPILE_OPTIONS})
+    default_options = {"shared": _metadata.get('is_shared'), "fPIC": True}  # inherit from config
+    default_options.update({_name: bool(_spec.get('default', False))
+                            for _name, _spec in _COMPILE_OPTIONS.items()})
 
     # Sources live beside this recipe; api/* rides along so the pybind11 module is part of the package.
     exports_sources = ["CMakeLists.txt", "src/*", "include/*", "api/*", METADATA_FILENAME, "LICENSE"]
@@ -254,10 +264,16 @@ class PackageRecipe(ConanFile):
     def _python_bindings_enabled(self):
         return bool(self.meta.get("enable_python_bindings"))
 
-    def _with_cmsis_nn(self):
-        """Read from the option, not from metadata: an `-o with_cmsis_nn=True` run has to be
-        able to override what the file says, and the default still comes from the file."""
-        return bool(self.options.with_cmsis_nn)
+    def _compile_option_enabled(self, name):
+        """Read the option rather than the metadata default, so `-o <name>=True` overrides it."""
+        return bool(getattr(self.options, name, False))
+
+    def _gated_requirement(self, package):
+        """Whether an option gates `package`: None when none does, else that option's state."""
+        for _name, _spec in _COMPILE_OPTIONS.items():
+            if str(_spec.get('requirement', '')).lower() == package.lower():
+                return self._compile_option_enabled(_name)
+        return None
 
     def _baremetal_whitelist(self):
         """Lowercase set: ConanCenter only moved to lowercase names in 2026 H1, so `OpenCV/4.x.x` is legitimate."""
@@ -274,16 +290,7 @@ class PackageRecipe(ConanFile):
                 continue
             if _pkg == 'pybind11' and (not self._python_bindings_enabled() or cross_building(self)):
                 continue
-            if _pkg == 'cmsis-nn':
-                if not self._with_cmsis_nn():
-                    continue
-                # Visible on purpose. The vendor's objects end up inside this static
-                # archive, so a consumer that links us without linking CMSIS-NN would get
-                # undefined `arm_*` symbols; hiding the requirement would produce exactly
-                # that. (Tried `visible=False` first: the scaffold's component_requires then
-                # rejects the package as not a direct requirement, and more importantly the
-                # hiding itself would be wrong.)
-                self.requires(req)
+            if self._gated_requirement(_pkg) is False:
                 continue
             self.requires(req)
 
@@ -294,9 +301,10 @@ class PackageRecipe(ConanFile):
         tc = CMakeToolchain(self)
         tc.variables['C_DEPS'], tc.variables['CPP_DEPS'] = self._preparing_deps_links()
         tc.variables['ENABLE_COVERAGE'] = self._coverage_enabled()
-        # Passed as a toolchain variable rather than read from metadata by CMake, so that
-        # `-o with_cmsis_nn=True` reaches the compiler as well.
-        tc.variables['WITH_CMSIS_NN'] = self._with_cmsis_nn()
+        tc.variables['COMPILE_DEFINES'] = ';'.join(
+            _define
+            for _name, _spec in _COMPILE_OPTIONS.items() if self._compile_option_enabled(_name)
+            for _define in (_spec.get('defines') or ()))
 
         if cross_building(self) and self.settings.os == "baremetal":  # cross build to MCU
             tc.variables["CMAKE_TRY_COMPILE_TARGET_TYPE"] = "STATIC_LIBRARY"
@@ -310,6 +318,14 @@ class PackageRecipe(ConanFile):
         _c = {k: v if k not in _common.keys() else list(set(v).union(set(_common.get(k)))) for k, v in _c.items()}
         _cpp = {k: v if k not in _common.keys() else list(set(v).union(set(_common.get(k)))) for k, v in _cpp.items()}
 
+        for _name, _spec in _COMPILE_OPTIONS.items():
+            if self._compile_option_enabled(_name):
+                continue
+            _key = _spec.get('dependency_key')
+            if _key:
+                for _bucket in (_common, _c, _cpp, _infra):
+                    _bucket.pop(_key, None)
+
         if cross_building(self) and self.settings.os == 'baremetal':
             _whitelist = self._baremetal_whitelist()
             _c, _cpp, _common, _infra = [{k: v for k, v in z.items() if k.lower() in _whitelist}
@@ -318,8 +334,6 @@ class PackageRecipe(ConanFile):
             _infra.pop("GTest", None)
             if not self._python_bindings_enabled() or cross_building(self):
                 _infra.pop("pybind11", None)
-            if not self._with_cmsis_nn():
-                _c.pop("cmsis-nn", None)
 
         _infra_deps = [f"{k}@{' '.join(v)}" for k, v in _infra.items()]
         _c_deps = [f"{k}@{' '.join(v)}" for k, v in {**_common, **_c}.items()]

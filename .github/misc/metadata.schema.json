@@ -7,6 +7,22 @@
   "required": ["name", "version", "scaffold", "build_type", "dependencies", "workflow_triggers"],
   "additionalProperties": false,
   "properties": {
+    "compile_options": {
+      "type": "object",
+      "description": "Compile-time options as data: the key is the Conan option name, the value says what it gates.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["defines"],
+        "additionalProperties": false,
+        "properties": {
+          "default": { "type": "boolean" },
+          "requirement": { "type": "string" },
+          "dependency_key": { "type": "string" },
+          "defines": { "type": "array", "items": { "type": "string" } },
+          "why": { "type": "string" }
+        }
+      }
+    },
     "name": { "type": "string", "minLength": 1 },
     "target": { "type": "string" },
     "version": { "type": "string" },

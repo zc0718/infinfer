@@ -1,0 +1,163 @@
+--- a/test_package/conanfile.py
++++ b/test_package/conanfile.py
+@@ -16,6 +16,20 @@
+ _get_file_name = (lambda x: x.split(sep)[-1])
+ 
+ 
++def _slot_name(object_path: str) -> str:
++    """Short, stable directory name for one object directory.
++
++    The coverage collector copies every `.gcda`/`.gcno` pair into a directory of its own, keyed by
++    the object's directory. Flattening them by basename -- the template's behaviour -- makes two
++    translation units that share a file name (`fc.c` in two tiers) overwrite each other, and the
++    loser vanishes from the report with no diagnostic. Hashing the directory keeps the pair
++    together, keeps the name filesystem-safe, and stays stable across runs.
++    """
++    import hashlib
++
++    return 'o' + hashlib.sha256(os.path.dirname(object_path).encode('utf-8')).hexdigest()[:16]
++
++
+ def _lcov_ignore_errors() -> str:
+     """Error classes to skip, named per lcov version: geninfo 2.x validates the list, 1.x rejects unknown names."""
+     try:
+@@ -478,9 +492,17 @@
+ 
+         coverage_folder = self._coverage_folder()
+ 
++        # One directory per object directory: the pair must stay together (gcov matches a `.gcda`
++        # to its `.gcno` by name in the same directory), but two sources that share a basename --
++        # `src/kernel/scalar/fc.c` and `src/kernel/x86/fc.c` -- must not land on the same path, or
++        # the later copy silently replaces the earlier one and that translation unit disappears
++        # from the report. The slot name is a hash of the object's directory, so it is stable
++        # across runs and short enough for any filesystem.
+         for v1, v2 in zip(_gcda, _gcno):
+-            shutil.copy2(v1, coverage_folder + sep + _get_file_name(v1))
+-            shutil.copy2(v2, coverage_folder + sep + _get_file_name(v2))
++            _slot = coverage_folder + sep + _slot_name(v1)
++            os.makedirs(_slot, exist_ok=True)
++            shutil.copy2(v1, _slot + sep + _get_file_name(v1))
++            shutil.copy2(v2, _slot + sep + _get_file_name(v2))
+ 
+         # `source` = deleted ucov_ copies; the line-range classes are named per lcov release (see _lcov_ignore_errors).
+         cmd1 = ['lcov', '--directory', coverage_folder, '--capture', '--output-file',
+--- a/conanfile.py
++++ b/conanfile.py
+@@ -100,6 +100,14 @@
+     return _has_pragma, _idx
+ 
+ 
++# Compile-time options are declared as data, not as code: `metadata.json:compile_options` maps
++# an option name to what it gates -- the requirement it switches on, the dependency bucket key to
++# drop while it is off, and the compile definitions it contributes. This scaffold knows no
++# particular option; a project that needs one fills the table, which keeps its own requirements
++# out of this file.
++_COMPILE_OPTIONS = _metadata.get('compile_options') or {}
++
++
+ class PackageRecipe(ConanFile):
+ 
+     # header-only packages must not advertise a compiled-library identity
+@@ -108,7 +116,10 @@
+     # Binary configuration
+     settings = "os", "compiler", "build_type", "arch"
+     options = {"shared": [True, False], "fPIC": [True, False]}
++    options.update({_name: [True, False] for _name in _COMPILE_OPTIONS})
+     default_options = {"shared": _metadata.get('is_shared'), "fPIC": True}  # inherit from config
++    default_options.update({_name: bool(_spec.get('default', False))
++                            for _name, _spec in _COMPILE_OPTIONS.items()})
+ 
+     # Sources live beside this recipe; api/* rides along so the pybind11 module is part of the package.
+     exports_sources = ["CMakeLists.txt", "src/*", "include/*", "api/*", METADATA_FILENAME, "LICENSE"]
+@@ -253,6 +264,17 @@
+     def _python_bindings_enabled(self):
+         return bool(self.meta.get("enable_python_bindings"))
+ 
++    def _compile_option_enabled(self, name):
++        """Read the option rather than the metadata default, so `-o <name>=True` overrides it."""
++        return bool(getattr(self.options, name, False))
++
++    def _gated_requirement(self, package):
++        """Whether an option gates `package`: None when none does, else that option's state."""
++        for _name, _spec in _COMPILE_OPTIONS.items():
++            if str(_spec.get('requirement', '')).lower() == package.lower():
++                return self._compile_option_enabled(_name)
++        return None
++
+     def _baremetal_whitelist(self):
+         """Lowercase set: ConanCenter only moved to lowercase names in 2026 H1, so `OpenCV/4.x.x` is legitimate."""
+         return {str(_name).lower() for _name in (self.meta.get('baremetal_white_list') or ())}
+@@ -268,6 +290,8 @@
+                 continue
+             if _pkg == 'pybind11' and (not self._python_bindings_enabled() or cross_building(self)):
+                 continue
++            if self._gated_requirement(_pkg) is False:
++                continue
+             self.requires(req)
+ 
+     def layout(self):
+@@ -277,6 +301,10 @@
+         tc = CMakeToolchain(self)
+         tc.variables['C_DEPS'], tc.variables['CPP_DEPS'] = self._preparing_deps_links()
+         tc.variables['ENABLE_COVERAGE'] = self._coverage_enabled()
++        tc.variables['COMPILE_DEFINES'] = ';'.join(
++            _define
++            for _name, _spec in _COMPILE_OPTIONS.items() if self._compile_option_enabled(_name)
++            for _define in (_spec.get('defines') or ()))
+ 
+         if cross_building(self) and self.settings.os == "baremetal":  # cross build to MCU
+             tc.variables["CMAKE_TRY_COMPILE_TARGET_TYPE"] = "STATIC_LIBRARY"
+@@ -290,6 +318,14 @@
+         _c = {k: v if k not in _common.keys() else list(set(v).union(set(_common.get(k)))) for k, v in _c.items()}
+         _cpp = {k: v if k not in _common.keys() else list(set(v).union(set(_common.get(k)))) for k, v in _cpp.items()}
+ 
++        for _name, _spec in _COMPILE_OPTIONS.items():
++            if self._compile_option_enabled(_name):
++                continue
++            _key = _spec.get('dependency_key')
++            if _key:
++                for _bucket in (_common, _c, _cpp, _infra):
++                    _bucket.pop(_key, None)
++
+         if cross_building(self) and self.settings.os == 'baremetal':
+             _whitelist = self._baremetal_whitelist()
+             _c, _cpp, _common, _infra = [{k: v for k, v in z.items() if k.lower() in _whitelist}
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -204,6 +204,11 @@
+ 
+   # dynamically create lib targets
+   add_library(${LIB_NAME}_c ${BUILD_TYPE} ${C_SOURCES})
++  # Compile definitions contributed by metadata-declared options; the value arrives
++  # from the Conan toolchain, so `-o <option>=True` reaches the compiler.
++  if(DEFINED COMPILE_DEFINES AND NOT COMPILE_DEFINES STREQUAL "")
++    target_compile_definitions(${LIB_NAME}_c PRIVATE ${COMPILE_DEFINES})
++  endif()
+   add_library(${LIB_NAME}_cpp ${BUILD_TYPE} ${CPP_SOURCES} ${MODULE_FILES})
+   add_library(${LIB_NAME} INTERFACE)
+ 
+--- a/.github/misc/metadata.schema.json
++++ b/.github/misc/metadata.schema.json
+@@ -7,6 +7,22 @@
+   "required": ["name", "version", "scaffold", "build_type", "dependencies", "workflow_triggers"],
+   "additionalProperties": false,
+   "properties": {
++    "compile_options": {
++      "type": "object",
++      "description": "Compile-time options as data: the key is the Conan option name, the value says what it gates.",
++      "additionalProperties": {
++        "type": "object",
++        "required": ["defines"],
++        "additionalProperties": false,
++        "properties": {
++          "default": { "type": "boolean" },
++          "requirement": { "type": "string" },
++          "dependency_key": { "type": "string" },
++          "defines": { "type": "array", "items": { "type": "string" } },
++          "why": { "type": "string" }
++        }
++      }
++    },
+     "name": { "type": "string", "minLength": 1 },
+     "target": { "type": "string" },
+     "version": { "type": "string" },

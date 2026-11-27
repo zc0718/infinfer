@@ -204,10 +204,10 @@ else()  # general package
 
   # dynamically create lib targets
   add_library(${LIB_NAME}_c ${BUILD_TYPE} ${C_SOURCES})
-  # A vendor backend is compiled in only when its option is on. The variable comes
-  # from the Conan toolchain (not from metadata.json) so that -o overrides work.
-  if(WITH_CMSIS_NN)
-    target_compile_definitions(${LIB_NAME}_c PRIVATE INFR_WITH_CMSIS_NN)
+  # Compile definitions contributed by metadata-declared options; the value arrives
+  # from the Conan toolchain, so `-o <option>=True` reaches the compiler.
+  if(DEFINED COMPILE_DEFINES AND NOT COMPILE_DEFINES STREQUAL "")
+    target_compile_definitions(${LIB_NAME}_c PRIVATE ${COMPILE_DEFINES})
   endif()
   add_library(${LIB_NAME}_cpp ${BUILD_TYPE} ${CPP_SOURCES} ${MODULE_FILES})
   add_library(${LIB_NAME} INTERFACE)
