@@ -112,7 +112,7 @@
   "enable_python_bindings": false,
   "compile_options": {
     "with_cmsis_nn": {
-      "default": false,
+      "enabled": false,
       "requirement": "cmsis-nn",
       "dependency_key": "cmsis-nn",
       "defines": [

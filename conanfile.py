@@ -101,7 +101,7 @@ def _pragma_in_import(x: list[str]) -> tuple[bool, int]:
 
 
 # Compile-time options are declared as data, not as code: `metadata.json:compile_options` maps
-# an option name to what it gates -- the requirement it switches on, the dependency bucket key to
+# an option name to what it gates -- whether it is on by default, the requirement it switches on, the bucket key to
 # drop while it is off, and the compile definitions it contributes. This scaffold knows no
 # particular option; a project that needs one fills the table, which keeps its own requirements
 # out of this file.
@@ -118,7 +118,7 @@ class PackageRecipe(ConanFile):
     options = {"shared": [True, False], "fPIC": [True, False]}
     options.update({_name: [True, False] for _name in _COMPILE_OPTIONS})
     default_options = {"shared": _metadata.get('is_shared'), "fPIC": True}  # inherit from config
-    default_options.update({_name: bool(_spec.get('default', False))
+    default_options.update({_name: bool(_spec.get('enabled', False))
                             for _name, _spec in _COMPILE_OPTIONS.items()})
 
     # Sources live beside this recipe; api/* rides along so the pybind11 module is part of the package.

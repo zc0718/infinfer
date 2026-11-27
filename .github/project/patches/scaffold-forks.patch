@@ -48,7 +48,7 @@
  
  
 +# Compile-time options are declared as data, not as code: `metadata.json:compile_options` maps
-+# an option name to what it gates -- the requirement it switches on, the dependency bucket key to
++# an option name to what it gates -- whether it is on by default, the requirement it switches on, the bucket key to
 +# drop while it is off, and the compile definitions it contributes. This scaffold knows no
 +# particular option; a project that needs one fills the table, which keeps its own requirements
 +# out of this file.
@@ -64,7 +64,7 @@
      options = {"shared": [True, False], "fPIC": [True, False]}
 +    options.update({_name: [True, False] for _name in _COMPILE_OPTIONS})
      default_options = {"shared": _metadata.get('is_shared'), "fPIC": True}  # inherit from config
-+    default_options.update({_name: bool(_spec.get('default', False))
++    default_options.update({_name: bool(_spec.get('enabled', False))
 +                            for _name, _spec in _COMPILE_OPTIONS.items()})
  
      # Sources live beside this recipe; api/* rides along so the pybind11 module is part of the package.
@@ -124,14 +124,33 @@
              _c, _cpp, _common, _infra = [{k: v for k, v in z.items() if k.lower() in _whitelist}
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -204,6 +204,11 @@
+@@ -204,6 +204,30 @@
  
    # dynamically create lib targets
    add_library(${LIB_NAME}_c ${BUILD_TYPE} ${C_SOURCES})
-+  # Compile definitions contributed by metadata-declared options; the value arrives
-+  # from the Conan toolchain, so `-o <option>=True` reaches the compiler.
-+  if(DEFINED COMPILE_DEFINES AND NOT COMPILE_DEFINES STREQUAL "")
-+    target_compile_definitions(${LIB_NAME}_c PRIVATE ${COMPILE_DEFINES})
++  # Compile definitions declared by `metadata.json:compile_options`. Metadata is the single
++  # source of truth, so a plain CMake build honours it without Conan; when the Conan toolchain
++  # supplies COMPILE_DEFINES, that per-run value wins, because `-o <option>=True` has to be able
++  # to override the file. Nobody edits this block to add an option -- they edit metadata.json.
++  if(DEFINED COMPILE_DEFINES)
++    set(_option_defines ${COMPILE_DEFINES})
++  else()
++    set(_option_defines "")
++    string(JSON _option_names ERROR_VARIABLE _json_error KEYS "${METADATA_JSON}" "compile_options")
++    if(NOT _json_error)
++      foreach(_option_name IN LISTS _option_names)
++        string(JSON _option_on ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
++               "compile_options" "${_option_name}" "enabled")
++        if(_option_on)
++          string(JSON _option_defines ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
++                 "compile_options" "${_option_name}" "defines")
++          list(APPEND _option_defines ${_option_defines})
++        endif()
++      endforeach()
++    endif()
++  endif()
++  if(_option_defines)
++    target_compile_definitions(${LIB_NAME}_c PRIVATE ${_option_defines})
 +  endif()
    add_library(${LIB_NAME}_cpp ${BUILD_TYPE} ${CPP_SOURCES} ${MODULE_FILES})
    add_library(${LIB_NAME} INTERFACE)
@@ -144,13 +163,13 @@
    "properties": {
 +    "compile_options": {
 +      "type": "object",
-+      "description": "Compile-time options as data: the key is the Conan option name, the value says what it gates.",
++      "description": "Compile-time options: the key is the option name, the value says what it gates and whether it is on by default.",
 +      "additionalProperties": {
 +        "type": "object",
 +        "required": ["defines"],
 +        "additionalProperties": false,
 +        "properties": {
-+          "default": { "type": "boolean" },
++          "enabled": { "type": "boolean" },
 +          "requirement": { "type": "string" },
 +          "dependency_key": { "type": "string" },
 +          "defines": { "type": "array", "items": { "type": "string" } },

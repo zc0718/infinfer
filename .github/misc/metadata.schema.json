@@ -9,13 +9,13 @@
   "properties": {
     "compile_options": {
       "type": "object",
-      "description": "Compile-time options as data: the key is the Conan option name, the value says what it gates.",
+      "description": "Compile-time options: the key is the option name, the value says what it gates and whether it is on by default.",
       "additionalProperties": {
         "type": "object",
         "required": ["defines"],
         "additionalProperties": false,
         "properties": {
-          "default": { "type": "boolean" },
+          "enabled": { "type": "boolean" },
           "requirement": { "type": "string" },
           "dependency_key": { "type": "string" },
           "defines": { "type": "array", "items": { "type": "string" } },

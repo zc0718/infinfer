@@ -204,10 +204,29 @@ else()  # general package
 
   # dynamically create lib targets
   add_library(${LIB_NAME}_c ${BUILD_TYPE} ${C_SOURCES})
-  # Compile definitions contributed by metadata-declared options; the value arrives
-  # from the Conan toolchain, so `-o <option>=True` reaches the compiler.
-  if(DEFINED COMPILE_DEFINES AND NOT COMPILE_DEFINES STREQUAL "")
-    target_compile_definitions(${LIB_NAME}_c PRIVATE ${COMPILE_DEFINES})
+  # Compile definitions declared by `metadata.json:compile_options`. Metadata is the single
+  # source of truth, so a plain CMake build honours it without Conan; when the Conan toolchain
+  # supplies COMPILE_DEFINES, that per-run value wins, because `-o <option>=True` has to be able
+  # to override the file. Nobody edits this block to add an option -- they edit metadata.json.
+  if(DEFINED COMPILE_DEFINES)
+    set(_option_defines ${COMPILE_DEFINES})
+  else()
+    set(_option_defines "")
+    string(JSON _option_names ERROR_VARIABLE _json_error KEYS "${METADATA_JSON}" "compile_options")
+    if(NOT _json_error)
+      foreach(_option_name IN LISTS _option_names)
+        string(JSON _option_on ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
+               "compile_options" "${_option_name}" "enabled")
+        if(_option_on)
+          string(JSON _option_defines ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
+                 "compile_options" "${_option_name}" "defines")
+          list(APPEND _option_defines ${_option_defines})
+        endif()
+      endforeach()
+    endif()
+  endif()
+  if(_option_defines)
+    target_compile_definitions(${LIB_NAME}_c PRIVATE ${_option_defines})
   endif()
   add_library(${LIB_NAME}_cpp ${BUILD_TYPE} ${CPP_SOURCES} ${MODULE_FILES})
   add_library(${LIB_NAME} INTERFACE)
