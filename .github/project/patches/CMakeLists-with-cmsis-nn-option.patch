@@ -1,0 +1,14 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -204,6 +204,11 @@
+ 
+   # dynamically create lib targets
+   add_library(${LIB_NAME}_c ${BUILD_TYPE} ${C_SOURCES})
++  # A vendor backend is compiled in only when its option is on. The variable comes
++  # from the Conan toolchain (not from metadata.json) so that -o overrides work.
++  if(WITH_CMSIS_NN)
++    target_compile_definitions(${LIB_NAME}_c PRIVATE INFR_WITH_CMSIS_NN)
++  endif()
+   add_library(${LIB_NAME}_cpp ${BUILD_TYPE} ${CPP_SOURCES} ${MODULE_FILES})
+   add_library(${LIB_NAME} INTERFACE)
+ 

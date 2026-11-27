@@ -109,12 +109,14 @@
     {
       "path": "conanfile.py",
       "why": "the scaffold models feature toggles as metadata flags but has no way to make a requirement conditional on one; `with_cmsis_nn` needs `requirements()` to skip the package when the option is off, and needs the option itself declared. Owner-approved on 2026-11-27: the scaffold never covered compile-time options.",
-      "exit": "drop this entry when fcpp v0.4+ carries a conditional-requirement mechanism driven by metadata, and use it instead of the local option"
+      "exit": "drop this entry when fcpp v0.4+ carries a conditional-requirement mechanism driven by metadata, and use it instead of the local option",
+      "patch": ".github/project/patches/conanfile-with-cmsis-nn-option.patch"
     },
     {
       "path": "CMakeLists.txt",
       "why": "same reason on the build side: the C target has to be compiled with `INFR_WITH_CMSIS_NN` only when the option is on, and no scaffold hook exists for a compile definition that follows a feature flag",
-      "exit": "drop this entry together with the conanfile.py one, once the scaffold ships the compile-option hook"
+      "exit": "drop this entry together with the conanfile.py one, once the scaffold ships the compile-option hook",
+      "patch": ".github/project/patches/CMakeLists-with-cmsis-nn-option.patch"
     }
   ],
   "owned_dirs": [

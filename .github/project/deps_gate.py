@@ -33,9 +33,14 @@ Usage:
 
     python3 .github/project/deps_gate.py             # check
     python3 .github/project/deps_gate.py --selftest  # prove each rule can fail
+  D8 a self-authored recipe lives outside the repository, so the register carries the
+     digests of the recipe's own files: when the folder is present they must match, and when
+     it is absent (a clean clone) the gate says so instead of failing -- an absent recipe is
+     the documented state, a changed one is not.
 """
 
 import argparse
+import hashlib
 import json
 import pathlib
 import re
@@ -198,6 +203,36 @@ def check(root, data_path=None):
                 f"deps: baremetal_white_list names '{key}', which no entry marks as baremetal_ok"
             )
 
+    # D8 -- a recipe that lives outside the tree can only be kept honest by its digests.
+    for entry in entries:
+        recipe = entry.get("recipe")
+        if not recipe:
+            continue
+        name = entry.get("conan", "?")
+        folder = root / recipe.get("path", "")
+        recorded = recipe.get("files") or {}
+        if not recorded:
+            problems.append(
+                f"deps: '{name}' declares a recipe but no file digests, so nothing about it can "
+                f"be checked from here"
+            )
+            continue
+        if not folder.is_dir():
+            print(f"[deps]   {name}: recipe folder '{recipe['path']}' is not present locally; its "
+                  f"digests cannot be checked from a clean clone, and that is the documented state")
+            continue
+        for rel, digest in recorded.items():
+            candidate = folder / rel
+            if not candidate.is_file():
+                problems.append(
+                    f"deps: '{name}''s recipe names '{rel}', which is missing from '{recipe['path']}'"
+                )
+            elif hashlib.sha256(candidate.read_bytes()).hexdigest() != digest:
+                problems.append(
+                    f"deps: '{name}''s recipe file '{rel}' does not hash to the digest recorded "
+                    f"here -- the recipe on this machine is not the one this register describes"
+                )
+
     # D7 (PLAN gate/license) -- this project's own licence, not a dependency's.
     if metadata.is_file():
         own = str(load_json(metadata).get("license", "")).strip()
@@ -294,6 +329,35 @@ def selftest():
         else:
             failures += 1
             print(f"[deps:selftest] FAIL D1 expected the orphan-entry report, got {problems}")
+
+        recipe_dir = root / "recipes" / "zlib"
+        recipe_dir.mkdir(parents=True, exist_ok=True)
+        (recipe_dir / "conanfile.py").write_text("# the real thing\n", encoding="utf-8")
+        good = hashlib.sha256((recipe_dir / "conanfile.py").read_bytes()).hexdigest()
+        problems = run([entry(recipe={"path": "recipes/zlib",
+                                     "files": {"conanfile.py": good}})])
+        if not problems:
+            print("[deps:selftest] PASS D8 a recipe matching its digests is green")
+        else:
+            failures += 1
+            print(f"[deps:selftest] FAIL D8 expected a clean run, got {problems}")
+
+        (recipe_dir / "conanfile.py").write_text("# something else\n", encoding="utf-8")
+        problems = run([entry(recipe={"path": "recipes/zlib",
+                                     "files": {"conanfile.py": good}})])
+        if any("not the one this register describes" in p for p in problems):
+            print("[deps:selftest] PASS D8 a recipe that changed since it was registered is red")
+        else:
+            failures += 1
+            print(f"[deps:selftest] FAIL D8 expected the digest-mismatch report, got {problems}")
+
+        problems = run([entry(recipe={"path": "recipes/absent",
+                                     "files": {"conanfile.py": good}})])
+        if any("missing from" in p for p in problems) or not problems:
+            print("[deps:selftest] PASS D8 an absent recipe folder is not a failure (clean clone)")
+        else:
+            failures += 1
+            print(f"[deps:selftest] FAIL D8 an absent folder should not be red, got {problems}")
 
         problems = run([entry(bucket="cpp")])
         if any("not one of" in p for p in problems):

@@ -161,7 +161,19 @@
         "path": "src/backend/cmsis_nn.c",
         "contains": "arm_nnfunctions.h"
       },
-      "attribution": ""
+      "attribution": "",
+      "recipe": {
+        "path": "workspace/conan/recipes/cmsis-nn",
+        "why_out_of_tree": "the job of a recipe is to carry a download URL and an upstream sha256; the plan keeps those out of the version library deliberately, so this register records only the digests of the recipe's own files",
+        "files": {
+          "config.yml": "5d553e03456823a529baa5002bfcf4f6c58053f7101042c633e8c4612d53f9cf",
+          "all/conandata.yml": "bfc04f5272bc26825dac3b22ea7754627eccd8adb5f6e5dd46bd3f03b57dabdd",
+          "all/conanfile.py": "8a02aa43eefc98016ac2c5756f9c68f100cb79b3f00dee360a9e4eb97e74ff15",
+          "all/test_package/conanfile.py": "bb6e6a46a2b0a3fd778cd556e54b9c6921e1c45fa9a1a210b45d57b5e9fe4317",
+          "all/test_package/CMakeLists.txt": "e08a9a027115c6f7680e2a5b60a7650c067101ebbebed01be9323c90fd57ee54",
+          "all/test_package/test_package.c": "30091533dc6dc25a5d315f30087acb2fba19bcd468cd927118922044fe38182a"
+        }
+      }
     }
   ]
 }

@@ -23,6 +23,43 @@
 
 ---
 
+## F2 · `conanfile.py`：编译期开关 `with_cmsis_nn`（2026-11-27）
+
+**改哪儿.** 五处：`options`/`default_options` 增加 `with_cmsis_nn`；新增 `_with_cmsis_nn()`
+（读 **option** 而不是 metadata，这样 `-o with_cmsis_nn=True` 能覆盖文件里的默认值）；
+`requirements()` 关掉时跳过 `cmsis-nn`；`generate()` 把 `WITH_CMSIS_NN` 交给 toolchain；
+`_preparing_deps_links()` 关掉时把 `cmsis-nn` 从链目标里摘掉。
+补丁：`patches/conanfile-with-cmsis-nn-option.patch`（5 个 hunk）。
+
+**为什么.** 模板把功能开关建模成 metadata 布尔值，但**没有任何机制让一个依赖变成条件的**：
+`requirements()` 无条件 `self.requires(req)`。于是"可选厂商后端"只能二选一——要么永远依赖
+CMSIS-NN（Cortex-M 之外的每个目标都被迫下载），要么永远不接。厂商后端又恰恰只对 MCU 有意义，
+所以这个开关是它存在的前提。
+
+**怎么验证.** ① 关（默认）：`conan create . -s build_type=Release` 不解析 cmsis-nn，
+174 tests 绿；② 开：`conan create . -s build_type=Release -o with_cmsis_nn=True` 解析并链接
+`cmsis-nn/8.0.0`，`src/backend/cmsis_nn.c` 用真实头文件编译，覆盖率 91.9%；
+③ 补丁忠实性：`patch -p1` 打到上游 v0.3.11 原字节后 `diff -q` 与当前文件相同。
+
+**退出条件.** 上游 v0.4+ 提供"由 metadata 驱动的条件依赖"机制后，删本条、删补丁、
+删 `tolerance_budget` 里为它加的那一位。
+
+## F3 · `CMakeLists.txt`：`INFR_WITH_CMSIS_NN` 跟随开关（2026-11-27）
+
+**改哪儿.** `add_library(${LIB_NAME}_c ...)` 之后增加一段 `if(WITH_CMSIS_NN)` /
+`target_compile_definitions(... PRIVATE INFR_WITH_CMSIS_NN)`。
+补丁：`patches/CMakeLists-with-cmsis-nn-option.patch`（1 个 hunk）。
+
+**为什么.** `src/backend/cmsis_nn.c` 整份内容都在 `#if defined(INFR_WITH_CMSIS_NN)` 里，
+关闭时必须编译成**零符号**；这需要一个能跟着功能开关走的编译定义，而模板的钩子只覆盖
+`ENABLE_COVERAGE` 这类固定变量，没有"跟随 metadata/option 的定义"的位置。
+变量走 Conan toolchain（不是让 CMake 自己去读 metadata），否则 `-o` 覆盖到不了编译器。
+
+**怎么验证.** 同 F2 的两条构建；另外 `python3 .github/project/vendor_gate.py` 断言关闭时
+`nm` 里没有该后端符号、打开时有（V1/V2）。
+
+**退出条件.** 与 F2 同批移除——上游提供编译选项钩子后，两条一起消失。
+
 ## F1 · `test_package/conanfile.py`：覆盖率收集按对象目录分槽（2026-11-26）
 
 **改哪儿.** `_code_coverage_gcc()` 里把 `.gcda`/`.gcno` 复制进收集目录的那两行，从"按 basename
