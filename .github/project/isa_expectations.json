@@ -311,6 +311,24 @@
         "min_packed": 1,
         "measured": 0,
         "what": "int8 dot via pmaddwd into int32 lanes (the accumulator half of a quantized conv)"
+      },
+      "src/kernel/arm_neon/dot.c": {
+        "tier": "arm_neon",
+        "min_packed": 1,
+        "measured": 0,
+        "what": "int8 dot via vmull_s8 + vpadalq_s16 into int32 lanes"
+      },
+      "src/kernel/arm_m/dot.c": {
+        "tier": "arm_m",
+        "min_packed": 1,
+        "measured": 0,
+        "what": "int8 dot via SMLAD into one int32 register"
+      },
+      "src/kernel/rvv/dot.c": {
+        "tier": "rvv",
+        "min_packed": 1,
+        "measured": 0,
+        "what": "int8 dot via vsext + vwmacc into int32 lanes"
       }
     },
     "excluded": {

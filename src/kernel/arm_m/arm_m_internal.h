@@ -47,3 +47,11 @@ infr_status infr_arm_m_fc_i16(const void *const *inputs, void *const *outputs, u
  */
 infr_status infr_arm_m_relu_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
                                const infr_quant *quant);
+
+/**
+ * @brief [en] int8 dot product into an int32 accumulator; `quant` is ignored (NULL is legal).
+ * @brief [zh] int8 点积写进 int32 累加器；`quant` 被忽略（NULL 合法）。
+ * @since 0.2.0
+ */
+infr_status infr_arm_m_dot_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                              const infr_quant *quant);
