@@ -7,19 +7,32 @@
   "required": ["name", "version", "scaffold", "build_type", "dependencies", "workflow_triggers"],
   "additionalProperties": false,
   "properties": {
-    "compile_options": {
+    "optional_dependencies": {
       "type": "object",
-      "description": "Compile-time options: the key is the option name, the value says what it gates and whether it is on by default.",
+      "description": "A conditional dependency: the key is the package name as written in conandata.yml, and one entry answers both 'when' (its option) and 'what' (targets, source). A package appears here or in `dependencies`, never in both. conanfile.py, test_package/conanfile.py and CMakeLists.txt read it with one rule: option off means no requirement, no CMake target and no define. `source: local` states that a stock ConanCenter remote cannot fetch it, so online CI keeps that option off.",
       "additionalProperties": {
         "type": "object",
-        "required": ["defines"],
+        "required": ["option", "targets"],
         "additionalProperties": false,
         "properties": {
-          "enabled": { "type": "boolean" },
-          "requirement": { "type": "string" },
-          "dependency_key": { "type": "string" },
-          "defines": { "type": "array", "items": { "type": "string" } },
-          "why": { "type": "string" }
+          "option": {
+            "type": "object",
+            "description": "The switch that owns this dependency: its name, the state a fresh checkout starts in, and the markers the C sources see while it is on.",
+            "required": ["name", "default", "defines"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "default": { "enum": ["on", "off"] },
+              "defines": {
+                "type": "object",
+                "description": "Macro name to value; an empty value emits a bare -DNAME.",
+                "additionalProperties": { "type": "string" }
+              }
+            }
+          },
+          "targets": { "type": "array", "items": { "type": "string" } },
+          "source": { "enum": ["conancenter", "local"] },
+          "bucket": { "enum": ["c", "cpp"] }
         }
       }
     },

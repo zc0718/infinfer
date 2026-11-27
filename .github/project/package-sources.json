@@ -23,8 +23,8 @@
       "version": "8.0.0",
       "source": "local",
       "recipe": ".github/project/local-packages/cmsis-nn",
-      "needed_by": "compile_options.with_cmsis_nn",
-      "if_absent": "the leg that enables compile_options.with_cmsis_nn is skipped and says which recipe it wanted; every other leg is unaffected"
+      "needed_by": "optional_dependencies.cmsis-nn.option.name",
+      "if_absent": "the leg that turns optional_dependencies.cmsis-nn on is skipped and says which recipe it wanted; every other leg is unaffected"
     }
   ]
 }

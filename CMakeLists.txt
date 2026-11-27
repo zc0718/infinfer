@@ -204,7 +204,7 @@ else()  # general package
 
   # dynamically create lib targets
   add_library(${LIB_NAME}_c ${BUILD_TYPE} ${C_SOURCES})
-  # Compile definitions declared by `metadata.json:compile_options`. Metadata is the single
+  # Define flags declared by `metadata.json:optional_dependencies`. Metadata is the single
   # source of truth, so a plain CMake build honours it without Conan; when the Conan toolchain
   # supplies COMPILE_DEFINES, that per-run value wins, because `-o <option>=True` has to be able
   # to override the file. Nobody edits this block to add an option -- they edit metadata.json.
@@ -212,15 +212,24 @@ else()  # general package
     set(_option_defines ${COMPILE_DEFINES})
   else()
     set(_option_defines "")
-    string(JSON _option_names ERROR_VARIABLE _json_error KEYS "${METADATA_JSON}" "compile_options")
+    string(JSON _capability_names ERROR_VARIABLE _json_error KEYS "${METADATA_JSON}"
+           "optional_dependencies")
     if(NOT _json_error)
-      foreach(_option_name IN LISTS _option_names)
-        string(JSON _option_on ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
-               "compile_options" "${_option_name}" "enabled")
-        if(_option_on)
-          string(JSON _option_defines ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
-                 "compile_options" "${_option_name}" "defines")
-          list(APPEND _option_defines ${_option_defines})
+      foreach(_capability IN LISTS _capability_names)
+        string(JSON _capability_state ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
+               "optional_dependencies" "${_capability}" "option" "default")
+        if(_capability_state STREQUAL "on")
+          string(JSON _define_names ERROR_VARIABLE _json_error KEYS "${METADATA_JSON}"
+                 "optional_dependencies" "${_capability}" "option" "defines")
+          foreach(_define_name IN LISTS _define_names)
+            string(JSON _define_value ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
+                   "optional_dependencies" "${_capability}" "option" "defines" "${_define_name}")
+            if(_define_value STREQUAL "")
+              list(APPEND _option_defines "${_define_name}")
+            else()
+              list(APPEND _option_defines "${_define_name}=${_define_value}")
+            endif()
+          endforeach()
         endif()
       endforeach()
     endif()

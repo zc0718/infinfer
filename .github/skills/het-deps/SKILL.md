@@ -78,14 +78,18 @@ carries the upstream URL and sha256, exactly as CCI does.
 a measurement. An absent local recipe is not an error — the leg that needs it reports being
 skipped.
 
-A local package the build uses also needs a compile option to switch it on; that switch is declared
-in `metadata.json:compile_options` and nowhere else.
+A local package the build uses is one entry in `metadata.json:optional_dependencies`: its
+`option` (name, default `on|off`, macro defines), the CMake `targets` to link, and
+`"source": "local"` (a stock CCI remote cannot fetch it). One entry answers both “when” and
+“what”, so a package never has a second half in another table — there is no `compile_options`
+table to keep in step.
 
 ## Switch Map（开关对照）
 
 | Dep（依赖） | Controlled by（受控于） |
 |------|------|
 | gtest | test_package only (host) |
+| an optional dependency（`optional_dependencies`） | its own `option`; `source: local` means online CI keeps it off |
 | pybind11 | `enable_python_bindings` |
 | OS deps (zlib/pcre2/eigen/gtest/pybind11) | `baremetal_white_list`（默认 `["etl","ArduinoJson"]`） |
 

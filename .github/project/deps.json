@@ -147,7 +147,7 @@
     {
       "conan": "cmsis-nn",
       "metadata_key": "cmsis-nn",
-      "bucket": "c",
+      "bucket": "optional",
       "targets": [
         "cmsis-nn::cmsis-nn"
       ],
@@ -174,7 +174,8 @@
           "all/test_package/test_package.c": "30091533dc6dc25a5d315f30087acb2f",
           "config.yml": "5d553e03456823a529baa5002bfcf4f6"
         }
-      }
+      },
+      "option": "with_cmsis_nn"
     }
   ]
 }

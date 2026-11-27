@@ -100,12 +100,12 @@ def _pragma_in_import(x: list[str]) -> tuple[bool, int]:
     return _has_pragma, _idx
 
 
-# Compile-time options are declared as data, not as code: `metadata.json:compile_options` maps
-# an option name to what it gates -- whether it is on by default, the requirement it switches on, the bucket key to
-# drop while it is off, and the compile definitions it contributes. This scaffold knows no
-# particular option; a project that needs one fills the table, which keeps its own requirements
-# out of this file.
-_COMPILE_OPTIONS = _metadata.get('compile_options') or {}
+# A conditional dependency is declared as data, one entry per package in
+# `metadata.json:optional_dependencies`: the option that owns it (name, the state a fresh checkout
+# starts in, the markers the C sources see), the CMake targets to link, and where its recipe comes
+# from. One entry therefore answers both "when" and "what", and the recipe, its test package and
+# CMake read it with the same rule -- no consumer matches a name across two tables.
+_OPTIONAL_DEPS = _metadata.get('optional_dependencies') or {}
 
 
 class PackageRecipe(ConanFile):
@@ -116,10 +116,10 @@ class PackageRecipe(ConanFile):
     # Binary configuration
     settings = "os", "compiler", "build_type", "arch"
     options = {"shared": [True, False], "fPIC": [True, False]}
-    options.update({_name: [True, False] for _name in _COMPILE_OPTIONS})
+    options.update({_spec['option']['name']: [True, False] for _spec in _OPTIONAL_DEPS.values()})
     default_options = {"shared": _metadata.get('is_shared'), "fPIC": True}  # inherit from config
-    default_options.update({_name: bool(_spec.get('enabled', False))
-                            for _name, _spec in _COMPILE_OPTIONS.items()})
+    default_options.update({_spec['option']['name']: _spec['option']['default'] == 'on'
+                            for _spec in _OPTIONAL_DEPS.values()})
 
     # Sources live beside this recipe; api/* rides along so the pybind11 module is part of the package.
     exports_sources = ["CMakeLists.txt", "src/*", "include/*", "api/*", METADATA_FILENAME, "LICENSE"]
@@ -264,16 +264,28 @@ class PackageRecipe(ConanFile):
     def _python_bindings_enabled(self):
         return bool(self.meta.get("enable_python_bindings"))
 
-    def _compile_option_enabled(self, name):
-        """Read the option rather than the metadata default, so `-o <name>=True` overrides it."""
-        return str(self.options.get_safe(name)).strip() == 'True'
+    def _optional_state(self, package):
+        """None when `package` is unconditional, else whether the option that owns it is on.
 
-    def _gated_requirement(self, package):
-        """Whether an option gates `package`: None when none does, else that option's state."""
-        for _name, _spec in _COMPILE_OPTIONS.items():
-            if str(_spec.get('requirement', '')).lower() == package.lower():
-                return self._compile_option_enabled(_name)
-        return None
+        The option's own value is the answer: `default_options` was generated from
+        `option.default`, so a `-o <name>=...` run has already replaced the file's choice.
+        """
+        _spec = next((_v for _k, _v in _OPTIONAL_DEPS.items()
+                      if _k.lower() == package.lower()), None)
+        if _spec is None:
+            return None
+        _state = str(self.options.get_safe(_spec['option']['name'])).strip() == 'True'
+        if _state and str(_spec.get('source') or 'conancenter').lower() == 'local':
+            self.output.warning(
+                f'{package} is declared local (`optional_dependencies.{package}.source`), '
+                'so this configuration resolves only where its recipe is available')
+        return _state
+
+    @staticmethod
+    def _define_flags(spec):
+        """`option.defines` reads as macro name to value; an empty value emits a bare -DNAME."""
+        return [f'{_name}={_value}' if str(_value) != '' else str(_name)
+                for _name, _value in (spec['option'].get('defines') or {}).items()]
 
     def _baremetal_whitelist(self):
         """Lowercase set: ConanCenter only moved to lowercase names in 2026 H1, so `OpenCV/4.x.x` is legitimate."""
@@ -290,7 +302,7 @@ class PackageRecipe(ConanFile):
                 continue
             if _pkg == 'pybind11' and (not self._python_bindings_enabled() or cross_building(self)):
                 continue
-            if self._gated_requirement(_pkg) is False:
+            if self._optional_state(_pkg) is False:
                 continue
             self.requires(req)
 
@@ -302,9 +314,9 @@ class PackageRecipe(ConanFile):
         tc.variables['C_DEPS'], tc.variables['CPP_DEPS'] = self._preparing_deps_links()
         tc.variables['ENABLE_COVERAGE'] = self._coverage_enabled()
         tc.variables['COMPILE_DEFINES'] = ';'.join(
-            _define
-            for _name, _spec in _COMPILE_OPTIONS.items() if self._compile_option_enabled(_name)
-            for _define in (_spec.get('defines') or ()))
+            _flag
+            for _name, _spec in _OPTIONAL_DEPS.items() if self._optional_state(_name)
+            for _flag in self._define_flags(_spec))
 
         if cross_building(self) and self.settings.os == "baremetal":  # cross build to MCU
             tc.variables["CMAKE_TRY_COMPILE_TARGET_TYPE"] = "STATIC_LIBRARY"
@@ -318,13 +330,14 @@ class PackageRecipe(ConanFile):
         _c = {k: v if k not in _common.keys() else list(set(v).union(set(_common.get(k)))) for k, v in _c.items()}
         _cpp = {k: v if k not in _common.keys() else list(set(v).union(set(_common.get(k)))) for k, v in _cpp.items()}
 
-        for _name, _spec in _COMPILE_OPTIONS.items():
-            if self._compile_option_enabled(_name):
+        # An optional dependency joins the bucket it names only while its option is on. It is
+        # declared in `optional_dependencies` and nowhere in `dependencies`, so turning the
+        # option off needs no removal step: the entry was never there.
+        for _name, _spec in _OPTIONAL_DEPS.items():
+            if self._optional_state(_name) is False:
                 continue
-            _key = _spec.get('dependency_key')
-            if _key:
-                for _bucket in (_common, _c, _cpp, _infra):
-                    _bucket.pop(_key, None)
+            _bucket = {'c': _c, 'cpp': _cpp}.get(str(_spec.get('bucket') or 'c'), _c)
+            _bucket[_name] = list(_spec.get('targets') or [])
 
         if cross_building(self) and self.settings.os == 'baremetal':
             _whitelist = self._baremetal_whitelist()

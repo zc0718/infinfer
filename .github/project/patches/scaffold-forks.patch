@@ -21,7 +21,48 @@
  def _lcov_ignore_errors() -> str:
      """Error classes to skip, named per lcov version: geninfo 2.x validates the list, 1.x rejects unknown names."""
      try:
-@@ -478,9 +492,17 @@
+@@ -95,9 +109,25 @@
+             return
+         self.build_requires(f"cmake/{_override or self.metadata.get('cmake_version')}")
+ 
++    def _optional_state(self, package):
++        """None when `package` is unconditional, else whether the option that owns it is on.
++
++        Read from metadata only: this method is called from `requirements()`, where the graph
++        does not exist yet and touching `self.dependencies` would poison the generator's view.
++        `-o` does not need to reach here -- the tested package carries its own requirement, and
++        this list is only about what the test executable links directly.
++        """
++        _spec = next((_v for _k, _v in (self.metadata.get('optional_dependencies') or {}).items()
++                      if _k.lower() == package.lower()), None)
++        if _spec is None:
++            return None
++        return str(_spec['option'].get('default', 'off')).strip() == 'on'
++
+     def requirements(self):
+         self.requires(self.tested_reference_str)
+         for req in self.conandata.get("requirements", []):
++            if self._optional_state(req.split('/')[0]) is False:
++                continue
+             self.requires(req)
+ 
+     def _tests_enabled(self):
+@@ -136,6 +166,14 @@
+         if not self.metadata.get('enable_python_bindings'):
+             _infra.pop("pybind11", None)
+         
++        # Same rule as the recipe: an optional dependency reaches the CMake link line only
++        # while its option is on, so both sides agree without matching names by hand.
++        for _name, _spec in (self.metadata.get('optional_dependencies') or {}).items():
++            if self._optional_state(_name) is False:
++                continue
++            _bucket = _cpp if str(_spec.get('bucket') or 'c') == 'cpp' else _c
++            _bucket[_name] = list(_spec.get('targets') or [])
++
+         _infra_deps = [f"{k}@{' '.join(v)}" for k, v in _infra.items()]
+         _c_deps = [f"{k}@{' '.join(v)}" for k, v in {**_common, **_c}.items()]
+         _cpp_deps = [f"{k}@{' '.join(v)}" for k, v in {**_common, **_cpp}.items()]
+@@ -478,9 +516,17 @@
  
          coverage_folder = self._coverage_folder()
  
@@ -47,12 +88,12 @@
      return _has_pragma, _idx
  
  
-+# Compile-time options are declared as data, not as code: `metadata.json:compile_options` maps
-+# an option name to what it gates -- whether it is on by default, the requirement it switches on, the bucket key to
-+# drop while it is off, and the compile definitions it contributes. This scaffold knows no
-+# particular option; a project that needs one fills the table, which keeps its own requirements
-+# out of this file.
-+_COMPILE_OPTIONS = _metadata.get('compile_options') or {}
++# A conditional dependency is declared as data, one entry per package in
++# `metadata.json:optional_dependencies`: the option that owns it (name, the state a fresh checkout
++# starts in, the markers the C sources see), the CMake targets to link, and where its recipe comes
++# from. One entry therefore answers both "when" and "what", and the recipe, its test package and
++# CMake read it with the same rule -- no consumer matches a name across two tables.
++_OPTIONAL_DEPS = _metadata.get('optional_dependencies') or {}
 +
 +
  class PackageRecipe(ConanFile):
@@ -62,73 +103,86 @@
      # Binary configuration
      settings = "os", "compiler", "build_type", "arch"
      options = {"shared": [True, False], "fPIC": [True, False]}
-+    options.update({_name: [True, False] for _name in _COMPILE_OPTIONS})
++    options.update({_spec['option']['name']: [True, False] for _spec in _OPTIONAL_DEPS.values()})
      default_options = {"shared": _metadata.get('is_shared'), "fPIC": True}  # inherit from config
-+    default_options.update({_name: bool(_spec.get('enabled', False))
-+                            for _name, _spec in _COMPILE_OPTIONS.items()})
++    default_options.update({_spec['option']['name']: _spec['option']['default'] == 'on'
++                            for _spec in _OPTIONAL_DEPS.values()})
  
      # Sources live beside this recipe; api/* rides along so the pybind11 module is part of the package.
      exports_sources = ["CMakeLists.txt", "src/*", "include/*", "api/*", METADATA_FILENAME, "LICENSE"]
-@@ -253,6 +264,17 @@
+@@ -253,6 +264,29 @@
      def _python_bindings_enabled(self):
          return bool(self.meta.get("enable_python_bindings"))
  
-+    def _compile_option_enabled(self, name):
-+        """Read the option rather than the metadata default, so `-o <name>=True` overrides it."""
-+        return str(self.options.get_safe(name)).strip() == 'True'
++    def _optional_state(self, package):
++        """None when `package` is unconditional, else whether the option that owns it is on.
 +
-+    def _gated_requirement(self, package):
-+        """Whether an option gates `package`: None when none does, else that option's state."""
-+        for _name, _spec in _COMPILE_OPTIONS.items():
-+            if str(_spec.get('requirement', '')).lower() == package.lower():
-+                return self._compile_option_enabled(_name)
-+        return None
++        The option's own value is the answer: `default_options` was generated from
++        `option.default`, so a `-o <name>=...` run has already replaced the file's choice.
++        """
++        _spec = next((_v for _k, _v in _OPTIONAL_DEPS.items()
++                      if _k.lower() == package.lower()), None)
++        if _spec is None:
++            return None
++        _state = str(self.options.get_safe(_spec['option']['name'])).strip() == 'True'
++        if _state and str(_spec.get('source') or 'conancenter').lower() == 'local':
++            self.output.warning(
++                f'{package} is declared local (`optional_dependencies.{package}.source`), '
++                'so this configuration resolves only where its recipe is available')
++        return _state
++
++    @staticmethod
++    def _define_flags(spec):
++        """`option.defines` reads as macro name to value; an empty value emits a bare -DNAME."""
++        return [f'{_name}={_value}' if str(_value) != '' else str(_name)
++                for _name, _value in (spec['option'].get('defines') or {}).items()]
 +
      def _baremetal_whitelist(self):
          """Lowercase set: ConanCenter only moved to lowercase names in 2026 H1, so `OpenCV/4.x.x` is legitimate."""
          return {str(_name).lower() for _name in (self.meta.get('baremetal_white_list') or ())}
-@@ -268,6 +290,8 @@
+@@ -268,6 +302,8 @@
                  continue
              if _pkg == 'pybind11' and (not self._python_bindings_enabled() or cross_building(self)):
                  continue
-+            if self._gated_requirement(_pkg) is False:
++            if self._optional_state(_pkg) is False:
 +                continue
              self.requires(req)
  
      def layout(self):
-@@ -277,6 +301,10 @@
+@@ -277,6 +313,10 @@
          tc = CMakeToolchain(self)
          tc.variables['C_DEPS'], tc.variables['CPP_DEPS'] = self._preparing_deps_links()
          tc.variables['ENABLE_COVERAGE'] = self._coverage_enabled()
 +        tc.variables['COMPILE_DEFINES'] = ';'.join(
-+            _define
-+            for _name, _spec in _COMPILE_OPTIONS.items() if self._compile_option_enabled(_name)
-+            for _define in (_spec.get('defines') or ()))
++            _flag
++            for _name, _spec in _OPTIONAL_DEPS.items() if self._optional_state(_name)
++            for _flag in self._define_flags(_spec))
  
          if cross_building(self) and self.settings.os == "baremetal":  # cross build to MCU
              tc.variables["CMAKE_TRY_COMPILE_TARGET_TYPE"] = "STATIC_LIBRARY"
-@@ -290,6 +318,14 @@
+@@ -290,6 +330,15 @@
          _c = {k: v if k not in _common.keys() else list(set(v).union(set(_common.get(k)))) for k, v in _c.items()}
          _cpp = {k: v if k not in _common.keys() else list(set(v).union(set(_common.get(k)))) for k, v in _cpp.items()}
  
-+        for _name, _spec in _COMPILE_OPTIONS.items():
-+            if self._compile_option_enabled(_name):
++        # An optional dependency joins the bucket it names only while its option is on. It is
++        # declared in `optional_dependencies` and nowhere in `dependencies`, so turning the
++        # option off needs no removal step: the entry was never there.
++        for _name, _spec in _OPTIONAL_DEPS.items():
++            if self._optional_state(_name) is False:
 +                continue
-+            _key = _spec.get('dependency_key')
-+            if _key:
-+                for _bucket in (_common, _c, _cpp, _infra):
-+                    _bucket.pop(_key, None)
++            _bucket = {'c': _c, 'cpp': _cpp}.get(str(_spec.get('bucket') or 'c'), _c)
++            _bucket[_name] = list(_spec.get('targets') or [])
 +
          if cross_building(self) and self.settings.os == 'baremetal':
              _whitelist = self._baremetal_whitelist()
              _c, _cpp, _common, _infra = [{k: v for k, v in z.items() if k.lower() in _whitelist}
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -204,6 +204,30 @@
+@@ -204,6 +204,39 @@
  
    # dynamically create lib targets
    add_library(${LIB_NAME}_c ${BUILD_TYPE} ${C_SOURCES})
-+  # Compile definitions declared by `metadata.json:compile_options`. Metadata is the single
++  # Define flags declared by `metadata.json:optional_dependencies`. Metadata is the single
 +  # source of truth, so a plain CMake build honours it without Conan; when the Conan toolchain
 +  # supplies COMPILE_DEFINES, that per-run value wins, because `-o <option>=True` has to be able
 +  # to override the file. Nobody edits this block to add an option -- they edit metadata.json.
@@ -136,15 +190,24 @@
 +    set(_option_defines ${COMPILE_DEFINES})
 +  else()
 +    set(_option_defines "")
-+    string(JSON _option_names ERROR_VARIABLE _json_error KEYS "${METADATA_JSON}" "compile_options")
++    string(JSON _capability_names ERROR_VARIABLE _json_error KEYS "${METADATA_JSON}"
++           "optional_dependencies")
 +    if(NOT _json_error)
-+      foreach(_option_name IN LISTS _option_names)
-+        string(JSON _option_on ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
-+               "compile_options" "${_option_name}" "enabled")
-+        if(_option_on)
-+          string(JSON _option_defines ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
-+                 "compile_options" "${_option_name}" "defines")
-+          list(APPEND _option_defines ${_option_defines})
++      foreach(_capability IN LISTS _capability_names)
++        string(JSON _capability_state ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
++               "optional_dependencies" "${_capability}" "option" "default")
++        if(_capability_state STREQUAL "on")
++          string(JSON _define_names ERROR_VARIABLE _json_error KEYS "${METADATA_JSON}"
++                 "optional_dependencies" "${_capability}" "option" "defines")
++          foreach(_define_name IN LISTS _define_names)
++            string(JSON _define_value ERROR_VARIABLE _json_error GET "${METADATA_JSON}"
++                   "optional_dependencies" "${_capability}" "option" "defines" "${_define_name}")
++            if(_define_value STREQUAL "")
++              list(APPEND _option_defines "${_define_name}")
++            else()
++              list(APPEND _option_defines "${_define_name}=${_define_value}")
++            endif()
++          endforeach()
 +        endif()
 +      endforeach()
 +    endif()
@@ -157,23 +220,36 @@
  
 --- a/.github/misc/metadata.schema.json
 +++ b/.github/misc/metadata.schema.json
-@@ -7,6 +7,22 @@
+@@ -7,6 +7,35 @@
    "required": ["name", "version", "scaffold", "build_type", "dependencies", "workflow_triggers"],
    "additionalProperties": false,
    "properties": {
-+    "compile_options": {
++    "optional_dependencies": {
 +      "type": "object",
-+      "description": "Compile-time options: the key is the option name, the value says what it gates and whether it is on by default.",
++      "description": "A conditional dependency: the key is the package name as written in conandata.yml, and one entry answers both 'when' (its option) and 'what' (targets, source). A package appears here or in `dependencies`, never in both. conanfile.py, test_package/conanfile.py and CMakeLists.txt read it with one rule: option off means no requirement, no CMake target and no define. `source: local` states that a stock ConanCenter remote cannot fetch it, so online CI keeps that option off.",
 +      "additionalProperties": {
 +        "type": "object",
-+        "required": ["defines"],
++        "required": ["option", "targets"],
 +        "additionalProperties": false,
 +        "properties": {
-+          "enabled": { "type": "boolean" },
-+          "requirement": { "type": "string" },
-+          "dependency_key": { "type": "string" },
-+          "defines": { "type": "array", "items": { "type": "string" } },
-+          "why": { "type": "string" }
++          "option": {
++            "type": "object",
++            "description": "The switch that owns this dependency: its name, the state a fresh checkout starts in, and the markers the C sources see while it is on.",
++            "required": ["name", "default", "defines"],
++            "additionalProperties": false,
++            "properties": {
++              "name": { "type": "string" },
++              "default": { "enum": ["on", "off"] },
++              "defines": {
++                "type": "object",
++                "description": "Macro name to value; an empty value emits a bare -DNAME.",
++                "additionalProperties": { "type": "string" }
++              }
++            }
++          },
++          "targets": { "type": "array", "items": { "type": "string" } },
++          "source": { "enum": ["conancenter", "local"] },
++          "bucket": { "enum": ["c", "cpp"] }
 +        }
 +      }
 +    },
@@ -182,7 +258,7 @@
      "version": { "type": "string" },
 --- a/.github/misc/Codegen-Starter.txt
 +++ b/.github/misc/Codegen-Starter.txt
-@@ -527,3 +527,22 @@
+@@ -527,3 +527,26 @@
  ================================================================================
  END OF PROMPT — paste this into Copilot agent with all [FILL] sections completed
  ================================================================================
@@ -200,8 +276,12 @@
 +            binary is bound to the machine that committed it. conandata.yml does carry the
 +            upstream URL and sha256 -- the same thing CCI commits.
 +
-+[COMPILE OPTIONS]
-+  A compile-time option is ONE entry in metadata.json:compile_options
-+  (enabled / requirement / dependency_key / defines / why). conanfile.py, CMakeLists.txt and the
-+  schema consume that table; nobody edits a build file to add an option. Precedence:
-+  a Conan `-o <option>=...` run overrides the file's `enabled`, because it is a per-run choice.
++[CONDITIONAL DEPENDENCIES]
++  A dependency that exists only while a switch is on is ONE entry in
++  metadata.json:optional_dependencies. The key is the package name; the entry carries `option`
++  (name / default on|off / defines as macro-to-value), `targets`, and `source`. One entry answers
++  both 'when' and 'what', so a package never needs a second half in another table: `source: local`
++  says a stock CCI remote cannot fetch it, so an online CI leg keeps that option off.
++  conanfile.py, test_package/conanfile.py, CMakeLists.txt and the schema read that one table with
++  one rule; nobody edits a build file to add an option. Precedence: a Conan `-o <option>=...` run
++  overrides the file's `default`, because it is a per-run choice.

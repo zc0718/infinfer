@@ -45,6 +45,30 @@
 3. **pybind11 enters the main package only when `enable_python_bindings=true`, and never in a cross build** — a target-side python interpreter cannot be probed from the build machine (gated in both main recipe and test_package). pybind11 跟随开关，交叉构建时不进依赖图。
 4. Keys differ in case from conandata package names (`Eigen3` vs `eigen`) — always compare lowercase. 键名与 conandata 包名大小写不同，统一小写归一。
 
+### Optional Dependency Contract（条件依赖契约）
+```json
+"optional_dependencies": {
+  "<pkg>": {
+    "option": {"name": "<switch>", "default": "on|off", "defines": {"<MACRO>": "<value>"}},
+    "targets": ["<CMake target>"],
+    "source": "conancenter|local"
+  }
+}
+```
+**语义**：一个条目 = 一个能力，同时回答「什么时候开」与「开了要什么」。键名与 `conandata.yml`
+的包名一致；它**不出现**在 `dependencies` —— 一个包只能待在一张表里，`dependencies` 只管
+无条件依赖。
+
+**Rules（不可违背）**
+1. `option.default` 生成 Conan 选项默认值，`-o <option.name>=...` 覆盖它。选项关 ⇒ 不发
+   requirement、不加 CMake 目标、不发宏；`test_package` 与根 `CMakeLists.txt` 用**同一判据**。
+2. `defines` 是「宏名 → 值」；值为空串时只发裸 `-DNAME`。
+3. `source: local` 表示干净的 CCI 远程取不到这个 recipe，因此在线 CI 的桌面腿必须让它保持
+   关闭；改成 `conancenter` 才允许 CI 打开它。打开时会打印指名该字段的 warning。
+4. 判据只认**显式声明**的包，不靠“名字看起来像被门控”——常规依赖（GTest 等）永远不会
+   被误删。
+5. 一个条目只属于一个选项；两个包共享一个开关时，两份 `option` 必须逐字相同（门禁检查）。
+
 ### Component Graph（组件图，可选）
 ```json
 "component_requires": {"<name>_c": ["<name>_cpp"]}

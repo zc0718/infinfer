@@ -110,7 +110,7 @@
     },
     {
       "path": "conanfile.py",
-      "why": "the scaffold models feature toggles as metadata flags but has no way to make a requirement conditional on one, and no way for a flag to contribute a compile definition. The patch adds a generic injection point: `metadata.json:compile_options` maps an option name to the requirement it gates, the dependency key to drop while it is off, and the defines it contributes. Deliberately says nothing about any particular vendor -- this repository instantiates it, the scaffold does not know it exists.",
+      "why": "the scaffold models feature toggles as metadata flags but has no way to make a requirement conditional on one, and no way for a flag to contribute a compile definition. The patch adds a generic injection point: `metadata.json:optional_dependencies` gives each conditional package one entry carrying its option (name, default state, marker defines), the CMake targets to link and where its recipe comes from, so 'when' and 'what' are one declaration. Deliberately says nothing about any particular vendor -- this repository instantiates it, the scaffold does not know it exists.",
       "exit": "drop this entry when upstream ships an equivalent compile-option mechanism; the data stays here either way, since metadata.json is this project's own surface",
       "patch": ".github/project/patches/scaffold-forks.patch"
     },
@@ -123,7 +123,7 @@
     {
       "path": ".github/misc/metadata.schema.json",
       "patch": ".github/project/patches/scaffold-forks.patch",
-      "why": "the schema has additionalProperties:false, so the injection point needs its contract declared there: what a compile_options entry may contain. Without this the mechanism would be undocumented and metadata.json would fail validation.",
+      "why": "the schema has additionalProperties:false, so the injection point needs its contract declared there: what an `optional_dependencies` entry may contain (option name/default/defines, targets, source). Without this the mechanism would be undocumented and metadata.json would fail validation.",
       "exit": "drop this entry with the other two when upstream ships the hook; it is the same patch, not a separate decision"
     },
     {

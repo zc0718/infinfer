@@ -541,8 +541,12 @@ END OF PROMPT — paste this into Copilot agent with all [FILL] sections complet
             binary is bound to the machine that committed it. conandata.yml does carry the
             upstream URL and sha256 -- the same thing CCI commits.
 
-[COMPILE OPTIONS]
-  A compile-time option is ONE entry in metadata.json:compile_options
-  (enabled / requirement / dependency_key / defines / why). conanfile.py, CMakeLists.txt and the
-  schema consume that table; nobody edits a build file to add an option. Precedence:
-  a Conan `-o <option>=...` run overrides the file's `enabled`, because it is a per-run choice.
+[CONDITIONAL DEPENDENCIES]
+  A dependency that exists only while a switch is on is ONE entry in
+  metadata.json:optional_dependencies. The key is the package name; the entry carries `option`
+  (name / default on|off / defines as macro-to-value), `targets`, and `source`. One entry answers
+  both 'when' and 'what', so a package never needs a second half in another table: `source: local`
+  says a stock CCI remote cannot fetch it, so an online CI leg keeps that option off.
+  conanfile.py, test_package/conanfile.py, CMakeLists.txt and the schema read that one table with
+  one rule; nobody edits a build file to add an option. Precedence: a Conan `-o <option>=...` run
+  overrides the file's `default`, because it is a per-run choice.

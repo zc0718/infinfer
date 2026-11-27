@@ -6,19 +6,9 @@
   "team": "HeT-FTI",
   "license": "Apache-2.0",
   "description": "A portable C11/C++17 compute-graph runtime for embedded inference and on-device adaptation",
-  "authors": [
-    "Chen Zhang <chen2.zhang@szhittech.com>"
-  ],
-  "maintainers": [
-    "Chen Zhang <chen2.zhang@szhittech.com>"
-  ],
-  "topics": [
-    "inference",
-    "embedded",
-    "tinyml",
-    "quantization",
-    "library"
-  ],
+  "authors": ["Chen Zhang <chen2.zhang@szhittech.com>"],
+  "maintainers": ["Chen Zhang <chen2.zhang@szhittech.com>"],
+  "topics": ["inference", "embedded", "tinyml", "quantization", "library"],
   "url": "https://github.com/HeT-FTI/infinfer.git",
   "homepage": "https://github.com/HeT-FTI",
   "cmake_version": "4.2.3",
@@ -27,20 +17,12 @@
   "build_type": "Debug",
   "activate_code_coverage": true,
   "coverage": {
-    "core_scopes": [
-      "src/runtime/",
-      "src/kernel/scalar/"
-    ],
-    "floors": {
-      "Linux": {
-        "core": 91.0,
-        "all": 91.0
-      }
-    },
-    "default_floor": {
-      "core": 80.0,
-      "all": 70.0
-    }
+    "core_scopes": ["src/runtime/", "src/kernel/scalar/"],
+    "floors": {"Linux": {
+  "core": 91.0,
+  "all": 91.0
+}},
+    "default_floor": {"core": 80.0, "all": 70.0}
   },
   "is_shared": false,
   "is_header": false,
@@ -48,97 +30,35 @@
   "std_modules": "iostream",
   "user_modules": "",
   "dependencies": {
-    "common": {
-      "ZLIB": [
-        "ZLIB::ZLIB"
-      ]
-    },
-    "c": {
-      "PCRE2": [
-        "pcre2::pcre2"
-      ],
-      "cmsis-nn": [
-        "cmsis-nn::cmsis-nn"
-      ]
-    },
-    "cpp": {
-      "Eigen3": [
-        "Eigen3::Eigen"
-      ],
-      "etl": [
-        "etl::etl"
-      ]
-    },
-    "infra": {
-      "GTest": [
-        "gtest::gtest"
-      ],
-      "pybind11": [
-        "pybind11::module"
-      ]
+    "common": {"ZLIB": ["ZLIB::ZLIB"]},
+    "c": {"PCRE2": ["pcre2::pcre2"]},
+    "cpp": {"Eigen3": ["Eigen3::Eigen"], "etl": ["etl::etl"]},
+    "infra": {"GTest": ["gtest::gtest"], "pybind11": ["pybind11::module"]}
+  },
+  "optional_dependencies": {
+    "cmsis-nn": {
+      "option": {
+        "name": "with_cmsis_nn",
+        "default": "off",
+        "defines": {"INFR_WITH_CMSIS_NN": "1"}
+      },
+      "targets": ["cmsis-nn::cmsis-nn"],
+      "source": "local"
     }
   },
-  "component_requires": {
-    "infinfer_cpp": [
-      "infinfer_c"
-    ]
-  },
-  "baremetal_white_list": [
-    "etl",
-    "cmsis-nn"
-  ],
-  "doc_languages": [
-    "en",
-    "zh"
-  ],
-  "doc_versions": [
-    "0.1.0"
-  ],
-  "doc_doxygen_folders": [
-    "include",
-    "src",
-    "docs/doxygen/dox"
-  ],
-  "doc_doxygen_suffix": [
-    "h",
-    "c",
-    "hpp",
-    "cpp",
-    "dox",
-    "cxx"
-  ],
+  "component_requires": {"infinfer_cpp": ["infinfer_c"]},
+  "baremetal_white_list": ["etl", "cmsis-nn"],
+  "doc_languages": ["en", "zh"],
+  "doc_versions": ["0.1.0"],
+  "doc_doxygen_folders": ["include", "src", "docs/doxygen/dox"],
+  "doc_doxygen_suffix": ["h", "c", "hpp", "cpp", "dox", "cxx"],
   "trigger_tests": true,
   "saving_tests_log": true,
   "enable_python_bindings": false,
-  "compile_options": {
-    "with_cmsis_nn": {
-      "enabled": false,
-      "requirement": "cmsis-nn",
-      "dependency_key": "cmsis-nn",
-      "defines": [
-        "INFR_WITH_CMSIS_NN"
-      ],
-      "why": "optional vendor backend for Cortex-M; off by default so a clean clone needs no extra remote"
-    }
-  },
   "on_board_validation": {
-    "os": [
-      "Linux"
-    ],
-    "profile_arch": [
-      "x86_64"
-    ],
-    "toolchain_version": [
-      "11.3.rel1"
-    ]
+    "os": ["Linux"],
+    "profile_arch": ["x86_64"],
+    "toolchain_version": ["11.3.rel1"]
   },
-  "workflow_triggers": {
-    "build": true,
-    "tests": true,
-    "release": true,
-    "docs": true,
-    "security_scan": true,
-    "cross_compile": true,
-    "on_board": false
-  }
+  "workflow_triggers": {"build": true, "tests": true, "release": true, "docs": true, "security_scan": true, "cross_compile": true, "on_board": false}
 }

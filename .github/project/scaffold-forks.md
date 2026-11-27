@@ -105,3 +105,21 @@ shutil.copy2(v1, coverage_folder + sep + _get_file_name(v1))   # basename only
 **怎么验证.** 与 F2/F3 同一份 `patches/scaffold-forks.patch`；打到上游 v0.3.11 后 `diff -q` 一致。
 
 **退出条件.** 与 F2/F3 同批移除。
+
+## F5 · `metadata.json` 的条件依赖只有一张表（2026-11-27）
+
+**改哪儿.** `metadata.schema.json` 新增顶层 `optional_dependencies`（一个条目 = `option`
+(name/default/defines) + `targets` + `source` + 可选 `bucket`），并删掉 `dependencies` 里那条
+条件包；`conanfile.py`、`test_package/conanfile.py`、根 `CMakeLists.txt` 与蓝图
+`[CONDITIONAL DEPENDENCIES]` 一并对齐。
+
+**为什么它属于模板而不是本项目.** 上游把“某个开关管哪个依赖”拆成两处：开关表写包名，依赖表写
+同一个包，靠**名字碰巧相等**关联；而“这个包从哪儿能拿到”这个决定 CI 能做什么的事实，两处都没
+记。一个条目同时回答“什么时候开”和“开了要什么”之后，判据变成显式的、可被 schema 检查的，干净
+环境（只有 CCI 远程）的默认腿自然不含它——不需要任何“CI 专用开关”，也不需要改 workflow。
+
+**怎么验证.** 空 `CONAN_HOME`：默认腿的图里没有该包，`-o` 打开才去找它并指名
+`optional_dependencies.<pkg>.source` 报警；`gates.py all` + `ci.sh` 全绿；两条 `conan create`
+腿各跑一次（默认腿 174 tests）。
+
+**退出条件.** 上游用同样方式表达条件依赖（一个条目含开关、目标与来源）时移除。

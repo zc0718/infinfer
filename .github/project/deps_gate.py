@@ -115,10 +115,34 @@ def check(root, data_path=None):
     else:
         meta = load_json(metadata)
         buckets = meta.get("dependencies") or {}
+        optional = meta.get("optional_dependencies") or {}
         seen = set()
         for entry in entries:
             bucket = entry.get("bucket")
             key = entry.get("metadata_key")
+            if bucket == "optional":
+                # A conditional dependency: metadata keeps it in `optional_dependencies`, and the
+                # entry repeats its targets and names the option that owns it, so a package cannot
+                # drift between the two files without this rule saying so.
+                seen.add((bucket, key))
+                if key not in optional:
+                    problems.append(
+                        f"deps: entry '{entry.get('conan')}' expects metadata "
+                        f"'optional_dependencies' to hold '{key}', but it holds {sorted(optional)}"
+                    )
+                    continue
+                if sorted(optional[key].get("targets", [])) != sorted(entry.get("targets", [])):
+                    problems.append(
+                        f"deps: entry '{entry.get('conan')}' declares targets "
+                        f"{entry.get('targets')} but metadata says {optional[key].get('targets')}"
+                    )
+                _declared = str(optional[key].get("option", {}).get("name") or "")
+                if str(entry.get("option") or "") != _declared:
+                    problems.append(
+                        f"deps: entry '{entry.get('conan')}' declares option "
+                        f"'{entry.get('option')}' but metadata says '{_declared}'"
+                    )
+                continue
             if bucket not in buckets:
                 problems.append(
                     f"deps: entry '{entry.get('conan')}' declares bucket '{bucket}', which is not one "
@@ -143,6 +167,11 @@ def check(root, data_path=None):
                     problems.append(
                         f"deps: metadata declares '{bucket}/{key}' with no entry in deps.json"
                     )
+        for key in optional:
+            if ("optional", key) not in seen:
+                problems.append(
+                    f"deps: metadata declares 'optional/{key}' with no entry in deps.json"
+                )
 
     for entry in entries:
         name = entry.get("conan", "<no name>")
@@ -372,6 +401,61 @@ def selftest():
         else:
             failures += 1
             print(f"[deps:selftest] FAIL D2 expected the target report, got {problems}")
+
+        # D2 -- the conditional table. A package that lives in `optional_dependencies` is
+        # registered with bucket "optional"; the rule must read that table, not the four buckets.
+        _base_conandata = "requirements:\n  - \"zlib/1.3.1\"\n"
+        (root / "conandata.yml").write_text(
+            _base_conandata + "  - \"cmsis-nn/8.0.0\"\n", encoding="utf-8"
+        )
+        (root / "metadata.json").write_text(
+            json.dumps({
+                "license": "Apache-2.0",
+                "dependencies": {"common": {"ZLIB": ["ZLIB::ZLIB"]}},
+                "optional_dependencies": {
+                    "cmsis-nn": {"option": {"name": "with_cmsis_nn",
+                                            "default": "off", "defines": {}},
+                                 "targets": ["cmsis-nn::cmsis-nn"]},
+                },
+                "baremetal_white_list": ["ZLIB"],
+            }), encoding="utf-8"
+        )
+
+        def conditional(**overrides):
+            base = {"conan": "cmsis-nn", "metadata_key": "cmsis-nn", "bucket": "optional",
+                    "targets": ["cmsis-nn::cmsis-nn"], "option": "with_cmsis_nn"}
+            base.update(overrides)
+            return entry(**base)
+
+        problems = run([entry(), conditional()])
+        if not problems:
+            print("[deps:selftest] PASS D2 a conditional dependency that agrees is green")
+        else:
+            failures += 1
+            print(f"[deps:selftest] FAIL D2 expected a clean run, got {problems}")
+
+        problems = run([entry(), conditional(option="with_cmsis_n")])
+        if any("declares option" in p for p in problems):
+            print("[deps:selftest] PASS D2 a drift between the register and the option name is red")
+        else:
+            failures += 1
+            print(f"[deps:selftest] FAIL D2 expected the option report, got {problems}")
+
+        problems = run([entry(), conditional(metadata_key="ghost")])
+        if any("'optional_dependencies' to hold" in p for p in problems):
+            print("[deps:selftest] PASS D2 an entry claiming an undeclared conditional is red")
+        else:
+            failures += 1
+            print(f"[deps:selftest] FAIL D2 expected the missing-conditional report, got {problems}")
+
+        (root / "conandata.yml").write_text(_base_conandata, encoding="utf-8")
+        (root / "metadata.json").write_text(
+            json.dumps({
+                "license": "Apache-2.0",
+                "dependencies": {"common": {"ZLIB": ["ZLIB::ZLIB"]}},
+                "baremetal_white_list": ["ZLIB"],
+            }), encoding="utf-8"
+        )
 
         problems = run([entry(license="GPL-3.0")])
         if any("not in allowed_licences" in p for p in problems):

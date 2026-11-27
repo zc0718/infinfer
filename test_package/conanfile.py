@@ -109,9 +109,25 @@ class PackageTestConan(ConanFile):
             return
         self.build_requires(f"cmake/{_override or self.metadata.get('cmake_version')}")
 
+    def _optional_state(self, package):
+        """None when `package` is unconditional, else whether the option that owns it is on.
+
+        Read from metadata only: this method is called from `requirements()`, where the graph
+        does not exist yet and touching `self.dependencies` would poison the generator's view.
+        `-o` does not need to reach here -- the tested package carries its own requirement, and
+        this list is only about what the test executable links directly.
+        """
+        _spec = next((_v for _k, _v in (self.metadata.get('optional_dependencies') or {}).items()
+                      if _k.lower() == package.lower()), None)
+        if _spec is None:
+            return None
+        return str(_spec['option'].get('default', 'off')).strip() == 'on'
+
     def requirements(self):
         self.requires(self.tested_reference_str)
         for req in self.conandata.get("requirements", []):
+            if self._optional_state(req.split('/')[0]) is False:
+                continue
             self.requires(req)
 
     def _tests_enabled(self):
@@ -150,6 +166,14 @@ class PackageTestConan(ConanFile):
         if not self.metadata.get('enable_python_bindings'):
             _infra.pop("pybind11", None)
         
+        # Same rule as the recipe: an optional dependency reaches the CMake link line only
+        # while its option is on, so both sides agree without matching names by hand.
+        for _name, _spec in (self.metadata.get('optional_dependencies') or {}).items():
+            if self._optional_state(_name) is False:
+                continue
+            _bucket = _cpp if str(_spec.get('bucket') or 'c') == 'cpp' else _c
+            _bucket[_name] = list(_spec.get('targets') or [])
+
         _infra_deps = [f"{k}@{' '.join(v)}" for k, v in _infra.items()]
         _c_deps = [f"{k}@{' '.join(v)}" for k, v in {**_common, **_c}.items()]
         _cpp_deps = [f"{k}@{' '.join(v)}" for k, v in {**_common, **_cpp}.items()]

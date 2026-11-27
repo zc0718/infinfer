@@ -38,6 +38,12 @@ __pycache__/
 /test_package/build/
 CMakeUserPresets.json
 
+# coverage wrappers: the test package copies each source into `ucov_*` to instrument it, and
+# regenerates the stress entry point; a run that dies leaves them behind
+/test_package/test/unit/ucov_*.cpp
+/test_package/test/stress/ucov_*.cpp
+/test_package/test/stress/main.cpp
+
 # megalinter reports
 /megalinter-reports/
 mega-linter.log
