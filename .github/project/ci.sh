@@ -28,7 +28,7 @@ if ! python3 -c "import yaml" >/dev/null 2>&1; then
 fi
 
 status=0
-GATES="docannot_gate.py census_gate.py registry_gate.py isa_gate.py apicontract_gate.py rootlayout_gate.py scope_gate.py toolchain_gate.py initform_gate.py sanitize_gate.py header_dialect_gate.py coverage_gate.py procdocs_gate.py claim_gate.py gaps_gate.py deps_gate.py docvoice_gate.py scaffold_gate.py ci_policy_gate.py compliance_gate.py p3_gate.py"
+GATES="docannot_gate.py census_gate.py registry_gate.py isa_gate.py apicontract_gate.py rootlayout_gate.py scope_gate.py toolchain_gate.py initform_gate.py sanitize_gate.py header_dialect_gate.py coverage_gate.py procdocs_gate.py claim_gate.py gaps_gate.py deps_gate.py docvoice_gate.py scaffold_gate.py ci_policy_gate.py compliance_gate.py p3_gate.py vendor_gate.py"
 for gate in ${GATES}; do
     echo "--- .github/project/${gate}"
     python3 ".github/project/${gate}" || status=1

@@ -142,9 +142,9 @@
     {
       "id": "vendor",
       "from": "plan",
-      "status": "deferred",
-      "why": "no vendor backend exists (PLAN P2.5 not started), so an `nm` check for vendor symbols would pass without checking anything",
-      "trigger": "when backend/cmsis_nn.c or csi_nn2.c lands, the gate asserts their symbols are absent when the option is off"
+      "status": "covered",
+      "by": "vendor_gate.py:V1",
+      "what": "with the vendor option off, the object defines none of the backend's symbols; with it on, it defines them (V2), so V1 cannot pass because the branch is empty"
     },
     {
       "id": "apicontract",
