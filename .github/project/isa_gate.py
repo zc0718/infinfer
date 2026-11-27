@@ -57,7 +57,7 @@ DATA = ROOT / ".github/project/isa_expectations.json"
 # SSE2-era mnemonics that only appear when a loop was packed. Deliberately generous: the gate
 # asks "was this body vectorised", not "was it vectorised exactly the way I expected".
 PACKED_RE = re.compile(
-    r"\b(addps|subps|mulps|divps|maxps|minps|andps|orps|xorps|movups|movaps|unpcklps|unpckhps|"
+    r"\bv?(addps|subps|mulps|divps|maxps|minps|andps|orps|xorps|movups|movaps|unpcklps|unpckhps|"
     r"shufps|movhlps|movlhps|cvtdq2ps|cvtps2dq|paddd|psubd|pmullw|pmulld|pmaddwd|packssdw|"
     r"packuswb|pshufd|punpckldq|punpckhdq)\b"
 )
@@ -66,7 +66,7 @@ PACKED_RE = re.compile(
 # byte compares, unaligned moves). Kept separate so `autovec`'s thresholds are not silently
 # loosened by everything the intrinsics tier needs.
 X86_RE = re.compile(
-    r"\b(addps|subps|mulps|divps|maxps|minps|andps|orps|xorps|movups|movaps|movdqu|movdqa|"
+    r"\bv?(addps|subps|mulps|divps|maxps|minps|andps|orps|xorps|movups|movaps|movdqu|movdqa|"
     r"unpcklps|unpckhps|shufps|movhlps|movlhps|cvtdq2ps|cvtps2dq|paddd|psubd|paddq|pmullw|"
     r"pmulld|pmaddwd|psrad|packssdw|packuswb|pshufd|punpckldq|punpckhdq|punpcklwd|punpckhwd|"
     r"pcmpgtd|pcmpgtb|pand|por|pxor)\b"
