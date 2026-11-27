@@ -66,13 +66,28 @@ TEST(KernelParityDwconv3x3, ScalarFp32MatchesDoubleReference) {
              *
              * 参考实现在 double 域按源码写出的顺序求和，所以换了顺序的体会表现为差异，
              * 而不是被吸收掉。 */
+            /* The bound comes from the corpus, not from a fixed window. Nine products of
+             * up to 1e4 that cancel down to ~70 lose about `eps * sum|terms|` to rounding,
+             * which is a hundred times more than a 1e-5 relative window on the result would
+             * allow -- measured while trying a tap-major layout: a 9.8e-4 difference on a
+             * value of -71, all of it cancellation and none of it a reordered body. A
+             * tolerance that ignores the conditioning is how a parity test starts lying in
+             * both directions.
+             *
+             * 界来自语料而不是固定窗。九个最大到 1e4 的乘积抵消到 ~70 时，舍入损失约为
+             * `eps * sum|terms|`，比「结果上的 1e-5 相对窗」大两个数量级——这是在试 tap-major
+             * 布局时实测到的：值 -71 上差 9.8e-4，全部来自抵消，没有一项来自换顺序。不看
+             * 条件数的容差，会让 parity 测试在两个方向上都不再说真话。 */
             double want = 0.0;
+            double magnitude = 0.0;
             for (std::uint32_t j = 0; j < 9U; ++j) {
-                want += static_cast<double>(window[(static_cast<std::size_t>(r) * 9U) + j]) *
-                        static_cast<double>(weights[(static_cast<std::size_t>(r) * 9U) + j]);
+                const double term = static_cast<double>(window[(static_cast<std::size_t>(r) * 9U) + j]) *
+                                    static_cast<double>(weights[(static_cast<std::size_t>(r) * 9U) + j]);
+                want += term;
+                magnitude += std::fabs(term);
             }
-            EXPECT_NEAR(want, static_cast<double>(got[r]), 1e-5 * (1.0 + std::abs(want)))
-                << "row " << r << " of " << rows;
+            const double bound = (4.0 * 1.1920929e-7 * magnitude) + 1e-6;
+            EXPECT_NEAR(want, static_cast<double>(got[r]), bound) << "row " << r << " of " << rows;
         }
     }
 }
