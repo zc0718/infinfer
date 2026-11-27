@@ -44,6 +44,12 @@ def main():
                         help="static only: how many synthetic samples to calibrate on. 1 is what a "
                              "survey does when it has no data; the error that produces is a "
                              "statement about the calibration set, not about int8")
+    parser.add_argument("--images",
+                        help="comma-separated real images: calibrate on all but the last, evaluate "
+                             "on the last. Real photographs are the only way this survey can say "
+                             "anything about int8 accuracy; a ramp cannot")
+    parser.add_argument("--size", type=int, default=None,
+                        help="side of the square the model wants; defaults to the model's own height")
     args = parser.parse_args()
 
     try:
@@ -79,6 +85,46 @@ def main():
         ramp = (np.arange(feed.size, dtype=np.float32) / 16.0 - 1.0) * (1.0 + 0.125 * seed)
         return np.transpose(ramp.reshape(n, h, w, c), (0, 3, 1, 2)).copy()
 
+    def image_sample(path):
+        """A real photograph in the model's input layout.
+
+        Grayscale is replicated across the three channels when the model wants three and the file
+        has one: that keeps the *content* real (edges, scale, contrast) even though the colour is
+        not. Values are mapped to [-1, 1) per channel, which is the same convention the synthetic
+        fixture uses.
+        """
+        from PIL import Image
+
+        side = args.size or h
+        with Image.open(path) as handle:
+            picture = handle.convert("L" if c == 1 else "RGB").resize((side, side))
+        pixels = np.asarray(picture, dtype=np.float32) / 127.5 - 1.0
+        if c == 1:
+            array = pixels[:, :, None]
+        elif pixels.ndim == 3:
+            array = pixels                       # already RGB: repeating it would give 9 channels
+        else:
+            array = np.repeat(pixels[:, :, None], c, axis=2)
+        return np.transpose(array, (2, 0, 1))[None, ...].copy()
+
+    if args.images:
+        paths = [entry.strip() for entry in args.images.split(",") if entry.strip()]
+        if len(paths) < 2:
+            print("[ptq] --images needs at least two files: one to calibrate on, one held out",
+                  file=sys.stderr)
+            return 1
+        calibration = [image_sample(entry) for entry in paths[:-1]]
+        feed = image_sample(paths[-1])
+        print(f"[ptq] calibrating on {len(calibration)} image(s), evaluating on {paths[-1]}")
+    else:
+        calibration = [sample(seed + 1) for seed in range(args.calib)]
+
+    # The fp32 baseline is taken *after* the input is final: an image run and a ramp run must not
+    # share a reference, or a file-order mistake looks like a quantisation error.
+    # fp32 基线在输入定下来之后才算：图像运行与斜坡运行不能共用一份参考，否则一个文件顺序的
+    # 错误会看起来像量化误差。
+    want = reference(ort.InferenceSession(args.onnx, providers=["CPUExecutionProvider"]), feed)
+
     if args.mode == "dynamic":
         quantize_dynamic(args.onnx, str(quantised), weight_type=QuantType.QUInt8)
     else:
@@ -86,7 +132,7 @@ def main():
             """`--calib` synthetic samples, none of which is the evaluation input."""
 
             def __init__(self):
-                self._queue = [sample(seed + 1) for seed in range(args.calib)]
+                self._queue = list(calibration)
 
             def get_next(self):
                 return None if not self._queue else {name: self._queue.pop(0)}
@@ -98,8 +144,20 @@ def main():
     q = ort.InferenceSession(str(quantised), providers=["CPUExecutionProvider"])
     got = reference(q, feed)
 
+    # Both sides are flattened first: ORT returns the model's own shape (1, 1024) for a feature
+    # model, and a 2-D dot product is not the cosine of two vectors.
+    want = want.reshape(-1)
+    got = got.reshape(-1)
     diff = np.abs(got.astype(np.float64) - want.astype(np.float64))
     scale = np.abs(want.astype(np.float64)).max() + 1e-12
+    # A feature vector is mostly near-zero with a few large channels, so correlation alone is a
+    # misleading summary: it is dominated by the near-zero ones. Cosine similarity asks whether the
+    # *direction* survived, which is what a downstream layer actually consumes.
+    # 特征向量里大多数通道接近 0、少数很大，所以单看相关系数会误导：它被近零的那批主导。余弦相似度
+    # 问的是“方向”有没有保住，而那正是下一层真正消费的东西。
+    cosine = float(
+        np.dot(want.astype(np.float64), got.astype(np.float64))
+        / (np.linalg.norm(want.astype(np.float64)) * np.linalg.norm(got.astype(np.float64)) + 1e-12))
     fp32_bytes = pathlib.Path(args.onnx).stat().st_size
     # torch's exporter keeps the weights in a sidecar `.data` file; both halves are the model.
     sidecar = pathlib.Path(args.onnx).with_suffix(".onnx.data")
@@ -110,22 +168,25 @@ def main():
 
     report = {
         "mode": args.mode,
-        "calibration_samples": args.calib if args.mode == "static" else 0,
+        "calibration": "images" if args.images else f"ramps({args.calib})",
+        "calibration_samples": len(calibration) if args.mode == "static" else 0,
         "fp32_bytes": fp32_bytes,
         "int8_bytes": q_bytes,
         "ratio": round(fp32_bytes / q_bytes, 2) if q_bytes else None,
         "output_elements": int(want.size),
+        "fp32_absmax": float(np.abs(want).max()),
+        "fp32_rms": float(np.sqrt(np.mean(np.square(want.astype(np.float64))))),
         "max_abs_diff": float(diff.max()),
         "mean_abs_diff": float(diff.mean()),
         "max_rel_to_range": float(diff.max() / scale),
+        "cosine": cosine,
         "correlation": float(np.corrcoef(want.astype(np.float64), got.astype(np.float64))[0, 1]),
         "caveat": (
-            "the SIZES are facts about the model and can be quoted. The ERROR is not an accuracy "
-            "claim: calibration here is a handful of synthetic ramps, and int8 activation ranges "
-            "estimated from a ramp have nothing to do with the ranges of real images. A large "
-            "error says the calibration set is wrong, not that int8 is; a small one would have "
-            "said nothing either. Measuring int8 accuracy needs calibration data and a held-out "
-            "set, which this repository does not have (gaps G-110)"),
+            "the SIZES are facts about the model and can be quoted. The ERROR is only an accuracy "
+            "claim when it was calibrated and evaluated on real photographs -- and even then it "
+            "is one held-out sample, so it bounds the mechanism rather than measuring the model. "
+            "With the synthetic ramp it is a statement about the ramp: a large error says the "
+            "calibration set is wrong, not that int8 is (gaps G-110)"),
     }
     print(json.dumps(report, indent=2))
 
