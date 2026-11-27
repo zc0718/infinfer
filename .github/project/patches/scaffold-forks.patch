@@ -75,7 +75,7 @@
  
 +    def _compile_option_enabled(self, name):
 +        """Read the option rather than the metadata default, so `-o <name>=True` overrides it."""
-+        return bool(getattr(self.options, name, False))
++        return str(self.options.get_safe(name)).strip() == 'True'
 +
 +    def _gated_requirement(self, package):
 +        """Whether an option gates `package`: None when none does, else that option's state."""
