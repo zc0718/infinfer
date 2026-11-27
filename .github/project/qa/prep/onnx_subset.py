@@ -31,15 +31,26 @@ The subset, its refusals and its honest boundaries are recorded as gaps G-104.
 是 blob 声明的布局，而两种布局元素个数相同，换错了任何形状检查都看不见。这个子集、它的拒绝规则
 和诚实的边界记录在 gaps G-104。
 """
+import math
 import numpy as np
 
 import blobfmt
 
 # ONNX op_type -> the blob op name (a `blobfmt.OP` key).
+#
+# `ReduceMean` is in here with a condition (axes = the two spatial ones, keepdims = 1) which
+# `check()` enforces: that is how a modern exporter spells a global average pool, and refusing
+# it was a mistake of *reason* rather than of taste -- the first real MobileNetV3 export arrived
+# as 10 `ReduceMean` nodes where the synthetic fixture had `GlobalAveragePool`.
+#
+# `ReduceMean` 带条件（轴是两个空间轴、keepdims=1），条件在 `check()` 里查：这正是新导出器表达
+# global average pool 的方式。当初拒绝它是个**理由写错**，不是口味问题——第一份真 MobileNetV3
+# 导出里是 10 个 `ReduceMean`，而合成夹具里是 `GlobalAveragePool`。
 NODE_OPS = {
     "Conv": "conv2d",
     "MaxPool": "max_pool2d",
     "GlobalAveragePool": "mean_hw",
+    "ReduceMean": "mean_hw",
     "Gemm": "fc",
     "Mul": "mul",
     "Add": "add",
@@ -71,12 +82,15 @@ DEFERRED = {
     "ReduceSum": "the blob has `mean_hw` and no general reduce -- a reduction needs an axis "
                  "and a shape rule the format does not carry",
     "ReduceMax": "same as ReduceSum; `max` is a kernel, not a graph node in this format",
-    "ReduceMean": "`GlobalAveragePool` is the only reduction translated, because it is the "
-                  "only one whose axes are implied by the layout",
 }
 HARD_SIGMOID_ALPHA = 1.0 / 6.0
 HARD_SIGMOID_BETA = 0.5
 MAX_OPSET = 20
+# The only initializer families this importer accepts: float weights, integer shape constants.
+# One spelling, so `initializers` and `shape_constants` cannot disagree about what 7 means.
+# 本导入器只接受的两类初始化器：浮点权重与整数形状常量。只在此处写一次，
+# 好让 `initializers` 与 `shape_constants` 对“7 是什么”没有第二种说法。
+_DTYPES = {"float32": 1, "int32": 6, "int64": 7}
 
 
 class Unsupported(Exception):
@@ -96,16 +110,24 @@ def _scalar(attr, default):
 
 
 def initializers(model):
-    """Every static weight, as `{name: ndarray}`.
+    """Every static **float** weight, as `{name: ndarray}`.
 
     A model whose weights are not all static cannot run where there is no allocator, so a
-    missing one is a refusal rather than a TODO.
+    missing one is a refusal rather than a TODO. Integer initializers are not weights -- they
+    are the shape constants a `Reshape` carries -- so they are read by `shape_constants`
+    instead of being refused here, and only those two families are accepted at all.
+
+    每个静态**浮点**权重。权重不静态的模型在无分配器的目标上跑不了，所以缺一个就是拒绝而不是 TODO。
+    整数初始化器不是权重（它们是 `Reshape` 携带的形状常量），由 `shape_constants` 读取；只接受
+    这两类，其它类型仍然拒绝。
     """
     arrays = {}
     for tensor in model.graph.initializer:
-        if tensor.data_type != 1:  # FLOAT
-            raise Unsupported(f"initializer {tensor.name!r} is not FLOAT "
-                              f"(data_type={tensor.data_type})")
+        if tensor.data_type == _DTYPES["int64"] or tensor.data_type == _DTYPES["int32"]:
+            continue
+        if tensor.data_type != _DTYPES["float32"]:
+            raise Unsupported(f"initializer {tensor.name!r} has data_type={tensor.data_type}, "
+                              "which is neither FLOAT nor an integer shape constant")
         dims = list(tensor.dims)
         if tensor.raw_data:
             values = np.frombuffer(tensor.raw_data, dtype="<f4")
@@ -113,6 +135,30 @@ def initializers(model):
             values = np.asarray(tensor.float_data, dtype="<f4")
         arrays[tensor.name] = np.asarray(values, dtype=np.float32).reshape(dims)
     return arrays
+
+
+def shape_constants(model):
+    """Integer initializers, as `{name: [int, ...]}` -- `Reshape` targets and the like.
+
+    Kept apart from `initializers` so that "every weight is fp32" stays an invariant the rest
+    of the module can rely on: a blob slot is fp32 and an integer array has no place in one.
+
+    与 `initializers` 分开，好让“所有权重都是 fp32”这条不变量继续成立：blob 槽是 fp32，
+    整数数组在那里没有位置。
+    """
+    shapes = {}
+    for tensor in model.graph.initializer:
+        if tensor.data_type not in (_DTYPES["int64"], _DTYPES["int32"]):
+            continue
+        if tensor.raw_data:
+            dtype = "<i8" if tensor.data_type == _DTYPES["int64"] else "<i4"
+            values = np.frombuffer(tensor.raw_data, dtype=dtype)
+        else:
+            values = np.asarray(
+                tensor.int64_data if tensor.data_type == _DTYPES["int64"] else tensor.int32_data,
+                dtype=np.int64)
+        shapes[tensor.name] = [int(v) for v in np.asarray(values).ravel()]
+    return shapes
 
 
 def check(model):
@@ -129,6 +175,8 @@ def check(model):
         weights = initializers(model)
     except Unsupported as exc:
         return problems + [("<model>", str(exc))]
+    shapes = shape_constants(model)
+    static = set(weights) | set(shapes)
     known = set(NODE_OPS) | PASSTHROUGH | set(ACTIVATIONS) | {"Constant"}
     consumers = {}
     for node in model.graph.node:
@@ -146,7 +194,16 @@ def check(model):
             attrs = _attrs(node)
             alpha = _scalar(attrs.get("alpha"), 0.2)
             beta = _scalar(attrs.get("beta"), 0.5)
-            if abs(alpha - HARD_SIGMOID_ALPHA) > 1e-12 or abs(beta - HARD_SIGMOID_BETA) > 1e-12:
+            # The attributes are float32 on the wire, so an exporter that means 1/6 hands us
+            # 0.16666667163372040 -- a strict == against the Python double is a check of the
+            # fixture's precision, not of the semantics. It was written that way and it refused
+            # the first real MobileNetV3 export for exactly this reason.
+            #
+            # 属性在线上是 float32，所以导出器想写 1/6 时交给我们的是 0.16666667163372040；
+            # 拿 Python double 去严格相等，量的是夹具的精度而不是语义。原实现就是这么写的，
+            # 于是它拒绝了第一份真 MobileNetV3 导出，理由正是这个。
+            if (not math.isclose(alpha, HARD_SIGMOID_ALPHA, rel_tol=1e-6, abs_tol=1e-9)
+                    or not math.isclose(beta, HARD_SIGMOID_BETA, rel_tol=1e-6, abs_tol=1e-9)):
                 problems.append((label, f"alpha={alpha}, beta={beta}; this library implements "
                                         "alpha=1/6, beta=0.5 (relu6(x+3)/6)"))
         if node.op_type == "Clip":
@@ -185,8 +242,32 @@ def check(model):
                 problems.append((label, f"{source!r} feeds {len(consumers[source])} nodes; fusing "
                                         "the activation would change the others"))
         if node.op_type == "Reshape":
-            if len(node.input) < 2 or node.input[1] not in weights:
+            if len(node.input) < 2 or node.input[1] not in static:
                 problems.append((label, "only a static Reshape target is supported"))
+        if node.op_type == "ReduceMean":
+            # Only the global-pool form. A ReduceMean over anything else would need an axis and
+            # a shape rule the blob format does not carry, and accepting it because the numbers
+            # happen to match for one shape is how a wrong answer looks right.
+            #
+            # Two spellings, like `Clip`: opset < 18 carries `axes` as an attribute, opset 18
+            # moved it to input[1]. Reading only the attribute reports `axes=[]` for a modern
+            # export, which is what happened first.
+            #
+            # 只接受 global-pool 形式；其余 ReduceMean 需要 blob 格式并不携带的轴与形状规则。
+            # 两种写法（与 `Clip` 同理）：opset < 18 把 `axes` 当属性，opset 18 挪到了 input[1]。
+            # 只读属性会对新导出报 `axes=[]`——第一次就是这么撞上的。
+            attrs = _attrs(node)
+            axes = _ints(attrs.get("axes"), [])
+            if not axes and len(node.input) > 1 and node.input[1]:
+                axes = list(shapes.get(node.input[1]) or [])
+                if not axes:
+                    problems.append((label, "ReduceMean axes must be a static integer "
+                                            "initializer when given as an input"))
+            keepdims = int(attrs["keepdims"].i) if "keepdims" in attrs else 1
+            if sorted(axis % 4 for axis in axes) != [2, 3] or keepdims != 1:
+                problems.append((label, f"ReduceMean(axes={axes}, keepdims={keepdims}) is not a "
+                                        "global average pool; only axes=[2,3] with keepdims=1 "
+                                        "is in the subset"))
     return problems
 
 
@@ -217,6 +298,8 @@ def translate(model):
         name, reason = problems[0]
         raise Unsupported(f"{name}: {reason}")
     weights = initializers(model)
+    shapes = shape_constants(model)
+    static = set(weights) | set(shapes)
     opset = max((entry.version for entry in model.opset_import), default=0)
     if opset == 0:
         raise Unsupported("<model>: no opset_import")
@@ -250,7 +333,7 @@ def translate(model):
                 return
         raise Unsupported(f"<model>: an activation on {tensor_name!r} has no producing node")
 
-    graph_inputs = [entry for entry in model.graph.input if entry.name not in weights]
+    graph_inputs = [entry for entry in model.graph.input if entry.name not in static]
     if len(graph_inputs) != 1:
         raise Unsupported(f"<model>: exactly one graph input is supported, found {len(graph_inputs)}")
     source = graph_inputs[0]
@@ -270,7 +353,11 @@ def translate(model):
             if src not in shape_of:
                 raise Unsupported(f"{label}: {src!r} is read before it is produced")
             if kind == "Reshape":
-                requested = [int(round(float(v))) for v in np.asarray(weights[node.input[1]]).ravel()]
+                target = shapes.get(node.input[1])
+                if target is None:
+                    raise Unsupported(f"{label}: Reshape target {node.input[1]!r} is not a static "
+                                      "integer initializer")
+                requested = [int(axis) for axis in target]
                 after = int(np.prod([v for v in requested if v != 0]))
                 before = int(np.prod(shape_of[src]))
                 if after != before:
@@ -343,7 +430,7 @@ def translate(model):
                           "p": (k, stride, pad, 0)})
             continue
 
-        if kind == "GlobalAveragePool":
+        if kind in ("GlobalAveragePool", "ReduceMean"):
             src_shape = shape_of[src]
             shape_of[node.output[0]] = [src_shape[0], 1, 1, src_shape[3]]
             declare(node.output[0], shape_of[node.output[0]], b"")
@@ -370,11 +457,53 @@ def translate(model):
             continue
 
         if kind in ("Mul", "Add"):
+            lhs_name, rhs_name = node.input[0], node.input[1]
+            lhs, rhs = edge(lhs_name), edge(rhs_name)
+            lhs_shape, rhs_shape = shape_of.get(lhs), shape_of.get(rhs)
+
+            # A **runtime** per-channel gate: real squeeze-and-excite computes its gate, so the
+            # multiply has an (1,1,1,C) tensor against an (N,H,W,C) map and neither side is a
+            # constant. The constant form below was written first and it is what made the
+            # synthetic MobileNet's "SE" block not an SE block at all (gaps G-107).
+            #
+            # **运行时**的逐通道门：真的 squeeze-and-excite 是算出门的，所以乘法一边是
+            # (1,1,1,C) 张量、另一边是 (N,H,W,C) 特征图，两侧都不是常量。下面那种常量形式是先
+            # 写的，而它正是让合成 MobileNet 的"SE"块根本不是 SE 的原因（gaps G-107）。
+            if kind == "Mul" and lhs_shape and rhs_shape:
+                pair = None
+                for feat, feat_shape, gate, gate_shape in (
+                        (lhs, lhs_shape, rhs, rhs_shape), (rhs, rhs_shape, lhs, lhs_shape)):
+                    if (gate_shape[:3] == [1, 1, 1] and gate_shape[3] == feat_shape[3]
+                            and feat_shape[1:3] != [1, 1]):
+                        pair = (feat, feat_shape, gate)
+                        break
+                if pair is not None:
+                    feat, feat_shape, gate = pair
+                    shape_of[node.output[0]] = list(feat_shape)
+                    declare(node.output[0], shape_of[node.output[0]], b"")
+                    nodes.append({"op": "mul", "in": feat, "out": node.output[0],
+                                  "w": gate, "p": (1, 0, 0, 0)})
+                    continue
+
             lhs_shape = shape_of[src]
             gate_name = node.input[1]
             rhs = weights.get(gate_name)
             if rhs is None:
-                raise Unsupported(f"{label}: only a constant right operand is supported")
+                # A runtime right operand of the same extent: the residual connection, which is
+                # `Add(feature, skip)` with both sides computed. The blob stores both as slots
+                # and the binary kernel runs over the whole map.
+                #
+                # 等长的运行期右操作数：残差连接，`Add(feature, skip)` 两边都是算出来的。blob 把
+                # 两者都存成槽，二元核在整张图上跑。
+                runtime_rhs = edge(gate_name)
+                if kind in ("Mul", "Add") and shape_of.get(runtime_rhs) == lhs_shape:
+                    shape_of[node.output[0]] = list(lhs_shape)
+                    declare(node.output[0], shape_of[node.output[0]], b"")
+                    nodes.append({"op": NODE_OPS[kind], "in": src, "out": node.output[0],
+                                  "w": runtime_rhs, "p": (0, 0, 0, 0)})
+                    continue
+                raise Unsupported(f"{label}: only a constant or equal-extent right operand is "
+                                  "supported")
             rhs_nhwc = _nchw_to_nhwc(list(rhs.shape)) if rhs.ndim == 4 else list(rhs.shape)
             if rhs_nhwc == lhs_shape:
                 payload = np.ascontiguousarray(rhs, dtype="<f4").tobytes()

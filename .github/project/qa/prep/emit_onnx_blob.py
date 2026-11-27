@@ -34,7 +34,9 @@ def _build_reference_model():
     """A graph that touches every translation rule in one place.
 
     input (1,2,9,7) -> Conv(3 filters, 3x3, stride 2, pad 1) -> Clip(0,6)
-                    -> Mul(gate 1x1xC) -> GlobalAveragePool -> Flatten -> Gemm(2 out)
+                    -> squeeze-and-excite: ReduceMean([2,3]) -> HardSigmoid -> Mul(c)
+                    -> Mul(stored per-channel bias)
+                    -> GlobalAveragePool -> Flatten -> Gemm(2 out)
 
     The input is deliberately **non-square**: the conv lands on an (H,W,C) = (5,4,3) map,
     so H, W and C are all different. A fixture whose axes are all the same number cannot
@@ -42,8 +44,14 @@ def _build_reference_model():
     exactly the kind of code where such a swap hides (it did: the gate was applied along
     the wrong stride while every extent was equal).
 
-    输入故意是**非方形**：卷积输出 (H,W,C) = (5,4,3)，三个轴互不相同。三个轴都相等的夹具
-    分不出“轴换错了”和“算对了”，而下面的逐通道门正是最容易藏住这种错的地方（确实藏过）。
+    Two gates on purpose. The **computed** one is what a real squeeze-and-excite block does and
+    what the first real MobileNetV3 export turned out to need; the **stored** one is the form the
+    importer supported first. Both go through the same `p[0] == 1` branch in the executor, so
+    keeping both in one graph is what stops either spelling from quietly losing its only test.
+
+    输入故意**非方形**：(H,W,C) = (5,4,3)，三个轴互不相同。两个门是有意的：**算出来的**门是
+    真 SE 块做的事（第一份真 MobileNetV3 导出就需要它），**存起来的**门是导入器最早支持的形式；
+    两者走执行器同一个 `p[0] == 1` 分支，放在一张图里才不会让任何一种写法默默失去它唯一的测试。
     """
     import numpy as np
     import onnx
@@ -54,7 +62,7 @@ def _build_reference_model():
 
     conv_w = np.arange(3 * 2 * 3 * 3, dtype=np.float32).reshape(3, 2, 3, 3) / 32.0
     conv_b = np.array([0.25, -0.5, 0.75], dtype=np.float32)
-    gate = np.array([0.5, 1.5, -2.0], dtype=np.float32).reshape(1, 3, 1, 1)
+    bias = np.array([1.5, 0.5, -1.0], dtype=np.float32).reshape(1, 3, 1, 1)
     fc_w = np.arange(2 * 3, dtype=np.float32).reshape(2, 3) / 8.0
     fc_b = np.array([0.125, -0.25], dtype=np.float32)
 
@@ -63,8 +71,15 @@ def _build_reference_model():
                          kernel_shape=[3, 3], strides=[2, 2], pads=[1, 1, 1, 1], group=1),
         # opset 13 Clip: the bounds are *inputs*, not attributes.
         helper.make_node("Clip", ["c", "clip_min", "clip_max"], ["c6"], name="clip6"),
-        helper.make_node("Mul", ["c6", "gate"], ["g"], name="se_gate"),
-        helper.make_node("GlobalAveragePool", ["g"], ["p"], name="pool"),
+        # A real squeeze-and-excite gate: pooled, squashed, then multiplied back in.
+        helper.make_node("ReduceMean", ["c6"], ["pooled"], name="se_pool",
+                         axes=[2, 3], keepdims=1),
+        helper.make_node("HardSigmoid", ["pooled"], ["gate"], name="se_gate",
+                         alpha=1.0 / 6.0, beta=0.5),
+        helper.make_node("Mul", ["gate", "c6"], ["g"], name="se_scale"),
+        # And the stored form of the same shape, so both spellings stay covered.
+        helper.make_node("Mul", ["g", "bias"], ["gb"], name="se_bias"),
+        helper.make_node("GlobalAveragePool", ["gb"], ["p"], name="pool"),
         helper.make_node("Flatten", ["p"], ["f"], name="flatten"),
         helper.make_node("Gemm", ["f", "fc_w", "fc_b"], ["y"], name="classifier", transB=1),
     ]
@@ -72,7 +87,7 @@ def _build_reference_model():
         nodes, "k2o_onnx_subset",
         [helper.make_tensor_value_info("x", TensorProto.FLOAT, [1, 2, 9, 7])],
         [helper.make_tensor_value_info("y", TensorProto.FLOAT, [1, 2])],
-        [tensor("conv_w", conv_w), tensor("conv_b", conv_b), tensor("gate", gate),
+        [tensor("conv_w", conv_w), tensor("conv_b", conv_b), tensor("bias", bias),
          tensor("fc_w", fc_w), tensor("fc_b", fc_b),
          tensor("clip_min", np.array(0.0)), tensor("clip_max", np.array(6.0))])
     model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 13)])
@@ -86,14 +101,19 @@ def _expected_blob(model):
     is checked against. Every transposition below is written as an explicit axis order so
     that reading it next to `onnx_subset.translate` shows whether they agree.
 
-    同一张图，手写一遍。下面每个转置都用显式轴序写出来，好让它和
-    `onnx_subset.translate` 并排一读就能看出是否一致。
+    Slot order is the importer's convention -- a node declares its **output** first and its
+    operands after -- because two blobs that mean the same thing should be the same bytes, and
+    "which order did this producer happen to use" is not part of the meaning.
+
+    同一张图，手写一遍。下面每个转置都用显式轴序写出来，好让它和 `onnx_subset.translate`
+    并排一读就能看出是否一致。槽序用导入器的约定——节点先声明**输出**、再声明操作数——因为
+    意思相同的两个 blob 就该是同样的字节，"生产者碰巧用了什么顺序"不属于含义的一部分。
     """
     import numpy as np
 
     weights = onnx_subset.initializers(model)
     conv_w = np.transpose(weights["conv_w"], (0, 2, 3, 1))          # (oc,ic,kh,kw) -> (oc,kh,kw,ic)
-    gate = np.transpose(weights["gate"], (0, 2, 3, 1))              # (1,3,1,1)       -> (1,1,1,3)
+    bias = np.transpose(weights["bias"], (0, 2, 3, 1))              # (1,3,1,1)    -> (1,1,1,3)
     raw = lambda array: np.ascontiguousarray(array, dtype="<f4").tobytes()  # noqa: E731
 
     slots = [
@@ -101,8 +121,10 @@ def _expected_blob(model):
         ("c", [1, 5, 4, 3], b""),                                     # conv out
         ("conv_w", [3, 3, 3, 2], raw(conv_w)),
         ("conv_b", [3], raw(weights["conv_b"])),
-        ("g", [1, 5, 4, 3], b""),                                     # after the SE gate
-        ("gate", [1, 1, 1, 3], raw(gate)),
+        ("pooled", [1, 1, 1, 3], b""),                                # squeeze: the *computed* gate
+        ("g", [1, 5, 4, 3], b""),                                     # scaled by the computed gate
+        ("gb", [1, 5, 4, 3], b""),                                    # scaled by the stored gate
+        ("bias", [1, 1, 1, 3], raw(bias)),
         ("p", [1, 1, 1, 3], b""),                                     # global average pool
         ("y", [1, 1, 1, 2], b""),                                     # classifier output
         ("fc_w", [2, 3], raw(weights["fc_w"])),
@@ -112,8 +134,13 @@ def _expected_blob(model):
         {"op": "input", "out": "x"},
         {"op": "conv2d", "in": "x", "out": "c", "w": "conv_w", "b": "conv_b",
          "p": (3, 2, 1, 1), "act": "relu6"},
-        {"op": "mul", "in": "c", "out": "g", "w": "gate", "p": (1, 0, 0, 0)},
-        {"op": "mean_hw", "in": "g", "out": "p"},
+        # ReduceMean([2,3], keepdims=1) with HardSigmoid fused: one node, `p[0]` unused.
+        {"op": "mean_hw", "in": "c", "out": "pooled", "act": "hard_sigmoid"},
+        # The computed gate: `w` is a runtime slot, not a constant -- same `p[0] == 1` branch.
+        {"op": "mul", "in": "c", "out": "g", "w": "pooled", "p": (1, 0, 0, 0)},
+        # The stored gate: same branch, constant operand.
+        {"op": "mul", "in": "g", "out": "gb", "w": "bias", "p": (1, 0, 0, 0)},
+        {"op": "mean_hw", "in": "gb", "out": "p"},
         {"op": "fc", "in": "p", "out": "y", "w": "fc_w", "b": "fc_b"},
     ]
     return blobfmt.build(slots, nodes)
@@ -176,6 +203,20 @@ def reference_forward(model, x):
         if kind == "GlobalAveragePool":
             state[node.output[0]] = value(node.input[0]).mean(axis=(2, 3), keepdims=True,
                                                               dtype=np.float32)
+            continue
+        if kind == "ReduceMean":
+            # Written from the ONNX definition, not from our importer's rule: the axes come from
+            # the attribute (opset < 18) or from input[1] (opset 18+), and this reference has to
+            # agree with *ONNX* even if the importer were reading the other spelling.
+            # 按 ONNX 定义写，而不是照抄导入器的规则：轴来自属性（opset < 18）或 input[1]
+            # （opset 18+）。这份参考要对的是**ONNX**，哪怕导入器当时读的是另一种写法。
+            attrs = {attr.name: attr for attr in node.attribute}
+            axes = list(attrs["axes"].ints) if "axes" in attrs else None
+            if axes is None and len(node.input) > 1 and node.input[1] in weights:
+                axes = [int(v) for v in np.asarray(weights[node.input[1]]).ravel()]
+            keepdims = int(attrs["keepdims"].i) if "keepdims" in attrs else 1
+            state[node.output[0]] = value(node.input[0]).mean(
+                axis=tuple(axes), keepdims=bool(keepdims), dtype=np.float32)
             continue
         if kind == "Gemm":
             src = value(node.input[0]).reshape(-1).astype(np.float32)

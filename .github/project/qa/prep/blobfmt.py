@@ -44,6 +44,7 @@ Op and activation codes are part of the **file format**, not of the C header: th
 frozen here so that renumbering an enum cannot silently reinterpret a blob that is
 already in the tree.
 """
+import hashlib
 import struct
 
 MAGIC = b"INFRKAT\0"
@@ -59,11 +60,38 @@ ACT = {"none": 0, "relu": 1, "relu_n1_to_1": 2, "relu6": 3, "tanh": 4, "sign_bit
        "hard_swish": 6, "hard_sigmoid": 7}
 
 
+def short_name(name: str) -> str:
+    """A slot name that fits the 16-byte field, still distinguishable.
+
+    The field is diagnostic: the node table refers to slots by index, so nothing looks a name up
+    at run time. But a real export's names are framework paths (`features.0.0.weight`), and a
+    blob whose slots are all `features_0_0` is a blob nobody can debug. So the rule is: keep as
+    much of the front as fits, then a `~` and four hex digits of the name's sha1 -- the same
+    name always shortens to the same string, and two names that collide in their first ten
+    characters almost certainly differ in the hash.
+
+    Names that already fit are returned unchanged, which is why every blob written before this
+    rule existed is byte-identical afterwards.
+
+    字段是给人看的：节点表按**下标**引用槽，运行期没有谁按名字查找。但真导出的名字是框架路径
+    （`features.0.0.weight`），若全部压成 `features_0_0`，这个 blob 就没人能调了。规则是：能放
+    多少放多少前缀，再补一个 `~` 和名字 sha1 的四位十六进制——同名总是缩成同一串，前十个字符
+    撞车的两个名字几乎一定在哈希上分开。
+
+    本来就放得下的名字原样返回，所以这条规则之前写下的每个 blob 都逐字节不变。
+    """
+    if len(name.encode("ascii")) <= 15:
+        return name
+    digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:4]
+    return name[:10] + "~" + digest
+
+
 def slot(name: str, dims, payload: bytes) -> bytes:
     """One slot record. `payload` empty means a runtime buffer (the graph writes it)."""
+    name = short_name(name)
     raw = name.encode("ascii")
     if len(raw) > 15:
-        raise SystemExit(f"blobfmt: slot name too long: {name}")
+        raise SystemExit(f"blobfmt: slot name too long even after shortening: {name}")
     if len(dims) > 4:
         raise SystemExit(f"blobfmt: slot {name} has rank {len(dims)}, max 4")
     count = 1

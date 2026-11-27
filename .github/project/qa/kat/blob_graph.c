@@ -95,6 +95,18 @@ static const float *constant_of(const unsigned char *bytes, const kat_blob_slot 
     return (const float *)(const void *)(bytes + slot->offset);
 }
 
+/* A slot's numbers, wherever they live: constants in the blob's flash image, runtime slots in
+ * the arena. The per-channel gate needs both cases -- a stored factor vector, and one a previous
+ * node computed (a real squeeze-and-excite block computes its gate; a constant one is not SE).
+ *
+ * 一个槽的数字，不管它住在哪里：常量在 blob 的 flash 映像里，运行期槽在 arena 里。逐通道门
+ * 两种都需要——存起来的因子向量，以及上一个节点算出来的那个（真的 SE 块是算出来的；常量门
+ * 不是 SE）。 */
+static const float *floats_of(const unsigned char *bytes, const kat_blob_slot *slot,
+                              const float *arena) {
+    return slot->byte_len != 0U ? constant_of(bytes, slot) : (arena + slot->arena);
+}
+
 int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *input, uint32_t input_len,
                  float *arena, uint32_t arena_len, infr_workspace *workspace, kat_blob_view *view) {
     static const unsigned char magic[8] = {'I', 'N', 'F', 'R', 'K', 'A', 'T', '\0'};
@@ -454,7 +466,7 @@ int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *inp
                 const infr_kernel_desc *gate;
                 float *out_data = arena + out_slot->arena;
                 const float *in_data = arena + a_slot->arena;
-                const float *factors = constant_of(bytes, b_slot);
+                const float *factors = floats_of(bytes, b_slot, arena);
                 uint32_t pixel;
                 if (node->op != KAT_BLOB_OP_MUL || count == 0U || channels == 0U ||
                     pixels * channels != count || slot_floats(a_slot) != count ||
@@ -496,8 +508,14 @@ int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *inp
             if (binary == 0) {
                 return INFR_ERR_NOT_IMPLEMENTED;
             }
-            operands[0] = arena + a_slot->arena;
-            operands[1] = arena + b_slot->arena;
+            /* Both operands through `floats_of`: a residual `add` has two runtime slots and an
+             * equal-extent `mul` against a stored tensor has one of each. Reading the arena for
+             * a constant (or the flash image for a runtime slot) is a wrong pointer either way.
+             *
+             * 两个操作数都走 `floats_of`：残差 `add` 两侧都是运行期槽，而等长的 `mul` 对着存好的
+             * 常量时一侧是常量。对常量读 arena（或对运行期槽读 flash 映像）都是错指针。 */
+            operands[0] = floats_of(bytes, a_slot, arena);
+            operands[1] = floats_of(bytes, b_slot, arena);
             product[0] = arena + out_slot->arena;
             status = binary->fn(operands, product, count, 0);
         } else {
