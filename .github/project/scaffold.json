@@ -88,7 +88,7 @@
     "test_package/conanfile.py": "28ca75ff819233055d95334554904c6b1c6ea1eb0665d08ccece714aaac6bf39",
     "CMakeLists.txt": "65cbd4dddf3c0879bd39e9ea4f9f4e635a91e2d4851d5ee30eece008c18dc7b1"
   },
-  "tolerance_budget": 3,
+  "tolerance_budget": 5,
   "tolerated": [
     {
       "path": ".github/workflows/ci-orchestrator.yml",
@@ -105,6 +105,16 @@
       "patch": ".github/project/patches/test_package-conanfile-coverage-slots.patch",
       "why": "the coverage collector copies every .gcda/.gcno by basename into one flat directory, so two sources that share a file name overwrite each other and the loser silently vanishes from the report -- measured: five register.c and, after the x86 tier landed, six more names, which dropped core from 588 to 491 lines and pushed `all` under its floor (gaps G-62)",
       "exit": "delete this entry, the patch file and section F1 of .github/project/scaffold-forks.md once upstream gives each object directory its own slot (or stops copying the pairs altogether), and put tolerance_budget back to 2"
+    },
+    {
+      "path": "conanfile.py",
+      "why": "the scaffold models feature toggles as metadata flags but has no way to make a requirement conditional on one; `with_cmsis_nn` needs `requirements()` to skip the package when the option is off, and needs the option itself declared. Owner-approved on 2026-11-27: the scaffold never covered compile-time options.",
+      "exit": "drop this entry when fcpp v0.4+ carries a conditional-requirement mechanism driven by metadata, and use it instead of the local option"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "why": "same reason on the build side: the C target has to be compiled with `INFR_WITH_CMSIS_NN` only when the option is on, and no scaffold hook exists for a compile definition that follows a feature flag",
+      "exit": "drop this entry together with the conanfile.py one, once the scaffold ships the compile-option hook"
     }
   ],
   "owned_dirs": [

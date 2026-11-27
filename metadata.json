@@ -56,6 +56,9 @@
     "c": {
       "PCRE2": [
         "pcre2::pcre2"
+      ],
+      "cmsis-nn": [
+        "cmsis-nn::cmsis-nn"
       ]
     },
     "cpp": {
@@ -81,7 +84,8 @@
     ]
   },
   "baremetal_white_list": [
-    "etl"
+    "etl",
+    "cmsis-nn"
   ],
   "doc_languages": [
     "en",
@@ -106,6 +110,7 @@
   "trigger_tests": true,
   "saving_tests_log": true,
   "enable_python_bindings": false,
+  "with_cmsis_nn": false,
   "on_board_validation": {
     "os": [
       "Linux"

@@ -143,6 +143,25 @@
         "contains": "#include <pybind11/pybind11.h>"
       },
       "attribution": ""
+    },
+    {
+      "conan": "cmsis-nn",
+      "metadata_key": "cmsis-nn",
+      "bucket": "c",
+      "targets": [
+        "cmsis-nn::cmsis-nn"
+      ],
+      "license": "Apache-2.0",
+      "license_status": "verified",
+      "license_evidence": "upstream repository ships LICENSE (Apache-2.0); the local recipe packages it into licenses/LICENSE",
+      "redistributed": false,
+      "baremetal_ok": true,
+      "why": "the optional vendor backend for Cortex-M: it is resolved only when the with_cmsis_nn option is on, and its kernels are meant for exactly the bare-metal targets this library supports",
+      "used_from": {
+        "path": "src/backend/cmsis_nn.c",
+        "contains": "arm_nnfunctions.h"
+      },
+      "attribution": ""
     }
   ]
 }

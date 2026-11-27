@@ -107,8 +107,9 @@ class PackageRecipe(ConanFile):
 
     # Binary configuration
     settings = "os", "compiler", "build_type", "arch"
-    options = {"shared": [True, False], "fPIC": [True, False]}
-    default_options = {"shared": _metadata.get('is_shared'), "fPIC": True}  # inherit from config
+    options = {"shared": [True, False], "fPIC": [True, False], "with_cmsis_nn": [True, False]}
+    default_options = {"shared": _metadata.get('is_shared'), "fPIC": True,  # inherit from config
+                       "with_cmsis_nn": _metadata.get('with_cmsis_nn')}
 
     # Sources live beside this recipe; api/* rides along so the pybind11 module is part of the package.
     exports_sources = ["CMakeLists.txt", "src/*", "include/*", "api/*", METADATA_FILENAME, "LICENSE"]
@@ -253,6 +254,11 @@ class PackageRecipe(ConanFile):
     def _python_bindings_enabled(self):
         return bool(self.meta.get("enable_python_bindings"))
 
+    def _with_cmsis_nn(self):
+        """Read from the option, not from metadata: an `-o with_cmsis_nn=True` run has to be
+        able to override what the file says, and the default still comes from the file."""
+        return bool(self.options.with_cmsis_nn)
+
     def _baremetal_whitelist(self):
         """Lowercase set: ConanCenter only moved to lowercase names in 2026 H1, so `OpenCV/4.x.x` is legitimate."""
         return {str(_name).lower() for _name in (self.meta.get('baremetal_white_list') or ())}
@@ -268,6 +274,17 @@ class PackageRecipe(ConanFile):
                 continue
             if _pkg == 'pybind11' and (not self._python_bindings_enabled() or cross_building(self)):
                 continue
+            if _pkg == 'cmsis-nn':
+                if not self._with_cmsis_nn():
+                    continue
+                # Visible on purpose. The vendor's objects end up inside this static
+                # archive, so a consumer that links us without linking CMSIS-NN would get
+                # undefined `arm_*` symbols; hiding the requirement would produce exactly
+                # that. (Tried `visible=False` first: the scaffold's component_requires then
+                # rejects the package as not a direct requirement, and more importantly the
+                # hiding itself would be wrong.)
+                self.requires(req)
+                continue
             self.requires(req)
 
     def layout(self):
@@ -277,6 +294,9 @@ class PackageRecipe(ConanFile):
         tc = CMakeToolchain(self)
         tc.variables['C_DEPS'], tc.variables['CPP_DEPS'] = self._preparing_deps_links()
         tc.variables['ENABLE_COVERAGE'] = self._coverage_enabled()
+        # Passed as a toolchain variable rather than read from metadata by CMake, so that
+        # `-o with_cmsis_nn=True` reaches the compiler as well.
+        tc.variables['WITH_CMSIS_NN'] = self._with_cmsis_nn()
 
         if cross_building(self) and self.settings.os == "baremetal":  # cross build to MCU
             tc.variables["CMAKE_TRY_COMPILE_TARGET_TYPE"] = "STATIC_LIBRARY"
@@ -298,6 +318,8 @@ class PackageRecipe(ConanFile):
             _infra.pop("GTest", None)
             if not self._python_bindings_enabled() or cross_building(self):
                 _infra.pop("pybind11", None)
+            if not self._with_cmsis_nn():
+                _c.pop("cmsis-nn", None)
 
         _infra_deps = [f"{k}@{' '.join(v)}" for k, v in _infra.items()]
         _c_deps = [f"{k}@{' '.join(v)}" for k, v in {**_common, **_c}.items()]

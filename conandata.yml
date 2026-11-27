@@ -8,3 +8,7 @@ requirements:
   - "pcre2/10.44"
   - "eigen/3.4.0"
   - "etl/20.47.1"
+  # A local recipe (the recipe itself lives outside this repository, in the
+  # recipes directory the plan designates). Resolved only when the
+  # `with_cmsis_nn` option is on, so a clean clone builds without it.
+  - "cmsis-nn/8.0.0"
