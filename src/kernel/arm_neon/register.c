@@ -58,6 +58,13 @@ infr_status infr_kernel_register_arm_neon(void) {
          .quant = INFR_QUANT_PER_TENSOR,
          .tier = INFR_TIER_ARM_NEON,
          .fn = infr_arm_neon_fc_i8},
+        /* The accumulator half of a quantized convolution; see scalar/dot.c for why
+         * `fc` cannot serve. */
+        {.name = "dot",
+         .dtype = INFR_DTYPE_I8,
+         .quant = INFR_QUANT_PER_TENSOR,
+         .tier = INFR_TIER_ARM_NEON,
+         .fn = infr_arm_neon_dot_i8},
         {.name = "max",
          .dtype = INFR_DTYPE_F32,
          .quant = INFR_QUANT_NONE,

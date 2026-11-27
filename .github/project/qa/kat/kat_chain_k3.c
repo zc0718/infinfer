@@ -39,6 +39,14 @@ static int16_t g_xs[K3_MAX];
 static int16_t g_ws[K3_MAX];
 static int16_t g_sa[K3_MAX];
 static int16_t g_sb[K3_MAX];
+/* The accumulator cell's answer is an int32, not a byte: `dot` stops before the requantisation so
+ * a convolution can add a bias first, which means the value the chain compares is wider than any
+ * of the other cells' outputs.
+ *
+ * 累加器格的答案是 int32 而不是一字节：`dot` 停在再量化之前，好让卷积先把偏置加上，因此本链
+ * 要比的值比其它任何格的输出都宽。 */
+static int32_t g_ia[K3_MAX];
+static int32_t g_ib[K3_MAX];
 /* `scale` takes one broadcast factor as its second input, so it has to live somewhere. */
 static float g_factor;
 
@@ -171,8 +179,7 @@ static void fill_quant(infr_quant *q, float multiplier) {
  *
  * 比较一格在一个长度上的结果。两行一致返回 1，否则 0。转换类（quantize/dequantize）的输入与输出
  * dtype 不同，所以这里按调用形态**推导**两端 dtype，而不是照读格里的那一个——其余形态两端同 dtype。 */
-static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, const infr_kernel_desc *row,
-                      unsigned n) {
+static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, const infr_kernel_desc *row, unsigned n) {
     const void *in_ref[2] = {0, 0};
     const void *in_row[2] = {0, 0};
     void *out_ref[1];
@@ -200,10 +207,10 @@ static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, cons
     }
 
     /* Dot products accumulate, so every distinct parameter set is its own comparison. */
-    unsigned passes = (cell->call == KAT_K3_CALL_DOT_Q || cell->call == KAT_K3_CALL_QUANTIZE ||
-                       cell->call == KAT_K3_CALL_DEQUANTIZE)
-                          ? (unsigned)K3_MULT_COUNT
-                          : 1u;
+    unsigned passes =
+        (cell->call == KAT_K3_CALL_DOT_Q || cell->call == KAT_K3_CALL_QUANTIZE || cell->call == KAT_K3_CALL_DEQUANTIZE)
+            ? (unsigned)K3_MULT_COUNT
+            : 1u;
     unsigned pass;
     for (pass = 0; pass < passes; ++pass) {
         fill_quant(&q, k3_multiplier_for(cell->dtype, pass));
@@ -243,6 +250,18 @@ static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, cons
                 in_row[1] = g_ws;
             }
             break;
+        case KAT_K3_CALL_DOT_ACC:
+            /* int8 operands, no parameters: `dot` does not requantize, and passing a quant would only
+             * prove that it ignores one.
+"
+             *
+"
+             * int8 操作数、不带参数：`dot` 不做再量化，传一个 quant 只能证明它会忽略它。 */
+            in_ref[0] = g_xi;
+            in_ref[1] = g_wi;
+            in_row[0] = g_xi;
+            in_row[1] = g_wi;
+            break;
         case KAT_K3_CALL_QUANTIZE:
             in_ref[0] = g_x;
             in_row[0] = g_x;
@@ -265,7 +284,10 @@ static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, cons
             break;
         }
 
-        if (out_i8) {
+        if (cell->call == KAT_K3_CALL_DOT_ACC) {
+            out_ref[0] = g_ia;
+            out_row[0] = g_ib;
+        } else if (out_i8) {
             out_ref[0] = g_qa;
             out_row[0] = g_qb;
         } else if (out_i16) {
@@ -278,8 +300,7 @@ static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, cons
 
         {
             /* Every quantised entry point takes the resolved parameters; the rest take NULL. */
-            const infr_quant *qp = (cell->call == KAT_K3_CALL_DOT_Q ||
-                                    cell->call == KAT_K3_CALL_QUANTIZE ||
+            const infr_quant *qp = (cell->call == KAT_K3_CALL_DOT_Q || cell->call == KAT_K3_CALL_QUANTIZE ||
                                     cell->call == KAT_K3_CALL_DEQUANTIZE)
                                        ? &q
                                        : 0;
@@ -304,12 +325,21 @@ static int compare_at(const kat_k3_cell *cell, const infr_kernel_desc *ref, cons
         }
 
         /* Only the reduction and dot cells produce a single value; conversions are elementwise. */
-        count = (cell->call == KAT_K3_CALL_REDUCE || cell->call == KAT_K3_CALL_DOT ||
-                 cell->call == KAT_K3_CALL_DOT_Q)
+        count = (cell->call == KAT_K3_CALL_REDUCE || cell->call == KAT_K3_CALL_DOT || cell->call == KAT_K3_CALL_DOT_Q ||
+                 cell->call == KAT_K3_CALL_DOT_ACC)
                     ? 1u
                     : n;
         for (i = 0; i < count; ++i) {
-            if (out_i8) {
+            if (cell->call == KAT_K3_CALL_DOT_ACC) {
+                /* Exact integer equality, with the sign included by construction: the accumulator is
+                 * the whole answer, so there is nothing to round and nothing to tolerate.
+                 *
+                 * 精确整数相等，符号天然包含在内：累加器就是全部答案，没有要舍入的东西、也没有可容差
+                 * 的余地。 */
+                if (g_ia[i] != g_ib[i]) {
+                    return 0;
+                }
+            } else if (out_i8) {
                 if (g_qa[i] != g_qb[i]) {
                     return 0;
                 }
@@ -358,8 +388,7 @@ infr_status kat_k3_run(kat_k3_result *out) {
 
     for (c = 0; c < KAT_K3_CELL_COUNT; ++c) {
         const kat_k3_cell *cell = &kat_k3_cells[c];
-        const infr_kernel_desc *ref =
-            infr_kernel_find(cell->kernel, cell->dtype, cell->quant_kind, INFR_TIER_SCALAR);
+        const infr_kernel_desc *ref = infr_kernel_find(cell->kernel, cell->dtype, cell->quant_kind, INFR_TIER_SCALAR);
         const infr_kernel_desc *row =
             infr_kernel_find(cell->kernel, cell->dtype, cell->quant_kind, (infr_tier)KAT_K3_TIER);
         if (ref == 0) {

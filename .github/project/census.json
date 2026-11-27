@@ -21,6 +21,15 @@
     "dequantize/int8/tensor/scalar": [
       "KernelParityQuant/ScalarDequantizeMatchesDefinition"
     ],
+    "dot/int8/tensor/arm_m": [
+      "KernelParityDotArmM/Int8MatchesScalarBitwise"
+    ],
+    "dot/int8/tensor/arm_neon": [
+      "KernelParityDotNeon/Int8MatchesScalarBitwise"
+    ],
+    "dot/int8/tensor/rvv": [
+      "KernelParityRvv/DotInt8MatchesScalarBitwise"
+    ],
     "dot/int8/tensor/scalar": [
       "KernelParityDot/ScalarI8MatchesInt32Reference"
     ],

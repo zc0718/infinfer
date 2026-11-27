@@ -68,6 +68,13 @@ infr_status infr_kernel_register_arm_m(void) {
          .quant = INFR_QUANT_PER_TENSOR,
          .tier = INFR_TIER_ARM_M,
          .fn = infr_arm_m_fc_i8},
+        /* The accumulator half of a quantized convolution; see scalar/dot.c for why
+         * `fc` cannot serve. */
+        {.name = "dot",
+         .dtype = INFR_DTYPE_I8,
+         .quant = INFR_QUANT_PER_TENSOR,
+         .tier = INFR_TIER_ARM_M,
+         .fn = infr_arm_m_dot_i8},
         {.name = "fc",
          .dtype = INFR_DTYPE_I16,
          .quant = INFR_QUANT_PER_TENSOR,

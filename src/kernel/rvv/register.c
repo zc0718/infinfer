@@ -64,6 +64,13 @@ infr_status infr_kernel_register_rvv(void) {
          .quant = INFR_QUANT_PER_TENSOR,
          .tier = INFR_TIER_RVV,
          .fn = infr_rvv_fc_i8},
+        /* The accumulator half of a quantized convolution; see scalar/dot.c for why
+         * `fc` cannot serve. */
+        {.name = "dot",
+         .dtype = INFR_DTYPE_I8,
+         .quant = INFR_QUANT_PER_TENSOR,
+         .tier = INFR_TIER_RVV,
+         .fn = infr_rvv_dot_i8},
         {.name = "max",
          .dtype = INFR_DTYPE_F32,
          .quant = INFR_QUANT_NONE,

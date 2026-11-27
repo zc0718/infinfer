@@ -31,14 +31,21 @@
 
 /** How a kernel is called. Generated, one per cell. 内核怎么调，逐格生成。 */
 typedef enum kat_k3_call {
-    KAT_K3_CALL_UNARY = 0,  /* in[0] -> out[0]: relu */
-    KAT_K3_CALL_BINARY = 1, /* in[0], in[1] -> out[0]: add, two real operands */
-    KAT_K3_CALL_SCALE = 2,  /* in[0], in[1] = one broadcast factor */
-    KAT_K3_CALL_REDUCE = 3, /* in[0] -> out[0] = one reduced value: sum, max */
-    KAT_K3_CALL_DOT = 4,    /* in[0], in[1] -> out[0]: fp32 dot product */
-    KAT_K3_CALL_DOT_Q = 5,  /* in[0], in[1], quant -> out[0]: integer dot product */
+    KAT_K3_CALL_UNARY = 0,      /* in[0] -> out[0]: relu */
+    KAT_K3_CALL_BINARY = 1,     /* in[0], in[1] -> out[0]: add, two real operands */
+    KAT_K3_CALL_SCALE = 2,      /* in[0], in[1] = one broadcast factor */
+    KAT_K3_CALL_REDUCE = 3,     /* in[0] -> out[0] = one reduced value: sum, max */
+    KAT_K3_CALL_DOT = 4,        /* in[0], in[1] -> out[0]: fp32 dot product */
+    KAT_K3_CALL_DOT_Q = 5,      /* in[0], in[1], quant -> out[0]: integer dot product */
     KAT_K3_CALL_QUANTIZE = 6,   /* fp32 in -> int8 out, quant */
-    KAT_K3_CALL_DEQUANTIZE = 7  /* int8 in -> fp32 out, quant */
+    KAT_K3_CALL_DEQUANTIZE = 7, /* int8 in -> fp32 out, quant */
+    /* in[0], in[1] -> out[0] = one **int32** accumulator, no requantisation. A separate mode
+     * from DOT_Q rather than a flag on it, because the output width differs: this cell's answer
+     * is the accumulator itself, and the chain has to compare four bytes rather than one.
+     *
+     * 与 DOT_Q 分开而不是给它加标志，因为输出宽度不同：本格的答案就是累加器本身，链要比的是
+     * 四字节而不是一字节。 */
+    KAT_K3_CALL_DOT_ACC = 8
 } kat_k3_call;
 
 /** The verdict for a cell. 一格的判据。 */
@@ -62,10 +69,10 @@ typedef struct kat_k3_cell {
  *  链的结果：驱动据此把失败编进退出码而不打印（不是每个目标都能打印：无控制台时半主机
  *  printf 会阻塞）。 */
 typedef struct kat_k3_result {
-    unsigned compared;  /* Cells that were registered and compared. 实际比较过的格数。 */
-    unsigned missing;   /* Cells the matrix calls done but the tier did not register. 声称 done 却没登记。 */
-    unsigned mismatched;/* First disagreeing cell index, or ~0u. 第一个不一致的格下标，无则 ~0u。 */
-    unsigned length;    /* Length of the corpus element that disagreed. 出错的语料长度。 */
+    unsigned compared;      /* Cells that were registered and compared. 实际比较过的格数。 */
+    unsigned missing;       /* Cells the matrix calls done but the tier did not register. 声称 done 却没登记。 */
+    unsigned mismatched;    /* First disagreeing cell index, or ~0u. 第一个不一致的格下标，无则 ~0u。 */
+    unsigned length;        /* Length of the corpus element that disagreed. 出错的语料长度。 */
     unsigned long elements; /* Output elements actually compared. 真正比较过的输出元素个数。 */
     unsigned length_index;  /* Index into the length table, for the -DKAT_K3_DIAG exit code. */
 } kat_k3_result;

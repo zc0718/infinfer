@@ -81,10 +81,10 @@
       "why_it_was_missing": "the tier parity tests under test_package/test/unit are compiled for the target but only run on the host, and the only cross-run path (this KAT) used to compile the scalar sources alone -- so on a target the claim rested on a probe run by hand (gaps G-73)",
       "how": "the k3_tier_parity chain compares the scalar row and the tier row in one process; the cell list is generated from src/kernel/matrix.yml for the tier being built, so the chain cannot claim a cell the matrix does not or skip one it does; a cell the matrix calls done that the tier did not register is a failure (exit 12), and so is a run that compared zero elements",
       "cells": {
-        "arm_neon": 11,
-        "arm_m": 3,
-        "rvv": 12,
-        "_cell_comparisons": 62
+        "arm_neon": 12,
+        "arm_m": 4,
+        "rvv": 13,
+        "_cell_comparisons": 69
       },
       "targets": [
         "aarch64-linux:base",
@@ -112,7 +112,8 @@
         "arm_m": 2,
         "rvv": 1
       },
-      "counts_note": "the counts were 9/2/10 (50 comparisons) until 2026-11-26, when fc/int8 landed on arm_neon and rvv (G-79) and relu/int8 on arm_m (G-83); the claim gate found the staleness on its first run. They became 11/3/12 (62 comparisons) the same day when `mul` landed (G-94), and this time the gate could not see the change at all -- both sides of the count check derive from `emit_k3_cells.MODES`, so a kernel missing from that map is invisible to it; `census_gate` R11 is the rule that now refuses it. `commit` points at the tree the 62 comparisons were measured on"
+      "counts_note": "the counts were 9/2/10 (50 comparisons) until 2026-11-26, when fc/int8 landed on arm_neon and rvv (G-79) and relu/int8 on arm_m (G-83); the claim gate found the staleness on its first run. They became 11/3/12 (62 comparisons) the same day when `mul` landed (G-94), and this time the gate could not see the change at all -- both sides of the count check derive from `emit_k3_cells.MODES`, so a kernel missing from that map is invisible to it; `census_gate` R11 is the rule that now refuses it. `commit` points at the tree the 62 comparisons were measured on",
+      "basis_2026_11_27": "the three tiers each gained `dot/int8/tensor` (2026-11-27): the cell emits an int32 accumulator rather than an int8 requantised byte, so the chain needed a call mode of its own (KAT_K3_CALL_DOT_ACC) before the cell could be claimed at all -- a `done` cell the chain cannot express is exactly the state this gate exists to refuse (gaps G-119, G-120)."
     },
     {
       "id": "case-k2-blob-graph",

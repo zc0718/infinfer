@@ -51,6 +51,13 @@ MODES = {
     # Conversions: the input dtype differs from the output dtype, and both are exact (an integer
     # result from rounding, or an integer subtract followed by one IEEE multiply), so the verdict is
     # bit equality in both directions.
+    # The accumulator half of a quantized convolution: its answer is an int32, so it needs its
+    # own call mode and an exact integer comparison -- there is no rounding in this cell to
+    # tolerate, and a window here would hide exactly the structural error this chain is for.
+    #
+    # 量化卷积的累加器那一半：答案是 int32，所以需要自己的调用形态与精确整数比较——本格没有
+    # 舍入可容差，而留一个窗口恰好会盖住本链存在的理由（结构性误差）。
+    "dot": ("DOT_ACC", "BITWISE"),
     "quantize": ("QUANTIZE", "BITWISE"),
     "dequantize": ("DEQUANTIZE", "BITWISE"),
 }
