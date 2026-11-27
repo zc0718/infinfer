@@ -95,6 +95,15 @@
       ],
       "runs_from": "preflight, or any machine with the house toolchains and qemu; measured green 2026-11-26",
       "why_not_in_ci": "the project-gates job has none of the cross toolchains and no qemu, so the chains would be red for reasons that have nothing to do with the tree; the evidence index cites this id, so an undeclared check would be a claim with no footing"
+    },
+    {
+      "id": "torch-export",
+      "command": "python3 .github/project/qa/prep/export_mobilenet_onnx.py --out {dir}",
+      "profiles": [
+        "host"
+      ],
+      "runs_from": "host-native: no cross profile is involved, so 'host' is the whole requirement; measured 2026-11-27 on this box producing a 290 KB ONNX graph from mobilenet_v3_small",
+      "why_not_in_ci": "torch is ~200 MB of wheels that exist to *author* a model, and the project-gates job has no such env -- what CI needs is the ONNX file and the tensors, which are what the export produces. Declared here so the dependency is visible instead of living in a shell history (T5), and so Y5 keeps it out of ci.sh"
     }
   ],
   "debt": [
