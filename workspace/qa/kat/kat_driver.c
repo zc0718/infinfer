@@ -9,11 +9,16 @@
 #if defined(KAT_CHAIN_K2)
 #include "kat_chain_k2.h"
 #endif
+#if defined(KAT_CHAIN_K2M)
+#include "kat_chain_k2m.h"
+#endif
 #if defined(KAT_CHAIN_K3)
 #include "kat_chain_k3.h"
 #endif
 #if !defined(KAT_EMIT) && !defined(KAT_CHAIN_K3)
-#if defined(KAT_CHAIN_K2)
+#if defined(KAT_CHAIN_K2M)
+#include "generated/kat_k2m_image.h"
+#elif defined(KAT_CHAIN_K2)
 #include "generated/kat_k2_image.h"
 #elif defined(KAT_CHAIN_K1)
 #include "generated/kat_k1_image.h"
@@ -66,6 +71,11 @@
 #define KAT_SELFCOMPARING 1
 typedef kat_k3_result kat_result;
 #define kat_run kat_k3_run
+#elif defined(KAT_CHAIN_K2M)
+typedef kat_k2m_result kat_result;
+#define kat_run kat_k2m_run
+#define kat_expect_len kat_k2m_expect_len
+#define kat_expect kat_k2m_expect
 #elif defined(KAT_CHAIN_K2)
 typedef kat_k2_result kat_result;
 #define kat_run kat_k2_run
@@ -96,8 +106,14 @@ int main(int argc, char **argv) {
     kat_result r;
     /* The emitter cannot use KAT_EXPECT_LEN: that macro lives in the baked
      * header, which only the check build includes. A fixed ceiling plus a guard
-     * keeps it honest. */
-    unsigned char expect[256];
+     * keeps it honest. 8 KiB because the MobileNet chain's checked tensor is 1000
+     * floats (4 KB); the smaller chains use tens of bytes, so the ceiling costs
+     * nothing on the host and still refuses a chain that grows unreasonably.
+     *
+     * 发射器用不了 KAT_EXPECT_LEN：那个宏在烘出来的头部里，而只有校验构建才包含它。所以
+     * 用一个固定上限加一道守卫。取 8 KiB 是因为 MobileNet 链被校验的张量是 1000 个 float
+     * （4 KB）；更小的链只用几十字节，所以这个上限在宿主上不花钱，同时仍能拒绝无节制变大的链。 */
+    unsigned char expect[8192];
     unsigned char header[8];
     unsigned v;
     FILE *f;
@@ -106,8 +122,16 @@ int main(int argc, char **argv) {
         (void)fprintf(stderr, "usage: %s <out.bin>\n", argv[0]);
         return 2;
     }
-    if (kat_run(&r) != INFR_OK) {
-        (void)fprintf(stderr, "kat_emit: chain failed\n");
+    int run_status = kat_run(&r);
+
+    if (run_status != INFR_OK) {
+        /* Name the code: `kat_emit` failing with a bare exit 10 has cost a rebuild-and-
+         * guess cycle before, and the status is the one thing that separates "the graph
+         * is wrong" from "the arena is short".
+         *
+         * 把状态码说出来：`kat_emit` 只报一个退出码 10，以前就得靠重编加猜，而这个码正是
+         * 区分"图不对"与"arena 不够"的唯一信息。 */
+        (void)fprintf(stderr, "kat_emit: chain failed (%d)\n", run_status);
         return KAT_EXIT_CHAIN;
     }
     v = kat_expect_len();

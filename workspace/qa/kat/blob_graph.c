@@ -22,8 +22,8 @@
 #define KAT_BLOB_NODE 36U
 #define KAT_BLOB_SLOT 44U
 
-#define KAT_BLOB_MAX_NODES 32U
-#define KAT_BLOB_MAX_SLOTS 32U
+#define KAT_BLOB_MAX_NODES 256U
+#define KAT_BLOB_MAX_SLOTS 256U
 
 #define KAT_BLOB_NO_SLOT 0xFFFFFFFFU
 #define KAT_BLOB_OP_INPUT 0U
@@ -98,16 +98,27 @@ static const float *constant_of(const unsigned char *bytes, const kat_blob_slot 
 int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *input, uint32_t input_len,
                  float *arena, uint32_t arena_len, infr_workspace *workspace, kat_blob_view *view) {
     static const unsigned char magic[8] = {'I', 'N', 'F', 'R', 'K', 'A', 'T', '\0'};
-    kat_blob_slot slots[KAT_BLOB_MAX_SLOTS];
-    kat_blob_node nodes[KAT_BLOB_MAX_NODES];
-    uint32_t last_use[KAT_BLOB_MAX_SLOTS];
-    uint8_t written[KAT_BLOB_MAX_SLOTS];
+    /* `static`, not automatic: at 256 slots these tables are ~18 KB, which is a normal
+     * .bss reservation on an MCU but a stack overflow waiting to happen. The price is
+     * that `kat_blob_run` is **not reentrant** -- one graph at a time, which is what a
+     * single-counter inference job is. 256 is not a guess either: the MobileNetV3-Small
+     * blob is 80 nodes / 188 slots, so 32 (the old ceiling) could not express it and the
+     * network was therefore never actually executed.
+     *
+     * 用 `static` 而不是自动变量：256 个槽时这两张表约 18 KB，在 MCU 上是一块正常的 .bss，
+     * 放在栈上就是等着溢出。代价是 `kat_blob_run` **不可重入**——一次跑一张图，而单片机的
+     * 推理作业本来就是这样。256 也不是拍的：MobileNetV3-Small 的 blob 是 80 个节点 / 188
+     * 个槽，旧上限 32 根本表达不了它，那张网络因此从未被真正执行过。 */
+    static kat_blob_slot slots[KAT_BLOB_MAX_SLOTS];
+    static kat_blob_node nodes[KAT_BLOB_MAX_NODES];
+    static uint32_t last_use[KAT_BLOB_MAX_SLOTS];
+    static uint8_t written[KAT_BLOB_MAX_SLOTS];
     /* One extra: while node i's output is being placed, every slot it releases is
      * inserted into a list that may already hold all the others.
      *
      * 多一格：给第 i 个节点定位输出时，它释放的槽要插进一个"可能已经装了其余全部"的表里。 */
-    uint32_t free_off[KAT_BLOB_MAX_SLOTS + 1U];
-    uint32_t free_len[KAT_BLOB_MAX_SLOTS + 1U];
+    static uint32_t free_off[KAT_BLOB_MAX_SLOTS + 1U];
+    static uint32_t free_len[KAT_BLOB_MAX_SLOTS + 1U];
     uint32_t free_count;
     uint32_t node_count;
     uint32_t slot_count;
@@ -415,11 +426,66 @@ int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *inp
             const uint32_t count = slot_floats(out_slot);
             const void *operands[2];
             void *product[1];
-            if (slot_floats(a_slot) != count || slot_floats(b_slot) != count) {
-                return KAT_BLOB_ERR_SHAPE;
-            }
             if (infr_kernel_register_scalar() != INFR_OK) {
                 return INFR_ERR_NOT_IMPLEMENTED;
+            }
+            /* `p[0] == 1`: the right operand is **one factor per output channel** rather
+             * than a tensor of the same shape -- MobileNet's squeeze-and-excite gate is
+             * exactly that (a 1x1xC vector times an HxWxC feature map), and writing it as
+             * a full-size constant would cost 1.7 MB of weights to say 96 numbers.
+             *
+             * The work is done by the registered `scale` kernel, not by a new one: `scale`
+             * already means `y[i] = a[i] * factor` with the factor in a one-element buffer,
+             * so a per-channel multiply is that call once per channel. Nothing here
+             * re-implements arithmetic that the matrix already covers.
+             *
+             * `p[0] == 1`：右操作数是**每个输出通道一个因子**，而不是同形状的张量——MobileNet
+             * 的 SE 门正是这个形状（1x1xC 向量乘 HxWxC 特征图），把它写成整尺寸常量等于花
+             * 1.7 MB 权重去表达 96 个数。实际计算交给已注册的 `scale` 核，而不是新增一个：
+             * `scale` 的语义就是 `y[i] = a[i] * factor`（因子放在单元素缓冲里），所以逐通道
+             * 相乘就是把它按通道调用一次——这里不重写矩阵已经覆盖的算术。 */
+            if (node->p[0] == 1U) {
+                const uint32_t channels = out_slot->dims[3];
+                const uint32_t plane = channels == 0U ? 0U : count / channels;
+                const infr_kernel_desc *scale;
+                float *out_data = arena + out_slot->arena;
+                const float *in_data = arena + a_slot->arena;
+                const float *factors = constant_of(bytes, b_slot);
+                uint32_t channel;
+                if (node->op != KAT_BLOB_OP_MUL || count == 0U || channels == 0U ||
+                    plane * channels != count || slot_floats(a_slot) != count ||
+                    slot_floats(b_slot) != channels) {
+                    return KAT_BLOB_ERR_SHAPE;
+                }
+                scale = infr_kernel_find("scale", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+                if (scale == 0) {
+                    return INFR_ERR_NOT_IMPLEMENTED;
+                }
+                for (channel = 0U; channel < channels; ++channel) {
+                    const void *scaled_in[2];
+                    void *scaled_out[1];
+                    scaled_in[0] = in_data + ((size_t)channel * plane);
+                    scaled_in[1] = factors + channel;
+                    scaled_out[0] = out_data + ((size_t)channel * plane);
+                    status = scale->fn(scaled_in, scaled_out, plane, 0);
+                    if (status != INFR_OK) {
+                        break;
+                    }
+                }
+                if (status != INFR_OK) {
+                    return (int)status;
+                }
+                if (node->act != 0U) {
+                    const infr_act_f32_fn act = infr_activation_f32((infr_activation)node->act);
+                    if (act == 0) {
+                        return KAT_BLOB_ERR_OP;
+                    }
+                    act(out_data, out_data, count);
+                }
+                continue;
+            }
+            if (slot_floats(a_slot) != count || slot_floats(b_slot) != count) {
+                return KAT_BLOB_ERR_SHAPE;
             }
             binary = infr_kernel_find(kernel, INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
             if (binary == 0) {

@@ -119,11 +119,19 @@ class Builder:
         self.node("fc", f"{name}_o", src, weight, bias, act=act)
         return f"{name}_o"
 
-    def binary(self, op, name, lhs, rhs, dims):
+    def binary(self, op, name, lhs, rhs, dims, params=(0, 0, 0, 0)):
         self.runtime(f"{name}_o", dims)
         # A binary node carries its two operands in the slots a weightful node would use
-        # for filter and bias (see blob_graph.hpp).
-        self.node(op, f"{name}_o", lhs, rhs)
+        # for filter and bias (see blob_graph.hpp). `params[0] == 1` declares the
+        # per-channel form: the right operand is one factor per output channel, which is
+        # what the squeeze-and-excite gate is. Emitting it as a full HxWxC constant would
+        # turn 96 numbers into 1.7 MB of weights.
+        #
+        # 二元节点的两个操作数放在带权节点本来放 filter 与 bias 的槽里（见
+        # blob_graph.hpp）。`params[0] == 1` 声明逐通道形式：右操作数是每个输出通道一个
+        # 因子，SE 门就是这个形状。把它展开成整张 HxWxC 常量，等于把 96 个数变成 1.7 MB
+        # 权重。
+        self.node(op, f"{name}_o", lhs, rhs, params=params)
         return f"{name}_o"
 
 
@@ -155,7 +163,7 @@ def build_linear(width: float, res: int, classes: int):
             gate = b.global_pool(f"{name}_se_pool", cur, c)
             gate = b.dense(f"{name}_se_red", gate, c, reduced, "relu")
             gate = b.dense(f"{name}_se_exp", gate, reduced, c, "hard_sigmoid")
-            cur = b.binary("mul", f"{name}_se_mul", cur, gate, (1, h2, w2, c))
+            cur = b.binary("mul", f"{name}_se_mul", cur, gate, (1, h2, w2, c), (1, 0, 0, 0))
         cur, h, w, c = b.conv(f"{name}_proj", cur, h2, w2, c, out_c, 1, 1, "none")
         if stride == 1 and block_c == c and block_h == h and block_w == w:
             cur = b.binary("add", f"{name}_res", cur, block_in, (1, h, w, c))
@@ -173,49 +181,18 @@ def plan_arena(slots, nodes):
 
     `nodes` must already carry **indices**, not names -- the same encoding `blobfmt.build`
     consumes -- so the plan and the artifact cannot disagree about which slot a node uses.
+    The allocator itself lives in `blobfmt` now: the executors have to derive the same
+    number from the same blob, so there is exactly one Python definition of it.
     """
-    runtime = [i for i, (_name, _dims, payload) in enumerate(slots) if not payload]
-    size = {}
-    for i, (_name, dims, _payload) in enumerate(slots):
+    counts = []
+    for _name, dims, payload in slots:
         count = 1
         for axis in dims:
             count *= axis
-        size[i] = count
-
-    last_use = {}
-    for position, node in enumerate(nodes):
-        for ref in (node["in"], node["w"], node["b"]):
-            if ref is not None and not slots[ref][2]:
-                last_use[ref] = position
-        last_use[node["out"]] = position
-
-    free = [(0, None)]  # (offset, length) with None meaning "to the end"
-    offsets = {}
-    high_water = 0
-
-    def take(count):
-        nonlocal high_water
-        for position, (offset, length) in enumerate(free):
-            if length is None:
-                # The tail block: always fits, and stays a tail block after the cut.
-                free[position] = (offset + count, None)
-                high_water = max(high_water, offset + count)
-                return offset
-            if length >= count:
-                if length > count:
-                    free[position] = (offset + count, length - count)
-                else:
-                    free.pop(position)
-                high_water = max(high_water, offset + count)
-                return offset
-        raise SystemExit("emit_mobilenet_blob: allocator ran out of free list")
-
-    for position, node in enumerate(nodes):
-        offsets[node["out"]] = take(size[node["out"]])
-        for index in sorted(i for i in runtime if last_use.get(i) == position):
-            free.append((offsets[index], size[index]))
-            free.sort()
-    return sum(size[i] for i in runtime), high_water
+        counts.append(None if payload else count)
+    refs = [(node["in"], node["out"], node["w"], node["b"]) for node in nodes]
+    naive = sum(count for count in counts if count is not None)
+    return naive, blobfmt.plan_arena(counts, refs)
 
 
 def main() -> int:

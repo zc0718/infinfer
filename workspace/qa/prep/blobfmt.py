@@ -30,6 +30,16 @@ Layout (little endian):
     per slot:
         char name[16], u32 dtype, u32 rank, u32 dims[4], u32 byte_len, payload
 
+For a binary node (`mul` / `add`) `in_slot` and `w_slot` are the two operands and `p[0]`
+says how they combine: 0 means element-wise over equal extents, 1 means the right operand
+is **one factor per output channel** (a `(C,)` constant against an `(H,W,C)` map). The
+second form is MobileNet's squeeze-and-excite gate; the executors run it as one `scale`
+call per channel rather than through a kernel of its own.
+
+二元节点（`mul` / `add`）的 `in_slot` 与 `w_slot` 是两个操作数，`p[0]` 说明怎么合成：
+0 表示等长逐元素；1 表示右操作数是**每个输出通道一个因子**（`(C,)` 常量对 `(H,W,C)`
+特征图）。后者正是 MobileNet 的 SE 门，执行时按通道各调一次 `scale`，而不是另立一个核。
+
 Op and activation codes are part of the **file format**, not of the C header: they are
 frozen here so that renumbering an enum cannot silently reinterpret a blob that is
 already in the tree.
@@ -128,3 +138,134 @@ def parse_constants(data: bytes) -> dict:
     if offset != len(data):
         raise SystemExit("blobfmt: trailing bytes after the last slot")
     return constants
+
+
+def layout(data: bytes):
+    """`(slot_counts, node_refs, ops)` -- everything a memory plan needs and nothing else.
+
+    `slot_counts[i]` is the slot's element count, or None when the slot is a constant
+    (its payload lives in the blob, i.e. it costs flash and no arena). `node_refs[j]` is
+    the node's `(in, out, w, b)` with None for an absent reference; `ops[j]` is its op
+    code, so a caller can find the graph's endpoints without parsing the blob twice.
+
+    内存计划需要且只需要这两样：每个槽的元素数（常量槽为 None，它花 flash 不花 arena），
+    以及每个节点的四个槽引用（缺省为 None）；`ops` 带上算子码，调用方找端点时不必再解析
+    一遍。
+    """
+    if len(data) < HEADER_SIZE or data[:8] != MAGIC:
+        raise SystemExit("blobfmt: not an INFRKAT blob")
+    version, node_count, slot_count, reserved = struct.unpack_from("<IIII", data, 8)
+    if version != VERSION:
+        raise SystemExit(f"blobfmt: unsupported version {version} (expected {VERSION})")
+    if reserved != 0:
+        raise SystemExit("blobfmt: header reserved field is not zero")
+    offset = HEADER_SIZE
+    if offset + node_count * NODE_SIZE > len(data):
+        raise SystemExit("blobfmt: node table runs past the end of the blob")
+    node_refs = []
+    ops = []
+    for index in range(node_count):
+        base = HEADER_SIZE + index * NODE_SIZE
+        ops.append(data[base])
+        refs = struct.unpack_from("<IIII", data, base + 4)
+        node_refs.append(tuple(None if ref == NO_SLOT else ref for ref in refs))
+    offset += node_count * NODE_SIZE
+    slot_counts = []
+    for _ in range(slot_count):
+        if offset + SLOT_HEADER_SIZE > len(data):
+            raise SystemExit("blobfmt: slot header runs past the end of the blob")
+        name = data[offset:offset + 16].split(b"\0", 1)[0].decode("ascii")
+        dtype, rank = struct.unpack_from("<II", data, offset + 16)
+        dims = struct.unpack_from("<4I", data, offset + 24)
+        (byte_len,) = struct.unpack_from("<I", data, offset + 40)
+        offset += SLOT_HEADER_SIZE
+        if dtype != DTYPE_F32 or rank > 4:
+            raise SystemExit(f"blobfmt: slot {name} is not a rank<=4 fp32 slot")
+        count = 1
+        for axis in range(rank):
+            count *= dims[axis]
+        if byte_len != 0 and byte_len != count * 4:
+            raise SystemExit(f"blobfmt: slot {name} byte_len disagrees with its dims")
+        if offset + byte_len > len(data):
+            raise SystemExit(f"blobfmt: slot {name} payload runs past the end of the blob")
+        slot_counts.append(None if byte_len else count)
+        offset += byte_len
+    if offset != len(data):
+        raise SystemExit("blobfmt: trailing bytes after the last slot")
+    return slot_counts, node_refs, ops
+
+
+def endpoints(slot_counts, node_refs, ops):
+    """`(in_floats, out_floats)` -- the extents a caller has to bring and gets back.
+
+    A chain sizes its buffers from these instead of from constants of its own: the model
+    file says how wide the input is, so the C side must not say it a second time.
+
+    调用方要带多少个输入、拿回多少个输出。链用它来定缓冲区，而不是自己再写一遍常数：
+    模型文件已经说了输入多宽，C 侧不该再说一次。
+    """
+    in_floats = 0
+    for op, refs in zip(ops, node_refs):
+        if op == OP["input"]:
+            in_floats = slot_counts[refs[1]]
+            break
+    out_floats = slot_counts[node_refs[-1][1]] if node_refs else 0
+    return in_floats, out_floats
+
+
+def plan_arena(slot_counts, node_refs) -> int:
+    """Floats a first-fit allocator needs for those live ranges -- the high-water mark.
+
+    A slot is released at the end of the node that last touches it, so node i's output
+    may land on a slot whose last use was node i-1, while two slots that are live at the
+    same time never overlap. This is the **plan**; the executors derive the same number
+    themselves (independently, in C and C++) and the KAT asserts the two agree on every
+    target, because a plan nobody executes is just a number in a document.
+
+    槽在最后一个碰它的节点结束时才释放，所以第 i 个节点的输出可以落在第 i-1 个节点最后
+    用过的槽上，而同时活跃的两个槽永不重叠。这是**计划**；两份执行器（C 与 C++，彼此
+    独立）各自算出同一个数，KAT 在每个目标上断言两者相等——因为没人执行的计划只是文档里
+    的一个数字。
+    """
+    runtime = [index for index, count in enumerate(slot_counts) if count is not None]
+    written = set()
+    last_use = {}
+    for position, (ins, out, weight, bias) in enumerate(node_refs):
+        for ref in (ins, weight, bias):
+            if ref is not None and slot_counts[ref] is not None:
+                last_use[ref] = position
+        last_use[out] = position
+        written.add(out)
+    orphans = [index for index in runtime if index not in written]
+    if orphans:
+        raise SystemExit(f"blobfmt: runtime slot(s) {orphans} are never written")
+
+    free = [(0, None)]  # (offset, length); None means "the tail", so it always fits
+    offsets = {}
+    high_water = 0
+
+    def take(count):
+        nonlocal high_water
+        for index, (offset, length) in enumerate(free):
+            if length is None:
+                free[index] = (offset + count, None)
+                high_water = max(high_water, offset + count)
+                return offset
+            if length >= count:
+                if length > count:
+                    free[index] = (offset + count, length - count)
+                else:
+                    free.pop(index)
+                high_water = max(high_water, offset + count)
+                return offset
+        raise SystemExit("blobfmt: allocator ran out of free list")
+
+    for position, (_ins, out, _weight, _bias) in enumerate(node_refs):
+        count = slot_counts[out]  # `out` is runtime by the format's own rule
+        if count is None:
+            raise SystemExit("blobfmt: a node writes into a constant slot")
+        offsets[out] = take(count)
+        for index in sorted(i for i in runtime if last_use.get(i) == position):
+            free.append((offsets[index], slot_counts[index]))
+            free.sort()
+    return high_water

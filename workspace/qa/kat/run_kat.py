@@ -50,20 +50,37 @@ KERNEL_SOURCES = [
 # The L2 operators live in C++17 (`src/runtime`). A chain that calls them has to be
 # linked by the C++ driver even though every source file it *writes* is C.
 CPP_SOURCES = sorted((ROOT / "src/runtime").glob("*.cpp"))
-CHAINS_NEEDING_CPP = {"k2"}
+CHAINS_NEEDING_CPP = {"k2", "k2m"}
 CHAIN_SOURCES = {
     "k0": [HERE / "kat_chain.c"],
     "k1": [HERE / "kat_chain_k1.c"],
     "k2": [HERE / "kat_chain_k2.c", HERE / "blob_graph.c"],
+    # The blob itself arrives as a generated `.S` (`.incbin`), added in `sources()`: 1.4 MB
+    # spelled as a C array is ~7 MB of source for every target build to parse.
+    "k2m": [HERE / "kat_chain_k2m.c", HERE / "blob_graph.c"],
     "k3": [HERE / "kat_chain_k3.c"],
 }
-CHAIN_FLAGS = {"k0": [], "k1": ["-DKAT_CHAIN_K1"], "k2": ["-DKAT_CHAIN_K2"], "k3": ["-DKAT_CHAIN_K3"]}
+CHAIN_FLAGS = {
+    "k0": [],
+    "k1": ["-DKAT_CHAIN_K1"],
+    "k2": ["-DKAT_CHAIN_K2"],
+    "k2m": ["-DKAT_CHAIN_K2M"],
+    "k3": ["-DKAT_CHAIN_K3"],
+}
 CHAIN_IDS = {
     "k0": "k0_actquant",
     "k1": "k1_mlp3",
     "k2": "k2_conv_micro",
+    "k2m": "k2m_mobilenet",
     "k3": "k3_tier_parity",
 }
+# The MobileNet chain runs on the two FPU MCUs only. The claim it carries is a memory row
+# (flash / RAM / peak arena) on a Cortex-M with an FPU; adding the soft-float M3 and the
+# RISC-V boards would multiply a 1.4 MB image by six to answer a question nobody asked.
+# k2m_mobilenet 只在两个带 FPU 的 MCU 上跑。它要交的是带 FPU 的 Cortex-M 上的一行内存数字
+# （flash / RAM / 峰值 arena）；把无 FPU 的 M3 和 RISC-V 板也拉进来，只是把 1.4 MB 的镜像
+# 复制六份，去回答一个没人问的问题。
+K2M_BOARDS = ("m4-an386", "m7-an500")
 # k3 is the only chain that compiles tier sources: it compares the tier row of a cell against the
 # scalar row **on the target**, which is the evidence every other chain cannot give (k0/k1/k2 are
 # written on top of the scalar registry). Built per tier, because the other tiers' sources do not
@@ -153,6 +170,11 @@ def sources(chain, tier=None):
         extra = sorted((ROOT / f"src/kernel/{tier}").glob("*.c"))
         if not extra:
             raise SystemExit(f"run_kat: no sources under src/kernel/{tier}/")
+    elif chain == "k2m":
+        # The blob as a linker-visible object rather than as 1.4 MB of C source. Generated
+        # next to the header by `emit_k2m_blob_header()`, and listed here so every build of
+        # this chain -- host and target -- links the same bytes.
+        extra = [GENERATED / "kat_k2m_blob.S"]
     return [*CHAIN_SOURCES[chain], HERE / "kat_driver.c", *KERNEL_SOURCES, *extra]
 
 
@@ -174,6 +196,7 @@ def objects_for(chain, cc, cxx, out_dir, extra_flags, opt="-O2", tier=None):
     language keeps its own compiler; only the *link* is done by the C++ driver, which
     is all a C++ runtime actually requires.
     """
+    out_dir.mkdir(parents=True, exist_ok=True)  # every caller gets its own directory now
     objects = []
     for src in sources(chain, tier):
         obj = out_dir / f"{chain}_{pathlib.Path(src).parent.name}_{pathlib.Path(src).stem}.o"
@@ -266,11 +289,47 @@ def emit_k2_model_header():
          GENERATED / "kat_k2_blob.h"])
 
 
+def emit_k2m_blob_header():
+    """Generate the MobileNet blob, then its `.incbin` object and its size header.
+
+    The model is generated rather than committed: it is 1.4 MB of reproducible LCG weights,
+    and a checked-in binary of that size would be an artifact nobody can review. Two steps,
+    one source -- `emit_mobilenet_blob.py` writes `model.blob`, and everything the targets
+    see is derived from that file.
+
+    模型是生成的，不进仓：它是 1.4 MB 可复现的 LCG 权重，把这么大的二进制提交进去等于放了
+    一个没人能 review 的产物。两步、一个来源——`emit_mobilenet_blob.py` 写出 `model.blob`，
+    目标看到的东西全部从那个文件派生。
+    """
+    model = BUILD / "mobilenet" / "model.blob"
+    run([sys.executable, ROOT / "workspace/qa/prep/emit_mobilenet_blob.py",
+         "--width", "0.25", "--res", "96", "--write", "--out", str(model.parent)])
+    run([sys.executable, ROOT / "workspace/qa/prep/emit_blob_image.py", "--segment",
+         "--name", "kat_k2m_blob", model, GENERATED / "kat_k2m_blob.h"])
+
+
 def build_host_emit(cc, chain):
     out = BUILD / f"{chain}_emit"
     if chain == "k2":
         emit_k2_model_header()
-    objects = objects_for(chain, cc, cxx_for(cc), BUILD, [])
+    elif chain == "k2m":
+        emit_k2m_blob_header()
+    # `-DKAT_EMIT` is what selects the emitter `main`. Without it this step compiled the
+    # *check* binary, ran it, and appeared to work only because a `<chain>_expected.bin`
+    # from an earlier run happened to be lying around -- i.e. step 1 of 4 was a no-op and
+    # a model that changed numerically would have left the baked header stale while every
+    # target kept passing against it (found 2026-11-27, gaps G-100).
+    #
+    # The objects go to their own directory: emit and check builds differ by one macro,
+    # and object files are named by source, so sharing a directory makes the second build
+    # silently overwrite the first.
+    #
+    # `-DKAT_EMIT` 才决定选哪个 `main`。没有它，这一步编出的是**校验**二进制，跑一下也
+    # "成功"——只因为上一次留下的 `<chain>_expected.bin` 还躺在旁边。也就是说四步里的
+    # 第一步其实什么都没做，而一个数值上变了的模型会让烘进去的头部过期，同时所有目标继续
+    # 对着它通过（2026-11-27 发现，gaps G-100）。对象要放进自己的目录：两个构建只差一个
+    # 宏，而对象名按源文件命名，共用一个目录就是让后一个悄悄覆盖前一个。
+    objects = objects_for(chain, cc, cxx_for(cc), BUILD / f"{chain}_emit_objs", ["-DKAT_EMIT"])
     link = cxx_for(cc) if chain in CHAINS_NEEDING_CPP else cc
     run([link, "-O2", *TRIM_LINK, *objects, "-lm", "-o", out])
     blob = BUILD / f"{chain}_expected.bin"
@@ -383,6 +442,14 @@ def build_target(board_name, chain, gcc_arm, gcc_rv, variant=None, tier=None):
 
 def run_chain(chain, boards, cc, use_variants=True):
     print(f"[run_kat] === {chain} ({CHAIN_IDS[chain]}) ===", flush=True)
+    if chain == "k2m":
+        kept = [name for name in boards if name in K2M_BOARDS]
+        if not kept:
+            print(f"[run_kat] k2m: no FPU MCU in this board selection, nothing to run", flush=True)
+            return []
+        if len(kept) != len(boards):
+            print(f"[run_kat] k2m: restricted to {', '.join(kept)} (see K2M_BOARDS)", flush=True)
+        boards = kept
     print(f"[run_kat] {chain} 1/4 host emit", flush=True)
     blob = build_host_emit(cc, chain)
     print(f"[run_kat] {chain} 2/4 emit image header", flush=True)
@@ -490,7 +557,8 @@ def run_k3(boards, cc, use_variants=True):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--chain", choices=["k0", "k1", "k2", "k3", "both", "all"], default="both")
+    ap.add_argument("--chain", choices=["k0", "k1", "k2", "k2m", "k3", "both", "all"],
+                    default="both")
     ap.add_argument("--cc", default=os.environ.get("CC", "cc"))
     ap.add_argument("--boards", nargs="*", default=None,
                     help="board stems to run (default: every board profile)")
@@ -502,7 +570,7 @@ def main():
     BUILD.mkdir(parents=True, exist_ok=True)
     GENERATED.mkdir(parents=True, exist_ok=True)
 
-    chains = {"both": ["k0", "k1"], "all": ["k0", "k1", "k2", "k3"]}.get(args.chain, [args.chain])
+    chains = {"both": ["k0", "k1"], "all": ["k0", "k1", "k2", "k2m", "k3"]}.get(args.chain, [args.chain])
     boards = args.boards or sorted(p.stem for p in BOARDS.glob("*.json"))
 
     all_failures = {}

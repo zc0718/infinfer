@@ -276,6 +276,18 @@ int kat_k2_run(kat_k2_result *result) {
         if (blob_status != KAT_BLOB_OK) {
             return blob_status;
         }
+        /* Two implementations of the same plan have to agree, and this is the only
+         * place they can be compared: the figure below was derived in Python from the
+         * blob at emit time, the one in the view was derived here in C at run time.
+         * Disagreeing means one of them is wrong about the same bytes -- which is
+         * exactly the "plan nobody executes" this check exists to stop.
+         *
+         * 同一份计划的两份实现必须一致，而这里是比较它们的唯一地方：宏是生成期由 Python
+         * 从 blob 推出的，view 里的数是运行期由这里的 C 算出的。两者不等就说明其中之一把
+         * 同一批字节读错了——这正是这条检查要拦住的“没人执行的计划”。 */
+        if (view.arena_floats != KAT_K2_BLOB_ARENA) {
+            return KAT_BLOB_ERR_ARENA;
+        }
         if (view.arena_floats * sizeof(float) >= sizeof arena) {
             return KAT_BLOB_ERR_ARENA;
         }
