@@ -143,6 +143,14 @@ infr_status infr_scalar_mul_f32(const void *const *inputs, void *const *outputs,
                                 const infr_quant *quant);
 
 /**
+ * @brief [en] Copy `element_count` floats; the layout operators' primitive.
+ * @brief [zh] 拷贝 `element_count` 个 float；布局类算子的原语。
+ * @since 0.2.0
+ */
+infr_status infr_scalar_copy_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                 const infr_quant *quant);
+
+/**
  * @brief [en] Fused 3x3 depthwise convolution over a gathered window plane.
  * @brief [zh] 在已 gather 的窗口平面上做融合 3×3 深卷积。
  * @since 0.2.0

@@ -38,6 +38,16 @@ infr_status infr_kernel_register_scalar(void) {
          .quant = INFR_QUANT_NONE,
          .tier = INFR_TIER_SCALAR,
          .fn = infr_scalar_add_f32},
+        /* The data-movement primitive: `concat`, `slice`, `resize` and `transpose` are all
+         * copies of runs into a different layout.
+         *
+         * 搬运原语：`concat`、`slice`、`resize`、`transpose` 本质上都是把若干段拷进另一种
+         * 布局。 */
+        {.name = "copy",
+         .dtype = INFR_DTYPE_F32,
+         .quant = INFR_QUANT_NONE,
+         .tier = INFR_TIER_SCALAR,
+         .fn = infr_scalar_copy_f32},
         {.name = "mul",
          .dtype = INFR_DTYPE_F32,
          .quant = INFR_QUANT_NONE,

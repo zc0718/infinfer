@@ -12,6 +12,10 @@
     "add/fp32/none/x86": [
       "KernelParityX86/AddFp32MatchesScalarBitwise"
     ],
+    "copy/fp32/none/scalar": [
+      "KernelParityCopy/CopiesTheRunExactly",
+      "KernelParityCopy/CountsOnlyWhatItIsTold"
+    ],
     "dequantize/int8/tensor/arm_neon": [
       "KernelParityQuantNeon/DequantizeInt8MatchesScalarBitwise"
     ],

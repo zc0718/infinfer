@@ -187,6 +187,25 @@ kernels:
   #
   # 向量档全部记 `na` 是故意的：这里的收益是**调用次数**而不是抽头求和，而那些档的 ISA 层
   # 工作属于厂商后端（ADR-007）。`arm_m` 在无 FPU 的档上根本没有 fp32，与其它 fp32 格一致。
+  # The data-movement primitive the layout operators are built on. No front-end operator maps
+  # to it directly, so both claims are empty on purpose -- the same arrangement `dot` and
+  # `requant` use. Only the reference tier is declared: a copy is memory-bound and the body is
+  # already `memcpy`, so a vector body would be the same instruction with more code around it
+  # (ADR-007). The `scalar` cell is the best implementation here, not the fallback.
+  #
+  # 布局类算子所依赖的搬运原语。没有前端算子直接映射到它，所以两条主张都故意为空——与
+  # `dot`、`requant` 同一安排。只声明参考档：拷贝是内存受限的，体本身就是 `memcpy`，手写
+  # 向量体只会得到同一条指令外加更多周边代码（ADR-007）。这一格的 `scalar` 是最优实现，
+  # 不是后备。
+  copy:
+    tflite: []
+    onnx: []
+    dtype_quant: [[fp32, none]]
+    tiers: { scalar: done, autovec: na, x86: na, arm_neon: na, arm_m: na, rvv: na }
+    grad: no-grad
+    grad_why: >-
+      a copy is the identity on values, so a derivative would be the identity too; spending a
+      contract on saying that is worse than saying nothing
   dwconv3x3:
     tflite: []
     onnx: []
