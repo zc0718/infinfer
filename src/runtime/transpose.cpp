@@ -118,43 +118,6 @@ infr_status resolve_plan(const infr_shape& in_shape, const infr_transpose_params
     return INFR_OK;
 }
 
-/**
- * @brief [en] Advance a mixed-radix odometer and keep `offset` in step with it.
- * @brief [zh] 推进混合进制里程计，并让 `offset` 跟随它。
- * @param idx [en] Digits; modified in place.
- * @param idx [zh] 各位数字；就地修改。
- * @param dim [en] Radix of each digit.
- * @param dim [zh] 各位的进制。
- * @param delta [en] Offset contributed by one step of each digit.
- * @param delta [zh] 各位走一步贡献的偏移。
- * @param count [en] Number of digits.
- * @param count [zh] 位数。
- * @param offset [en] Running offset; updated in place.
- * @param offset [zh] 运行中的偏移；就地更新。
- * @return [en] False once the odometer has run past its last position.
- * @return [zh] 里程计走完最后一个位置后返回 false。
- * @note [en] The wrap correction subtracts `dim * delta` after having just added `delta`, which
- *            leaves the digit at 0 with its contribution fully removed -- the arithmetic is
- *            spelled out here because an off-by-one-delta wrap is exactly the kind of bug that
- *            only shows up as one wrong element per row.
- * @note [zh] 进位修正是在刚加过 `delta` 之后再减 `dim * delta`，于是该位回到 0 且贡献被
- *            完全移除——这里把算术写明白，因为进位少减或多减一个 `delta` 正是那种"每行错
- *            一个元素"的缺陷。
- * @since 0.2.0
- */
-bool advance_odometer(uint32_t* idx, const uint32_t* dim, const ptrdiff_t* delta, uint32_t count, ptrdiff_t* offset) {
-    for (uint32_t a = count; a-- > 0U;) {
-        ++idx[a];
-        *offset += delta[a];
-        if (idx[a] < dim[a]) {
-            return true;
-        }
-        idx[a] = 0U;
-        *offset -= static_cast<ptrdiff_t>(dim[a]) * delta[a];
-    }
-    return false;
-}
-
 } // namespace
 
 /**
@@ -280,7 +243,7 @@ infr_status infr_transpose_f32(const infr_tensor* input, const infr_transpose_pa
                 return status;
             }
             written += run;
-            if (!advance_odometer(idx, plan.out_dims, plan.in_delta, rank - 1U, &offset)) {
+            if (!infr_detail::advance_odometer(idx, plan.out_dims, plan.in_delta, rank - 1U, &offset)) {
                 break;
             }
         }
@@ -301,7 +264,7 @@ infr_status infr_transpose_f32(const infr_tensor* input, const infr_transpose_pa
         ptrdiff_t offset = 0;
         for (size_t p = 0U; p < plan.total; ++p) {
             scratch[p] = src[offset];
-            (void)advance_odometer(idx, plan.out_dims, plan.in_delta, rank, &offset);
+            (void)infr_detail::advance_odometer(idx, plan.out_dims, plan.in_delta, rank, &offset);
         }
     }
     const void* in1[1] = {scratch};

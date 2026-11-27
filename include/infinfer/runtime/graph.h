@@ -475,6 +475,97 @@ infr_status infr_transpose_output_shape(const infr_shape *input_shape, const inf
 infr_status infr_transpose_f32(const infr_tensor *input, const infr_transpose_params *params, infr_tensor *output,
                                infr_workspace *workspace);
 
+/**
+ * @brief [en] Which axes to cut, and where.
+ * @brief [zh] 切哪几条轴，切在哪里。
+ * @since 0.2.0
+ */
+typedef struct infr_slice_params {
+    /**
+     * @brief [en] Number of entries used in the arrays below; 0 is rejected.
+     * @brief [zh] 下面各数组实际使用的项数；0 被拒绝。
+     */
+    uint32_t axis_count;
+    /**
+     * @brief [en] Axis each entry applies to; an axis may appear only once.
+     * @brief [zh] 每项作用的轴；同一条轴只能出现一次。
+     */
+    uint32_t axis[INFR_TENSOR_MAX_RANK];
+    /**
+     * @brief [en] Start index, inclusive; negative counts from the end.
+     * @brief [zh] 起始下标（含）；负数表示从末尾数。
+     */
+    int64_t start[INFR_TENSOR_MAX_RANK];
+    /**
+     * @brief [en] End index, exclusive; negative counts from the end, and `INT64_MAX`
+     *            means to the end of that axis.
+     * @brief [zh] 结束下标（不含）；负数表示从末尾数，`INT64_MAX` 表示到该轴末尾。
+     */
+    int64_t end[INFR_TENSOR_MAX_RANK];
+    /**
+     * @brief [en] Step along that axis; must be at least 1.
+     * @brief [zh] 沿该轴步长；至少为 1。
+     */
+    int64_t step[INFR_TENSOR_MAX_RANK];
+} infr_slice_params;
+
+/**
+ * @brief [en] Shape of the slice `params` cuts out of `input_shape`.
+ * @brief [zh] `params` 从 `input_shape` 里切出的形状。
+ * @param input_shape [en] Rank 1..`INFR_TENSOR_MAX_RANK`.
+ * @param input_shape [zh] 秩为 1..`INFR_TENSOR_MAX_RANK`。
+ * @param params [en] Axes, start, end and step; axes not listed are kept whole.
+ * @param params [zh] 轴、起止与步长；未列出的轴整条保留。
+ * @param out_shape [en] Receives the result; untouched on failure.
+ * @param out_shape [zh] 接收结果；失败时不改动。
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, an axis out of range or
+ *         repeated, or a step below 1.
+ * @note [en] Start and end are clamped to the axis, so `INT64_MAX` and a negative `-dim - 5`
+ *            are both legal and mean the obvious thing. A start at or past the end yields a
+ *            zero-length axis, which is a legal result, not an error.
+ * @note [zh] 起止被夹到轴长之内，所以 `INT64_MAX` 和 `-dim - 5` 都合法且含义如常。起点等于或
+ *            超过终点会得到长度 0 的轴，那是合法结果而不是错误。
+ * @since 0.2.0
+ */
+infr_status infr_slice_output_shape(const infr_shape *input_shape, const infr_slice_params *params,
+                                    infr_shape *out_shape);
+
+/**
+ * @brief [en] fp32 slice: cut a strided view out of a tensor, moving values with `copy`.
+ * @brief [zh] fp32 切片：从张量里切出一个带步长的视图，用 `copy` 搬值。
+ * @param input [en] fp32 tensor of rank 1..`INFR_TENSOR_MAX_RANK`.
+ * @param input [zh] 秩为 1..`INFR_TENSOR_MAX_RANK` 的 fp32 张量。
+ * @param params [en] Axes, start, end and step.
+ * @param params [zh] 轴、起止与步长。
+ * @param output [en] fp32 output whose shape must already equal `infr_slice_output_shape`;
+ *               the data is overwritten.
+ * @param output [zh] 形状必须已等于 `infr_slice_output_shape` 的 fp32 输出；数据会被覆盖。
+ * @param workspace [en] Scratch source, used only when the innermost axis is strided, where it
+ *                  must hold `output->shape.elem_count` floats; rewound on every path.
+ * @param workspace [zh] 临时空间来源，仅在末轴带步长时使用，此时需能放下
+ *                  `output->shape.elem_count` 个 float；任何路径都会回退。
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, an axis out of range or
+ *         repeated, or a shape mismatch; INFR_ERR_UNSUPPORTED for a non-fp32 tensor, a step
+ *         below 1 (a reversal), or more than `UINT32_MAX` elements;
+ *         INFR_ERR_BUFFER_TOO_SMALL when the workspace cannot hold the gathered output;
+ *         INFR_ERR_NOT_IMPLEMENTED when `copy` is not registered.
+ * @note [en] Two paths, the same rule as `transpose`: when the innermost axis has step 1 every
+ *            output run is contiguous and costs one `copy` per position of the outer axes;
+ *            otherwise the values are gathered and one `copy` is issued. So the kernel-call
+ *            cost is never above one per output element.
+ * @note [zh] 两条路径，规则与 `transpose` 相同：末轴步长为 1 时每条输出段都连续，外层每个
+ *            位置一次 `copy`；否则 gather 后发一次 `copy`。所以内核调用代价永不超过每输出
+ *            元素一次。
+ * @note [en] A step below 1 is refused rather than supported: a reversal is another operator's
+ *            job (the models this library targets do not emit it), and quietly accepting it
+ *            would make the contiguous-run test wrong by omission.
+ * @note [zh] 步长小于 1 是拒绝而不是支持：反向切片是另一个算子的职责（本库面向的模型也不生成
+ *            它），而默默接受会让「段是否连续」的判断因为漏掉这一种而失准。
+ * @since 0.2.0
+ */
+infr_status infr_slice_f32(const infr_tensor *input, const infr_slice_params *params, infr_tensor *output,
+                           infr_workspace *workspace);
+
 #ifdef __cplusplus
 }
 #endif

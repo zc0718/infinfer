@@ -265,6 +265,19 @@ composed:
     onnx: [{op: Transpose}]
     uses: [copy]
     kat: pending
+  # The third layout transform. Its cost model is the one worth stating out loud: slicing the
+  # channel axis of an NHWC tensor keeps the innermost axis contiguous, so the whole cut is one
+  # `copy` per pixel rather than one per element -- and the case that breaks that (a strided
+  # innermost axis) gathers once instead, exactly like `transpose`.
+  #
+  # 第三个布局变换。它的代价模型值得写明：切 NHWC 的通道轴时末轴仍然连续，所以整个切片是
+  # 每像素一次 `copy` 而不是每元素一次；而破坏这一点的情形（末轴带步长）改走一次 gather，
+  # 与 `transpose` 完全一致。
+  slice:
+    tflite: [SLICE]
+    onnx: [{op: Slice}]
+    uses: [copy]
+    kat: pending
   concat:
     tflite: [CONCATENATION]
     onnx: [{op: Concat}]
