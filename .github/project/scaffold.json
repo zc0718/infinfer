@@ -88,7 +88,7 @@
     "test_package/conanfile.py": "28ca75ff819233055d95334554904c6b1c6ea1eb0665d08ccece714aaac6bf39",
     "CMakeLists.txt": "65cbd4dddf3c0879bd39e9ea4f9f4e635a91e2d4851d5ee30eece008c18dc7b1"
   },
-  "tolerance_budget": 6,
+  "tolerance_budget": 7,
   "tolerated": [
     {
       "path": ".github/workflows/ci-orchestrator.yml",
@@ -125,6 +125,12 @@
       "patch": ".github/project/patches/scaffold-forks.patch",
       "why": "the schema has additionalProperties:false, so the injection point needs its contract declared there: what a compile_options entry may contain. Without this the mechanism would be undocumented and metadata.json would fail validation.",
       "exit": "drop this entry with the other two when upstream ships the hook; it is the same patch, not a separate decision"
+    },
+    {
+      "path": ".github/misc/Codegen-Starter.txt",
+      "patch": ".github/project/patches/scaffold-forks.patch",
+      "why": "the blueprint describes the framework's dependency and compile-option machinery; leaving it silent about the two tracks would make the framework's own description inconsistent with what it now does",
+      "exit": "drop with the other entries when upstream documents the mechanism itself"
     }
   ],
   "owned_dirs": [

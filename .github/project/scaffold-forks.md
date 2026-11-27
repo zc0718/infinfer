@@ -94,3 +94,14 @@ shutil.copy2(v1, coverage_folder + sep + _get_file_name(v1))   # basename only
 **为什么它是"真分叉"而不是"调门禁".** 它改的是**测量工具的输入组织**，判据（地板数值、
 `core_scopes` 前缀、由计数算率）一个字没动；修好之后 `core` 与 `all` 都是**更好**的数，不是更宽松的数。
 反过来做（降地板让红变绿）在同一周已经被明确拒绝过一次（gaps G-55/G-62）。
+
+## F4 · `.github/misc/Codegen-Starter.txt`：蓝图记录双轨与编译选项（2026-11-27）
+
+**改哪儿.** 文件末尾追加两节：`[DEPENDENCIES: TWO TRACKS]` 与 `[COMPILE OPTIONS]`。
+
+**为什么.** 蓝图是"脚手架能做什么"的说明书。双轨（CCI + 私域挂载点）与编译选项注入点都是
+脚手架现在具备的能力，蓝图不提就会与实现互相矛盾——而蓝图正是下游项目生成时读的东西。
+
+**怎么验证.** 与 F2/F3 同一份 `patches/scaffold-forks.patch`；打到上游 v0.3.11 后 `diff -q` 一致。
+
+**退出条件.** 与 F2/F3 同批移除。
