@@ -49,8 +49,8 @@
       "what": "fp32 and int8 relu; measured 5"
     },
     "src/kernel/scalar/scale.c": {
-      "min_packed": 5,
-      "what": "fp32 broadcast multiply; measured 8"
+      "min_packed": 4,
+      "what": "fp32 broadcast multiply; measured 8 packed instructions on gcc 13 (legacy SSE) and 4 on gcc 15 (VEX-encoded). The minimum is the smaller measurement: the rule is that the frame packs this loop at all, and a threshold taken from one compiler version fails on the next one for a reason that has nothing to do with the code."
     },
     "src/kernel/scalar/fc.c": {
       "min_packed": 4,
