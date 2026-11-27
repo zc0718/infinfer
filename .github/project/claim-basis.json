@@ -141,6 +141,40 @@
       },
       "reproduce": "python3 .github/project/qa/kat/run_kat.py --chain k2  (needs the house cross toolchains and qemu, which the project-gates job does not have)",
       "not_in_ci": "same reason as `kat-cross-target`: the project-gates job has no house cross toolchain and no qemu"
+    },
+    {
+      "id": "mbv3-real-model-numerics",
+      "claim": "a MobileNetV3-Small exported by torch and imported by `onnx_subset.translate` computes what PyTorch computes: on the pretrained model at 96x96 the worst |difference| is 2.69e-02 on logits of about 7e3 (1e-5..1e-4 relative), and onnxruntime sits *between* the two (5.86e-03 from this executor, 2.49e-02 from torch), so what is left is float32 accumulation order rather than a defect",
+      "why_it_was_missing": "until 2026-11-27 the importer had only ever seen the synthetic graph `emit_onnx_blob.py` builds itself, so 'it takes a real model' rested on nothing",
+      "how": "`export_mobilenet_onnx.py` exports torchvision's `mobilenet_v3_small` (2,542,856 parameters) at a static 96x96, writes the input in blob order (NHWC) and PyTorch's own output as the expectation; the C++ blob executor is compared against both that output and onnxruntime inside one probe. The first real export also exposed six assumptions (gaps G-107), including that a real squeeze-and-excite gate is computed rather than stored",
+      "gate": "torch-export",
+      "commit": "474c812",
+      "host": "zc Linux, torch 2.15.0+cpu / torchvision 0.29.2+cpu / onnxruntime 1.32.0",
+      "date": "2026-11-27",
+      "local_only": true,
+      "reproduce": "python3 .github/project/qa/prep/export_mobilenet_onnx.py --pretrained --out /tmp/mbv3p && python3 .github/project/qa/prep/emit_onnx_blob.py /tmp/mbv3p/model.onnx /tmp/mbv3p/model.blob",
+      "excluded": {
+        "accuracy": "the input is a deterministic ramp, not an image, and no ImageNet claim is made anywhere -- this is a statement about two implementations agreeing on the same numbers",
+        "target_run": "the real blob has not been executed on a QEMU target yet; the chain still points at the synthetic MobileNet"
+      },
+      "not_in_ci": "torch is a machine-level dependency (it authors a model; the repository ships the ONNX and the tensors) and the project-gates job has none of it; Y5 keeps this out of ci.sh by construction"
+    },
+    {
+      "id": "mbv3-resolution-arena",
+      "claim": "the blob's peak arena scales with the activation area, not with the weights: MobileNetV3-Small imported at 96/80/64/56/48/40/32 gives 105984/73600/47104/36064/26496/20704/11776 arena floats while the blob stays byte-identical at 10,112,128 B. So the input resolution is a memory parameter of the deployment, not a property of the model",
+      "why_it_was_missing": "the memory table had one row, and the only number in it came from a synthetic network whose gates were constants",
+      "how": "the same export/import pair at seven resolutions; the arena comes from `blobfmt.plan_arena` over the translated node table, and 96->64 measures 2.25x = (96/64)^2, which is what an arena proportional to activation elements must give",
+      "gate": "torch-export",
+      "commit": "474c812",
+      "host": "zc Linux, torch 2.15.0+cpu",
+      "date": "2026-11-27",
+      "local_only": true,
+      "reproduce": "for r in 96 80 64 56 48 40 32; do python3 .github/project/qa/prep/export_mobilenet_onnx.py --res $r --out /tmp/sw_$r && python3 .github/project/qa/prep/emit_onnx_blob.py /tmp/sw_$r/model.onnx /tmp/sw_$r/model.blob; done",
+      "excluded": {
+        "target_run": "measured on the host; no QEMU run at any of these resolutions yet",
+        "ram_budget": "the 4 MB RAM window it is compared against is QEMU's MPS2 memory map, not a datasheet for any part"
+      },
+      "not_in_ci": "same dependency as `mbv3-real-model-numerics`: torch authors the model"
     }
   ]
 }
