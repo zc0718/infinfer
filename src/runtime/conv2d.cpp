@@ -284,14 +284,44 @@ infr_status infr_conv2d_f32(const infr_tensor* input, const infr_tensor* filter,
                  * 普通卷积（`groups == 1`）与深卷积（`groups == out_c`）的差别只在每个输出
                  * 通道读哪个输入通道，这个循环两种都覆盖。若按分组迭代，就只填了一个窗口、
                  * 其余读到窗口之外——实测表现是 GraphConv2d 里「奇数输出元素为 0」。 */
-                for (uint32_t oc = 0U; oc < plan.out_c; ++oc) {
-                    const uint32_t group = oc / plan.out_per_group;
-                    float* w9 = window + (static_cast<size_t>(oc) * 9U);
-                    for (uint32_t ky = 0U; ky < 3U; ++ky) {
-                        for (uint32_t kx = 0U; kx < 3U; ++kx) {
-                            const int32_t iy = base_y + static_cast<int32_t>(ky);
-                            const int32_t ix = base_x + static_cast<int32_t>(kx);
-                            w9[(ky * 3U) + kx] = gather_one(in, plan, group, iy, ix);
+                /* Two gather paths, same result. Interior pixels cannot touch the
+                 * border, so they skip the per-tap bounds test entirely: measured, the
+                 * checked gather was ~4.5 ms of this layer's 4.9 ms once the calls were
+                 * batched (gaps G-132). Only the frame pixels keep the checked path, and
+                 * there are O(in_h + in_w) of those per channel-plane, not O(in_h*in_w).
+                 *
+                 * 两条 gather 路径，结果相同。内部像素碰不到边界，于是完全跳过逐抽头的边界
+                 * 判断：实测在调用被批处理之后，带检查的 gather 占了这一层 4.9 ms 里的约
+                 * 4.5 ms（gaps G-132）。只有边框像素走带检查的路径，而每个通道平面上这类
+                 * 像素是 O(in_h + in_w) 个，不是 O(in_h*in_w)。 */
+                const bool interior = (base_y >= 0) && (base_x >= 0) &&
+                                      (base_y + 3 <= static_cast<int32_t>(plan.in_h)) &&
+                                      (base_x + 3 <= static_cast<int32_t>(plan.in_w));
+                if (interior) {
+                    for (uint32_t oc = 0U; oc < plan.out_c; ++oc) {
+                        const uint32_t group = oc / plan.out_per_group;
+                        const float* corner =
+                            in +
+                            (((static_cast<size_t>(base_y) * plan.in_w) + static_cast<size_t>(base_x)) * plan.in_c) +
+                            group;
+                        float* w9 = window + (static_cast<size_t>(oc) * 9U);
+                        for (uint32_t ky = 0U; ky < 3U; ++ky) {
+                            for (uint32_t kx = 0U; kx < 3U; ++kx) {
+                                const size_t offset = ((static_cast<size_t>(ky) * plan.in_w) + kx) * plan.in_c;
+                                w9[(ky * 3U) + kx] = corner[offset];
+                            }
+                        }
+                    }
+                } else {
+                    for (uint32_t oc = 0U; oc < plan.out_c; ++oc) {
+                        const uint32_t group = oc / plan.out_per_group;
+                        float* w9 = window + (static_cast<size_t>(oc) * 9U);
+                        for (uint32_t ky = 0U; ky < 3U; ++ky) {
+                            for (uint32_t kx = 0U; kx < 3U; ++kx) {
+                                const int32_t iy = base_y + static_cast<int32_t>(ky);
+                                const int32_t ix = base_x + static_cast<int32_t>(kx);
+                                w9[(ky * 3U) + kx] = gather_one(in, plan, group, iy, ix);
+                            }
                         }
                     }
                 }
