@@ -70,8 +70,8 @@ struct Slot {
     std::uint32_t rank = 0;
     std::uint32_t dims[4] = {0, 0, 0, 0};
     std::uint32_t byte_len = 0;
-    std::size_t payload = 0;  // byte offset into Blob::bytes
-    std::size_t arena = 0;    // float offset into the caller's arena
+    std::size_t payload = 0; // byte offset into Blob::bytes
+    std::size_t arena = 0;   // float offset into the caller's arena
 };
 
 struct Node {
@@ -88,8 +88,8 @@ struct Blob {
     std::uint32_t version = 0;
     std::vector<Node> nodes;
     std::vector<Slot> slots;
-    std::vector<unsigned char> bytes;  // owns the payloads
-    std::size_t arena_floats = 0;      // required arena length in floats
+    std::vector<unsigned char> bytes; // owns the payloads
+    std::size_t arena_floats = 0;     // required arena length in floats
 };
 
 namespace detail {
@@ -119,7 +119,7 @@ inline bool same_dims(const Slot& slot, const infr_shape& shape) {
     return true;
 }
 
-}  // namespace detail
+} // namespace detail
 
 // Parse a v2 blob. Every field is bounds-checked and every reference between a node
 // and a slot is resolved here, so `run()` can assume a well-formed graph.
@@ -231,8 +231,8 @@ inline bool parse(std::vector<unsigned char> bytes, Blob* out, std::string* err)
         const std::uint32_t refs[4] = {node.in_slot, node.out_slot, node.w_slot, node.b_slot};
         for (std::uint32_t k = 0; k < 4; ++k) {
             if (refs[k] != kNoSlot && refs[k] >= out->slots.size()) {
-                *err = "node " + std::to_string(i) + " references slot " + std::to_string(refs[k]) +
-                       " but only " + std::to_string(out->slots.size()) + " exist";
+                *err = "node " + std::to_string(i) + " references slot " + std::to_string(refs[k]) + " but only " +
+                       std::to_string(out->slots.size()) + " exist";
                 return false;
             }
         }
@@ -241,8 +241,7 @@ inline bool parse(std::vector<unsigned char> bytes, Blob* out, std::string* err)
             return false;
         }
         if (is_constant[node.out_slot]) {
-            *err = "node " + std::to_string(i) + " writes into constant slot " +
-                   out->slots[node.out_slot].name;
+            *err = "node " + std::to_string(i) + " writes into constant slot " + out->slots[node.out_slot].name;
             return false;
         }
         if (node.op == kOpInput) {
@@ -342,9 +341,7 @@ inline std::uint32_t input_slot(const Blob& blob) {
 }
 
 // The slot `run()` produces: the output of the last node.
-inline std::uint32_t output_slot(const Blob& blob) {
-    return blob.nodes.empty() ? kNoSlot : blob.nodes.back().out_slot;
-}
+inline std::uint32_t output_slot(const Blob& blob) { return blob.nodes.empty() ? kNoSlot : blob.nodes.back().out_slot; }
 
 namespace detail {
 
@@ -361,7 +358,7 @@ inline const float* slot_const(const Blob& blob, std::uint32_t index) {
     if (slot.byte_len != 0) {
         return reinterpret_cast<const float*>(blob.bytes.data() + slot.payload);
     }
-    return nullptr;  // runtime slots are only reachable through slot_data()
+    return nullptr; // runtime slots are only reachable through slot_data()
 }
 
 inline bool bind(Blob& blob, float* arena, std::uint32_t index, infr_tensor* tensor, std::string* err) {
@@ -380,7 +377,7 @@ inline bool bind(Blob& blob, float* arena, std::uint32_t index, infr_tensor* ten
     return true;
 }
 
-}  // namespace detail
+} // namespace detail
 
 // Execute the graph. `arena` must hold at least `blob.arena_floats` floats and the
 // caller fills `input_slot()` before calling. The result lands in `output_slot()`.
@@ -497,8 +494,7 @@ inline bool run(Blob& blob, float* arena, std::size_t arena_len, infr_workspace*
                 *err = where + ": fc weight is not [out, in] or its input extent disagrees";
                 return false;
             }
-            const infr_kernel_desc* fc =
-                infr_kernel_find("fc", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+            const infr_kernel_desc* fc = infr_kernel_find("fc", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
             if (fc == nullptr) {
                 *err = where + ": the fc kernel is not registered";
                 return false;
@@ -604,7 +600,7 @@ inline bool run(Blob& blob, float* arena, std::size_t arena_len, infr_workspace*
                 return false;
             }
             const void* operands[2] = {detail::slot_data(blob, arena, node.in_slot),
-                                      detail::slot_data(blob, arena, node.w_slot)};
+                                       detail::slot_data(blob, arena, node.w_slot)};
             void* product[1] = {detail::slot_data(blob, arena, node.out_slot)};
             status = binary->fn(operands, product, static_cast<std::uint32_t>(count), nullptr);
         } else {
@@ -629,4 +625,269 @@ inline bool run(Blob& blob, float* arena, std::size_t arena_len, infr_workspace*
     return true;
 }
 
-}  // namespace infrb
+
+// ---------------------------------------------------------------------------------------------
+// The v3 int8 path, deliberately a **separate** reader rather than a branch inside `parse()`.
+//
+// The fp32 executor above accounts for the arena in floats -- every slot offset, every buffer
+// size, the whole placement pass. A v3 blob's arena is bytes, because an int8 slot is one byte
+// per element, so folding the two together would mean either converting every float offset or
+// pretending bytes are floats. Neither is worth it for a subset that has one operator: this
+// reader accepts input -> conv2d -> output, refuses anything else by name, and leaves the fp32
+// path byte-for-byte unchanged.
+//
+// v3 的 int8 路径**单独一个读取器**，而不是在 `parse()` 里加分支：上面的 fp32 执行器整个 arena
+// 记账都按 float——每个槽偏移、每个缓冲区尺寸、整趟布局。而 v3 blob 的 arena 是字节，因为 int8
+// 槽每元素一字节。合在一起意味着要么换算每个 float 偏移，要么把字节当浮点。对一个只有一种算子的
+// 子集，两者都不值得：本读取器只接 input -> conv2d -> output，其它一律按名拒绝，fp32 路径逐字节
+// 不变。
+// ---------------------------------------------------------------------------------------------
+
+struct I8Slot {
+    std::string name;
+    std::uint32_t dtype = 0;
+    std::uint32_t rank = 0;
+    std::uint32_t dims[4] = {0, 0, 0, 0};
+    std::uint32_t byte_len = 0;
+    std::size_t payload = 0;
+    std::uint8_t quant_kind = 0;
+    float scale = 0.0F;
+    std::int32_t zero_point = 0;
+    std::size_t scales_at = 0;
+    std::uint32_t scale_count = 0;
+};
+
+struct I8Blob {
+    std::vector<Node> nodes;
+    std::vector<I8Slot> slots;
+    std::vector<unsigned char> bytes;
+};
+
+namespace detail {
+
+inline bool parse_i8(std::vector<unsigned char> bytes, I8Blob* out, std::string* err) {
+    static const char kMagic[8] = {'I', 'N', 'F', 'R', 'K', 'A', 'T', '\0'};
+    if (bytes.size() < 24 || std::memcmp(bytes.data(), kMagic, sizeof kMagic) != 0) {
+        *err = "not an INFRKAT blob";
+        return false;
+    }
+    const std::uint32_t version = read_u32(bytes.data() + 8);
+    if (version != 3) {
+        // The v2 reader says the same thing in the other direction, which is what makes "the old
+        // runtime refuses a new blob by name" checkable instead of assumed.
+        *err = "this reader is v3; blob version is " + std::to_string(version);
+        return false;
+    }
+    const std::uint32_t node_count = read_u32(bytes.data() + 12);
+    const std::uint32_t slot_count = read_u32(bytes.data() + 16);
+    if (read_u32(bytes.data() + 20) != 0) {
+        *err = "header reserved field is not zero";
+        return false;
+    }
+    std::size_t offset = 24;
+    if (bytes.size() < offset + (static_cast<std::size_t>(node_count) * 36U)) {
+        *err = "node table runs past the end of the blob";
+        return false;
+    }
+    out->nodes.resize(node_count);
+    for (std::uint32_t i = 0; i < node_count; ++i) {
+        const unsigned char* p = bytes.data() + offset;
+        Node& node = out->nodes[i];
+        node.op = p[0];
+        node.act = p[1];
+        node.in_slot = read_u32(p + 4);
+        node.out_slot = read_u32(p + 8);
+        node.w_slot = read_u32(p + 12);
+        node.b_slot = read_u32(p + 16);
+        for (std::uint32_t k = 0; k < 4; ++k) {
+            node.p[k] = read_u32(p + 20 + (4U * k));
+        }
+        offset += 36;
+    }
+    constexpr std::size_t kSlotHeader = 60;
+    out->slots.resize(slot_count);
+    for (std::uint32_t i = 0; i < slot_count; ++i) {
+        if (bytes.size() < offset + kSlotHeader) {
+            *err = "slot " + std::to_string(i) + " header runs past the end of the blob";
+            return false;
+        }
+        const unsigned char* p = bytes.data() + offset;
+        I8Slot& slot = out->slots[i];
+        slot.name.assign(reinterpret_cast<const char*>(p));
+        slot.dtype = read_u32(p + 16);
+        slot.rank = read_u32(p + 20);
+        for (std::uint32_t axis = 0; axis < 4; ++axis) {
+            slot.dims[axis] = read_u32(p + 24 + (4U * axis));
+        }
+        slot.byte_len = read_u32(p + 40);
+        slot.quant_kind = p[44];
+        float scale = 0.0F;
+        std::int32_t zero_point = 0;
+        std::memcpy(&scale, p + 48, sizeof scale);
+        std::memcpy(&zero_point, p + 52, sizeof zero_point);
+        slot.scale = scale;
+        slot.zero_point = zero_point;
+        slot.scale_count = read_u32(p + 56);
+        offset += kSlotHeader;
+        slot.payload = offset;
+        if (bytes.size() < offset + slot.byte_len) {
+            *err = "slot " + slot.name + " payload runs past the end of the blob";
+            return false;
+        }
+        offset += slot.byte_len;
+        slot.scales_at = offset;
+        if (bytes.size() < offset + (static_cast<std::size_t>(slot.scale_count) * 4U)) {
+            *err = "slot " + slot.name + " scale table runs past the end of the blob";
+            return false;
+        }
+        offset += static_cast<std::size_t>(slot.scale_count) * 4U;
+        if (slot.dtype != kDtypeF32 && slot.dtype != 2U && slot.dtype != 3U) {
+            *err = "slot " + slot.name + " has unknown dtype " + std::to_string(slot.dtype);
+            return false;
+        }
+        if (slot.rank > 4) {
+            *err = "slot " + slot.name + " rank exceeds 4";
+            return false;
+        }
+    }
+    if (offset != bytes.size()) {
+        *err = "trailing bytes after the last slot";
+        return false;
+    }
+    out->bytes = std::move(bytes);
+    return true;
+}
+
+} // namespace detail
+
+// Run a v3 blob whose only operator is input -> conv2d -> output, all int8.
+//
+// `out` receives the output slot's bytes; `out_bytes` must equal its element count. The arena is
+// byte-addressed because that is what an int8 slot is, and it only has to hold the output slot:
+// the weights and the bias are constants and live in the blob's own image.
+//
+// 跑一张 v3 blob，唯一算子是 input -> conv2d -> output、全 int8。`out` 收到输出槽的字节，
+// `out_bytes` 必须等于它的元素数。arena 按字节寻址，因为 int8 槽就是一字节；它只需要装输出
+// 槽——权重与偏置是常量，住在 blob 自己的映像里。
+inline bool run_i8(const std::vector<unsigned char>& blob_bytes, const std::int8_t* input, std::size_t input_len,
+                   std::int8_t* out, std::size_t out_bytes, std::vector<unsigned char>* arena,
+                   infr_workspace* workspace, std::string* err) {
+    I8Blob blob;
+    if (!detail::parse_i8(blob_bytes, &blob, err)) {
+        return false;
+    }
+    const Node* conv = nullptr;
+    std::uint32_t input_slot_index = kNoSlot;
+    for (std::size_t i = 0; i < blob.nodes.size(); ++i) {
+        const Node& node = blob.nodes[i];
+        if (node.op == kOpInput) {
+            input_slot_index = node.out_slot;
+            continue;
+        }
+        if (node.op != kOpConv2d) {
+            *err = "this reader runs input -> conv2d only; node " + std::to_string(i) + " has op " +
+                   std::to_string(node.op);
+            return false;
+        }
+        if (conv != nullptr) {
+            *err = "more than one conv2d node";
+            return false;
+        }
+        conv = &node;
+    }
+    if (conv == nullptr || input_slot_index == kNoSlot) {
+        *err = "the graph needs one input node and one conv2d node";
+        return false;
+    }
+
+    auto& in_slot = blob.slots[input_slot_index];
+    auto& w_slot = blob.slots[conv->w_slot];
+    auto& b_slot = blob.slots[conv->b_slot];
+    auto& out_slot = blob.slots[conv->out_slot];
+
+    std::size_t in_count = 1;
+    for (std::uint32_t axis = 0; axis < in_slot.rank; ++axis) {
+        in_count *= in_slot.dims[axis];
+    }
+    if (in_count != input_len) {
+        *err = "input is " + std::to_string(input_len) + " bytes, slot declares " + std::to_string(in_count);
+        return false;
+    }
+    std::size_t out_count = 1;
+    for (std::uint32_t axis = 0; axis < out_slot.rank; ++axis) {
+        out_count *= out_slot.dims[axis];
+    }
+    if (out_count != out_bytes) {
+        *err = "output buffer is " + std::to_string(out_bytes) + " bytes, slot declares " + std::to_string(out_count);
+        return false;
+    }
+    if (arena->size() < out_count) {
+        *err = "arena is " + std::to_string(arena->size()) + " bytes, the plan needs " + std::to_string(out_count);
+        return false;
+    }
+
+    infr_shape in_shape{};
+    infr_shape w_shape{};
+    infr_shape out_shape{};
+    if (infr_shape_init(&in_shape, static_cast<std::uint8_t>(in_slot.rank), in_slot.dims) != INFR_OK ||
+        infr_shape_init(&w_shape, static_cast<std::uint8_t>(w_slot.rank), w_slot.dims) != INFR_OK ||
+        infr_shape_init(&out_shape, static_cast<std::uint8_t>(out_slot.rank), out_slot.dims) != INFR_OK) {
+        *err = "a slot declares a shape the descriptor cannot hold";
+        return false;
+    }
+
+    // The constants are cast out of the blob's bytes; `infr_tensor_init` has no const form.
+    auto* weights = const_cast<std::int8_t*>(reinterpret_cast<const std::int8_t*>(blob.bytes.data() + w_slot.payload));
+    auto* bias_bytes = reinterpret_cast<const std::int32_t*>(blob.bytes.data() + b_slot.payload);
+    std::vector<std::int32_t> bias(bias_bytes, bias_bytes + b_slot.dims[0]);
+    auto* output = arena->data();
+
+    infr_tensor in_tensor{};
+    infr_tensor w_tensor{};
+    infr_tensor out_tensor{};
+    if (infr_tensor_init(&in_tensor, const_cast<std::int8_t*>(input), INFR_DTYPE_I8, &in_shape) != INFR_OK ||
+        infr_tensor_init(&w_tensor, weights, INFR_DTYPE_I8, &w_shape) != INFR_OK ||
+        infr_tensor_init(&out_tensor, output, INFR_DTYPE_I8, &out_shape) != INFR_OK) {
+        *err = "infr_tensor_init rejected a slot";
+        return false;
+    }
+    in_tensor.quant.kind = INFR_QUANT_PER_TENSOR;
+    in_tensor.quant.scale = in_slot.scale;
+    in_tensor.quant.zero_point = in_slot.zero_point;
+    w_tensor.quant.kind = w_slot.quant_kind == 2U ? INFR_QUANT_PER_CHANNEL : INFR_QUANT_PER_TENSOR;
+    w_tensor.quant.scale = w_slot.scale;
+    w_tensor.quant.zero_point = w_slot.zero_point;
+    std::vector<float> scales;
+    if (w_slot.scale_count != 0U) {
+        for (std::uint32_t i = 0; i < w_slot.scale_count; ++i) {
+            float value = 0.0F;
+            std::memcpy(&value, blob.bytes.data() + w_slot.scales_at + (4U * i), sizeof value);
+            scales.push_back(value);
+        }
+        w_tensor.quant.channel_scales = scales.data();
+    }
+    out_tensor.quant.kind = INFR_QUANT_PER_TENSOR;
+    out_tensor.quant.scale = out_slot.scale;
+    out_tensor.quant.zero_point = out_slot.zero_point;
+
+    infr_conv2d_params params{};
+    params.kernel_h = conv->p[0];
+    params.kernel_w = conv->p[0];
+    params.stride_h = conv->p[1];
+    params.stride_w = conv->p[1];
+    params.pad_h = conv->p[2];
+    params.pad_w = conv->p[2];
+    params.in_channels = in_slot.dims[3];
+    params.out_channels = out_slot.dims[3];
+    params.groups = conv->p[3] != 0U ? conv->p[3] : 1U;
+
+    const infr_status status = infr_conv2d_i8(&in_tensor, &w_tensor, bias.data(), &params, &out_tensor, workspace);
+    if (status != INFR_OK) {
+        *err = std::string("infr_conv2d_i8: ") + infr_status_str(status);
+        return false;
+    }
+    std::memcpy(out, output, out_count);
+    return true;
+}
+
+} // namespace infrb
