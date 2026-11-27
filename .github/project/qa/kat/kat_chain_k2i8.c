@@ -33,7 +33,13 @@
  * 工作区只有一次借用深度：`infr_conv2d_i8` 只借窗口（kernel*kernel*in_per_group 字节），因为
  * 单个输出元素的累加器在局部变量里。64 字节足够 3x3 窗口跨 2 通道（18 B）并留有余量；链在末尾
  * 断言工作区归零，于是将来某个算子悄悄要得更多时是在这里失败，而不是污染下一个节点。 */
-#define K2I8_ARENA_BYTES (KAT_K2I8_EXPECT_BYTES_LEN)
+/* One buffer per runtime slot: the fixture has two, the intermediate between the two
+ * convolutions and the output. The executor refuses rather than overrunning when this is too
+ * small, so the figure is checkable rather than remembered.
+ *
+ * 每个运行期槽一块：(夹具里有两个——两卷积之间的中间结果与输出)。这个数太小时执行器是拒绝
+ * 而不是越界，所以这个数字是可核对的，不是靠记。 */
+#define K2I8_ARENA_BYTES (2 * KAT_K2I8_EXPECT_BYTES_LEN)
 #define K2I8_WORKSPACE_BYTES 64U
 
 int kat_k2i8_run(kat_k2i8_result *result) {

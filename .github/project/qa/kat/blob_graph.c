@@ -596,7 +596,13 @@ int kat_blob_run_i8(const unsigned char *bytes, uint32_t byte_len, const int8_t 
     uint32_t offset;
     uint32_t index;
     uint32_t input_slot = NO_SLOT_I8;
-    uint32_t conv = NO_SLOT_I8;
+    uint32_t conv_order[KAT_I8_MAX_NODES];
+    uint32_t conv_count = 0U;
+    uint32_t slot_count_of[KAT_I8_MAX_SLOTS];
+    uint32_t slot_at[KAT_I8_MAX_SLOTS];
+    uint8_t slot_placed[KAT_I8_MAX_SLOTS];
+    uint32_t arena_need;
+    uint32_t final_slot;
     int32_t bias_local[32];
     float scales_local[32];
     infr_shape in_shape;
@@ -607,12 +613,7 @@ int kat_blob_run_i8(const unsigned char *bytes, uint32_t byte_len, const int8_t 
     infr_tensor out_tensor;
     infr_conv2d_params params;
     infr_status status;
-    uint32_t in_count = 1U;
-    uint32_t out_count = 1U;
     uint32_t axis;
-    const kat_i8_slot *w_slot;
-    const kat_i8_slot *b_slot;
-    const kat_i8_slot *out_slot;
 
     if (bytes == NULL || input == NULL || arena == NULL || workspace == NULL || out == NULL) {
         return KAT_BLOB_ERR_INPUT;
@@ -681,82 +682,127 @@ int kat_blob_run_i8(const unsigned char *bytes, uint32_t byte_len, const int8_t 
         return KAT_BLOB_ERR_SLOT;
     }
 
+    /* Resolve the graph: one input node, then convolution nodes in order. Anything else is refused
+     * by name, because a reader that silently skips an operator is a reader that reports success
+     * for a graph it did not run.
+     *
+     * 解析图：一个输入节点，随后按顺序是卷积节点。其它算子按名拒绝——静默跳过一个算子的读取器，
+     * 就是会对一张自己没跑的图报成功的读取器。 */
+    memset(slot_count_of, 0, sizeof slot_count_of);
+    memset(slot_at, 0, sizeof slot_at);
+    memset(slot_placed, 0, sizeof slot_placed);
     for (index = 0U; index < node_count; ++index) {
         if (node_op[index] == 0U) { /* input */
             input_slot = node_out_slot[index];
         } else if (node_op[index] == 1U) { /* conv2d */
-            if (conv != NO_SLOT_I8) {
-                return KAT_BLOB_ERR_OP;
+            if (conv_count >= KAT_I8_MAX_NODES) {
+                return KAT_BLOB_ERR_TABLE;
             }
-            conv = index;
+            conv_order[conv_count] = index;
+            conv_count += 1U;
         } else {
             return KAT_BLOB_ERR_OP;
         }
     }
-    if (input_slot == NO_SLOT_I8 || conv == NO_SLOT_I8) {
+    if (input_slot == NO_SLOT_I8 || conv_count == 0U) {
         return KAT_BLOB_ERR_OP;
     }
-    w_slot = &slots[node_w_slot[conv]];
-    b_slot = &slots[node_b_slot[conv]];
-    out_slot = &slots[node_out_slot[conv]];
 
-    for (axis = 0U; axis < slots[input_slot].rank; ++axis) {
-        in_count *= slots[input_slot].dims[axis];
+    /* One arena buffer per runtime slot, in node order, no liveness reuse: handing a buffer to a
+     * later node while an earlier one still reads it is the classic graph-executor defect, and this
+     * reader is sized for graphs where the solver is not worth the risk.
+     *
+     * 每个运行期槽一块 arena 缓冲区、按节点顺序、不做存活复用：后一个节点还在读就复用掉缓冲区，
+     * 是图执行器的经典缺陷；本读取器面向的图不值得为求解器担这个风险。 */
+    arena_need = 0U;
+    for (index = 0U; index < conv_count; ++index) {
+        const uint32_t slot_index = node_out_slot[conv_order[index]];
+        if (!slot_placed[slot_index]) {
+            uint32_t total = 1U;
+            uint32_t axis;
+            for (axis = 0U; axis < slots[slot_index].rank; ++axis) {
+                total *= slots[slot_index].dims[axis];
+            }
+            slot_count_of[slot_index] = total;
+            slot_at[slot_index] = arena_need;
+            slot_placed[slot_index] = 1U;
+            arena_need += total;
+        }
     }
-    for (axis = 0U; axis < out_slot->rank; ++axis) {
-        out_count *= out_slot->dims[axis];
+    {
+        uint32_t axis;
+        uint32_t total = 1U;
+        for (axis = 0U; axis < slots[input_slot].rank; ++axis) {
+            total *= slots[input_slot].dims[axis];
+        }
+        slot_count_of[input_slot] = total;
     }
-    if (in_count != input_len || out_count != out_len || arena_len < out_count) {
+    final_slot = node_out_slot[conv_order[conv_count - 1U]];
+    if (slot_count_of[input_slot] != input_len || slot_count_of[final_slot] != out_len || arena_len < arena_need) {
         return KAT_BLOB_ERR_ARENA;
     }
-    if (w_slot->scale_count > 32U || b_slot->dims[0] > 32U) {
-        return KAT_BLOB_ERR_SLOT;
-    }
-    if (infr_shape_init(&in_shape, (uint8_t)slots[input_slot].rank, slots[input_slot].dims) != INFR_OK ||
-        infr_shape_init(&w_shape, (uint8_t)w_slot->rank, w_slot->dims) != INFR_OK ||
-        infr_shape_init(&out_shape, (uint8_t)out_slot->rank, out_slot->dims) != INFR_OK) {
-        return KAT_BLOB_ERR_SHAPE;
-    }
-    if (infr_tensor_init(&in_tensor, (void *)(uintptr_t)(const void *)input, INFR_DTYPE_I8, &in_shape) != INFR_OK ||
-        infr_tensor_init(&w_tensor, (void *)(uintptr_t)(const void *)(bytes + w_slot->payload), INFR_DTYPE_I8,
-                         &w_shape) != INFR_OK ||
-        infr_tensor_init(&out_tensor, arena, INFR_DTYPE_I8, &out_shape) != INFR_OK) {
-        return KAT_BLOB_ERR_SLOT;
-    }
-    in_tensor.quant.kind = INFR_QUANT_PER_TENSOR;
-    in_tensor.quant.scale = slots[input_slot].scale;
-    in_tensor.quant.zero_point = slots[input_slot].zero_point;
-    w_tensor.quant.kind = w_slot->quant_kind == 2U ? INFR_QUANT_PER_CHANNEL : INFR_QUANT_PER_TENSOR;
-    w_tensor.quant.scale = w_slot->scale;
-    w_tensor.quant.zero_point = w_slot->zero_point;
-    for (index = 0U; index < w_slot->scale_count; ++index) {
-        scales_local[index] = rd_f32(bytes + w_slot->scales_at + (4U * index));
-    }
-    if (w_slot->scale_count != 0U) {
-        w_tensor.quant.channel_scales = scales_local;
-    }
-    out_tensor.quant.kind = INFR_QUANT_PER_TENSOR;
-    out_tensor.quant.scale = out_slot->scale;
-    out_tensor.quant.zero_point = out_slot->zero_point;
 
-    for (index = 0U; index < b_slot->dims[0]; ++index) {
-        bias_local[index] = rd_i32(bytes + b_slot->payload + (4U * index));
-    }
+    for (index = 0U; index < conv_count; ++index) {
+        const uint32_t node = conv_order[index];
+        const uint32_t in_index = node_in_slot[node];
+        const uint32_t out_index = node_out_slot[node];
+        const kat_i8_slot *in_slot = &slots[in_index];
+        const kat_i8_slot *w_slot = &slots[node_w_slot[node]];
+        const kat_i8_slot *b_slot = &slots[node_b_slot[node]];
+        const kat_i8_slot *out_slot = &slots[out_index];
+        void *in_data;
+        void *out_data;
 
-    params.kernel_h = node_p[conv][0];
-    params.kernel_w = node_p[conv][0];
-    params.stride_h = node_p[conv][1];
-    params.stride_w = node_p[conv][1];
-    params.pad_h = node_p[conv][2];
-    params.pad_w = node_p[conv][2];
-    params.in_channels = slots[input_slot].dims[3];
-    params.out_channels = out_slot->dims[3];
-    params.groups = node_p[conv][3] != 0U ? node_p[conv][3] : 1U;
+        if (w_slot->scale_count > 32U || b_slot->dims[0] > 32U) {
+            return KAT_BLOB_ERR_SLOT;
+        }
+        if (infr_shape_init(&in_shape, (uint8_t)in_slot->rank, in_slot->dims) != INFR_OK ||
+            infr_shape_init(&w_shape, (uint8_t)w_slot->rank, w_slot->dims) != INFR_OK ||
+            infr_shape_init(&out_shape, (uint8_t)out_slot->rank, out_slot->dims) != INFR_OK) {
+            return KAT_BLOB_ERR_SHAPE;
+        }
+        in_data = in_index == input_slot ? (void *)(uintptr_t)(const void *)input : (void *)(arena + slot_at[in_index]);
+        out_data = (void *)(arena + slot_at[out_index]);
+        if (infr_tensor_init(&in_tensor, in_data, INFR_DTYPE_I8, &in_shape) != INFR_OK ||
+            infr_tensor_init(&w_tensor, (void *)(uintptr_t)(const void *)(bytes + w_slot->payload), INFR_DTYPE_I8,
+                             &w_shape) != INFR_OK ||
+            infr_tensor_init(&out_tensor, out_data, INFR_DTYPE_I8, &out_shape) != INFR_OK) {
+            return KAT_BLOB_ERR_SLOT;
+        }
+        in_tensor.quant.kind = INFR_QUANT_PER_TENSOR;
+        in_tensor.quant.scale = in_slot->scale;
+        in_tensor.quant.zero_point = in_slot->zero_point;
+        w_tensor.quant.kind = w_slot->quant_kind == 2U ? INFR_QUANT_PER_CHANNEL : INFR_QUANT_PER_TENSOR;
+        w_tensor.quant.scale = w_slot->scale;
+        w_tensor.quant.zero_point = w_slot->zero_point;
+        for (axis = 0U; axis < w_slot->scale_count; ++axis) {
+            scales_local[axis] = rd_f32(bytes + w_slot->scales_at + (4U * axis));
+        }
+        if (w_slot->scale_count != 0U) {
+            w_tensor.quant.channel_scales = scales_local;
+        }
+        out_tensor.quant.kind = INFR_QUANT_PER_TENSOR;
+        out_tensor.quant.scale = out_slot->scale;
+        out_tensor.quant.zero_point = out_slot->zero_point;
 
-    status = infr_conv2d_i8(&in_tensor, &w_tensor, bias_local, &params, &out_tensor, workspace);
-    if (status != INFR_OK) {
-        return KAT_BLOB_ERR_OP;
+        for (axis = 0U; axis < b_slot->dims[0]; ++axis) {
+            bias_local[axis] = rd_i32(bytes + b_slot->payload + (4U * axis));
+        }
+        params.kernel_h = node_p[node][0];
+        params.kernel_w = node_p[node][0];
+        params.stride_h = node_p[node][1];
+        params.stride_w = node_p[node][1];
+        params.pad_h = node_p[node][2];
+        params.pad_w = node_p[node][2];
+        params.in_channels = in_slot->dims[3];
+        params.out_channels = out_slot->dims[3];
+        params.groups = node_p[node][3] != 0U ? node_p[node][3] : 1U;
+
+        status = infr_conv2d_i8(&in_tensor, &w_tensor, bias_local, &params, &out_tensor, workspace);
+        if (status != INFR_OK) {
+            return KAT_BLOB_ERR_OP;
+        }
     }
-    memcpy(out, arena, out_count);
+    memcpy(out, arena + slot_at[final_slot], slot_count_of[final_slot]);
     return KAT_BLOB_OK;
 }

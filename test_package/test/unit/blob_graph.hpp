@@ -760,6 +760,37 @@ inline bool parse_i8(std::vector<unsigned char> bytes, I8Blob* out, std::string*
 
 } // namespace detail
 
+inline std::size_t element_count(const I8Slot& slot) {
+    std::size_t total = 1;
+    for (std::uint32_t axis = 0; axis < slot.rank; ++axis) {
+        total *= slot.dims[axis];
+    }
+    return total;
+}
+
+// A slot's stored parameters become a kernel's resolved ones. The per-channel table is copied into
+// the caller's vector because `infr_quant` points at it rather than owning it, and the blob's bytes
+// must not be cast away to become a `const float*`.
+//
+// 槽里存的参数变成内核用的已解析参数。逐通道表拷进调用方的 vector，因为 `infr_quant` 是指向它而
+// 不是拥有它，而 blob 的字节不该为变成 `const float*` 而被去掉 const。
+inline void apply_quant(const I8Slot& slot, const std::vector<unsigned char>& bytes, std::vector<float>* scales,
+                        infr_quant* quant) {
+    quant->kind = slot.quant_kind == 2U ? INFR_QUANT_PER_CHANNEL : INFR_QUANT_PER_TENSOR;
+    quant->scale = slot.scale;
+    quant->zero_point = slot.zero_point;
+    quant->requant_multiplier = 0.0F;
+    quant->channel_scales = nullptr;
+    if (scales != nullptr && slot.scale_count != 0U) {
+        for (std::uint32_t i = 0; i < slot.scale_count; ++i) {
+            float value = 0.0F;
+            std::memcpy(&value, bytes.data() + slot.scales_at + (4U * i), sizeof value);
+            scales->push_back(value);
+        }
+        quant->channel_scales = scales->data();
+    }
+}
+
 // Run a v3 blob whose only operator is input -> conv2d -> output, all int8.
 //
 // `out` receives the output slot's bytes; `out_bytes` must equal its element count. The arena is
@@ -776,8 +807,8 @@ inline bool run_i8(const std::vector<unsigned char>& blob_bytes, const std::int8
     if (!detail::parse_i8(blob_bytes, &blob, err)) {
         return false;
     }
-    const Node* conv = nullptr;
     std::uint32_t input_slot_index = kNoSlot;
+    std::vector<const Node*> convs;
     for (std::size_t i = 0; i < blob.nodes.size(); ++i) {
         const Node& node = blob.nodes[i];
         if (node.op == kOpInput) {
@@ -785,108 +816,109 @@ inline bool run_i8(const std::vector<unsigned char>& blob_bytes, const std::int8
             continue;
         }
         if (node.op != kOpConv2d) {
-            *err = "this reader runs input -> conv2d only; node " + std::to_string(i) + " has op " +
+            *err = "this reader runs input -> conv2d nodes only; node " + std::to_string(i) + " has op " +
                    std::to_string(node.op);
             return false;
         }
-        if (conv != nullptr) {
-            *err = "more than one conv2d node";
+        convs.push_back(&node);
+    }
+    if (convs.empty() || input_slot_index == kNoSlot) {
+        *err = "the graph needs one input node and at least one conv2d node";
+        return false;
+    }
+
+    // One arena buffer per runtime slot, in node order, with no liveness reuse. Deliberately naive:
+    // handing a buffer to a later node while an earlier one still reads it is the classic graph
+    // executor bug, and a fixture this small does not pay for the solver.
+    //
+    // 每个运行期槽一块 arena 缓冲区、按节点顺序、不做存活复用。故意朴素：后一个节点还在读就把缓冲区
+    // 复用掉，是图执行器的经典缺陷，而这个尺寸的夹具不为此付代价。
+    std::vector<std::size_t> count(blob.slots.size(), 0);
+    std::vector<std::size_t> at(blob.slots.size(), 0);
+    std::vector<bool> placed(blob.slots.size(), false);
+    std::size_t arena_need = 0;
+    for (const Node* node : convs) {
+        if (!placed[node->out_slot]) {
+            count[node->out_slot] = element_count(blob.slots[node->out_slot]);
+            at[node->out_slot] = arena_need;
+            placed[node->out_slot] = true;
+            arena_need += count[node->out_slot];
+        }
+    }
+    count[input_slot_index] = element_count(blob.slots[input_slot_index]);
+    if (count[input_slot_index] != input_len) {
+        *err = "input is " + std::to_string(input_len) + " bytes, slot declares " +
+               std::to_string(count[input_slot_index]);
+        return false;
+    }
+    const std::size_t final_slot = convs.back()->out_slot;
+    if (count[final_slot] != out_bytes) {
+        *err = "output buffer is " + std::to_string(out_bytes) + " bytes, slot declares " +
+               std::to_string(count[final_slot]);
+        return false;
+    }
+    if (arena->size() < arena_need) {
+        *err = "arena is " + std::to_string(arena->size()) + " bytes, the plan needs " + std::to_string(arena_need);
+        return false;
+    }
+
+    for (const Node* node : convs) {
+        const I8Slot& in_slot = blob.slots[node->in_slot];
+        const I8Slot& w_slot = blob.slots[node->w_slot];
+        const I8Slot& b_slot = blob.slots[node->b_slot];
+        const I8Slot& out_slot = blob.slots[node->out_slot];
+
+        infr_shape in_shape{};
+        infr_shape w_shape{};
+        infr_shape out_shape{};
+        if (infr_shape_init(&in_shape, static_cast<std::uint8_t>(in_slot.rank), in_slot.dims) != INFR_OK ||
+            infr_shape_init(&w_shape, static_cast<std::uint8_t>(w_slot.rank), w_slot.dims) != INFR_OK ||
+            infr_shape_init(&out_shape, static_cast<std::uint8_t>(out_slot.rank), out_slot.dims) != INFR_OK) {
+            *err = "a slot declares a shape the descriptor cannot hold";
             return false;
         }
-        conv = &node;
-    }
-    if (conv == nullptr || input_slot_index == kNoSlot) {
-        *err = "the graph needs one input node and one conv2d node";
-        return false;
-    }
+        void* in_data = node->in_slot == input_slot_index ? static_cast<void*>(const_cast<std::int8_t*>(input))
+                                                          : static_cast<void*>(arena->data() + at[node->in_slot]);
+        auto* w_data =
+            const_cast<std::int8_t*>(reinterpret_cast<const std::int8_t*>(blob.bytes.data() + w_slot.payload));
+        void* out_data = arena->data() + at[node->out_slot];
 
-    auto& in_slot = blob.slots[input_slot_index];
-    auto& w_slot = blob.slots[conv->w_slot];
-    auto& b_slot = blob.slots[conv->b_slot];
-    auto& out_slot = blob.slots[conv->out_slot];
-
-    std::size_t in_count = 1;
-    for (std::uint32_t axis = 0; axis < in_slot.rank; ++axis) {
-        in_count *= in_slot.dims[axis];
-    }
-    if (in_count != input_len) {
-        *err = "input is " + std::to_string(input_len) + " bytes, slot declares " + std::to_string(in_count);
-        return false;
-    }
-    std::size_t out_count = 1;
-    for (std::uint32_t axis = 0; axis < out_slot.rank; ++axis) {
-        out_count *= out_slot.dims[axis];
-    }
-    if (out_count != out_bytes) {
-        *err = "output buffer is " + std::to_string(out_bytes) + " bytes, slot declares " + std::to_string(out_count);
-        return false;
-    }
-    if (arena->size() < out_count) {
-        *err = "arena is " + std::to_string(arena->size()) + " bytes, the plan needs " + std::to_string(out_count);
-        return false;
-    }
-
-    infr_shape in_shape{};
-    infr_shape w_shape{};
-    infr_shape out_shape{};
-    if (infr_shape_init(&in_shape, static_cast<std::uint8_t>(in_slot.rank), in_slot.dims) != INFR_OK ||
-        infr_shape_init(&w_shape, static_cast<std::uint8_t>(w_slot.rank), w_slot.dims) != INFR_OK ||
-        infr_shape_init(&out_shape, static_cast<std::uint8_t>(out_slot.rank), out_slot.dims) != INFR_OK) {
-        *err = "a slot declares a shape the descriptor cannot hold";
-        return false;
-    }
-
-    // The constants are cast out of the blob's bytes; `infr_tensor_init` has no const form.
-    auto* weights = const_cast<std::int8_t*>(reinterpret_cast<const std::int8_t*>(blob.bytes.data() + w_slot.payload));
-    auto* bias_bytes = reinterpret_cast<const std::int32_t*>(blob.bytes.data() + b_slot.payload);
-    std::vector<std::int32_t> bias(bias_bytes, bias_bytes + b_slot.dims[0]);
-    auto* output = arena->data();
-
-    infr_tensor in_tensor{};
-    infr_tensor w_tensor{};
-    infr_tensor out_tensor{};
-    if (infr_tensor_init(&in_tensor, const_cast<std::int8_t*>(input), INFR_DTYPE_I8, &in_shape) != INFR_OK ||
-        infr_tensor_init(&w_tensor, weights, INFR_DTYPE_I8, &w_shape) != INFR_OK ||
-        infr_tensor_init(&out_tensor, output, INFR_DTYPE_I8, &out_shape) != INFR_OK) {
-        *err = "infr_tensor_init rejected a slot";
-        return false;
-    }
-    in_tensor.quant.kind = INFR_QUANT_PER_TENSOR;
-    in_tensor.quant.scale = in_slot.scale;
-    in_tensor.quant.zero_point = in_slot.zero_point;
-    w_tensor.quant.kind = w_slot.quant_kind == 2U ? INFR_QUANT_PER_CHANNEL : INFR_QUANT_PER_TENSOR;
-    w_tensor.quant.scale = w_slot.scale;
-    w_tensor.quant.zero_point = w_slot.zero_point;
-    std::vector<float> scales;
-    if (w_slot.scale_count != 0U) {
-        for (std::uint32_t i = 0; i < w_slot.scale_count; ++i) {
-            float value = 0.0F;
-            std::memcpy(&value, blob.bytes.data() + w_slot.scales_at + (4U * i), sizeof value);
-            scales.push_back(value);
+        infr_tensor in_tensor{};
+        infr_tensor w_tensor{};
+        infr_tensor out_tensor{};
+        if (infr_tensor_init(&in_tensor, in_data, INFR_DTYPE_I8, &in_shape) != INFR_OK ||
+            infr_tensor_init(&w_tensor, w_data, INFR_DTYPE_I8, &w_shape) != INFR_OK ||
+            infr_tensor_init(&out_tensor, out_data, INFR_DTYPE_I8, &out_shape) != INFR_OK) {
+            *err = "infr_tensor_init rejected a slot";
+            return false;
         }
-        w_tensor.quant.channel_scales = scales.data();
-    }
-    out_tensor.quant.kind = INFR_QUANT_PER_TENSOR;
-    out_tensor.quant.scale = out_slot.scale;
-    out_tensor.quant.zero_point = out_slot.zero_point;
+        std::vector<float> in_scales;
+        std::vector<float> w_scales;
+        apply_quant(in_slot, blob.bytes, &in_scales, &in_tensor.quant);
+        apply_quant(w_slot, blob.bytes, &w_scales, &w_tensor.quant);
+        apply_quant(out_slot, blob.bytes, nullptr, &out_tensor.quant);
 
-    infr_conv2d_params params{};
-    params.kernel_h = conv->p[0];
-    params.kernel_w = conv->p[0];
-    params.stride_h = conv->p[1];
-    params.stride_w = conv->p[1];
-    params.pad_h = conv->p[2];
-    params.pad_w = conv->p[2];
-    params.in_channels = in_slot.dims[3];
-    params.out_channels = out_slot.dims[3];
-    params.groups = conv->p[3] != 0U ? conv->p[3] : 1U;
+        const auto* bias_bytes = reinterpret_cast<const std::int32_t*>(blob.bytes.data() + b_slot.payload);
+        std::vector<std::int32_t> bias(bias_bytes, bias_bytes + b_slot.dims[0]);
 
-    const infr_status status = infr_conv2d_i8(&in_tensor, &w_tensor, bias.data(), &params, &out_tensor, workspace);
-    if (status != INFR_OK) {
-        *err = std::string("infr_conv2d_i8: ") + infr_status_str(status);
-        return false;
+        infr_conv2d_params params{};
+        params.kernel_h = node->p[0];
+        params.kernel_w = node->p[0];
+        params.stride_h = node->p[1];
+        params.stride_w = node->p[1];
+        params.pad_h = node->p[2];
+        params.pad_w = node->p[2];
+        params.in_channels = in_slot.dims[3];
+        params.out_channels = out_slot.dims[3];
+        params.groups = node->p[3] != 0U ? node->p[3] : 1U;
+
+        const infr_status status = infr_conv2d_i8(&in_tensor, &w_tensor, bias.data(), &params, &out_tensor, workspace);
+        if (status != INFR_OK) {
+            *err = std::string("infr_conv2d_i8: ") + infr_status_str(status);
+            return false;
+        }
     }
-    std::memcpy(out, output, out_count);
+    std::memcpy(out, arena->data() + at[final_slot], count[final_slot]);
     return true;
 }
 

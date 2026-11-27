@@ -57,8 +57,14 @@ TEST(GraphBlobI8, RunsTheCommittedV3Fixture) {
     std::memcpy(&version, blob.data() + 8, sizeof version);
     EXPECT_EQ(3U, version);
 
+    // One arena buffer per runtime slot, and the fixture has two (the intermediate between the two
+    // convolutions, and the output). The executor refuses rather than overrunning when this is too
+    // small, which is how the figure was found.
+    //
+    // 每个运行期槽一块 arena 缓冲区，夹具里有两个（两卷积之间的中间结果，以及输出）。这个数太小
+    // 时执行器是拒绝而不是越界——这个数字就是这么被发现的。
     std::vector<std::int8_t> got(expected.size(), 0);
-    std::vector<unsigned char> arena(expected.size(), 0);
+    std::vector<unsigned char> arena(expected.size() * 2U, 0);
     alignas(8) std::uint8_t workspace_bytes[kWorkspaceBytes] = {};
     infr_workspace workspace{};
     ASSERT_EQ(INFR_OK, infr_workspace_init(&workspace, workspace_bytes, sizeof(workspace_bytes)));

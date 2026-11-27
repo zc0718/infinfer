@@ -1,8 +1,8 @@
 {
   "graph": "k2_i8_conv",
   "blob_version": 3,
-  "blob_bytes": 414,
-  "blob_sha256": "a1da3dc931acc2d6",
+  "blob_bytes": 681,
+  "blob_sha256": "b0f3e77c4420a90a",
   "input_dims": [
     1,
     5,
@@ -16,7 +16,13 @@
     3
   ],
   "kernel": 3,
+  "stages": [
+    "conv2d(dense)",
+    "conv2d(depthwise, pad 1)"
+  ],
   "input_scale": 0.02,
+  "mid_scale": 0.03,
+  "mid_zero_point": 0,
   "output_scale": 0.05,
   "output_zero_point": -7,
   "weight_scales": [
@@ -24,8 +30,14 @@
     0.013,
     0.016
   ],
-  "operators": [
-    "conv2d"
+  "depthwise_scales": [
+    0.012,
+    0.015,
+    0.018
   ],
-  "note": "the expected output is computed by an integer implementation in this file, not by the executor the fixture checks"
+  "operators": [
+    "conv2d",
+    "dwconv2d"
+  ],
+  "note": "the expected output is computed by an integer implementation in this file, not by the executor the fixture checks; the intermediate is requantised to int8 between the two stages, because that is what an int8 graph does"
 }
