@@ -213,6 +213,22 @@ infr_status infr_scalar_dot_i8(const void *const *inputs, void *const *outputs, 
 int8_t infr_scalar_requantize_i32(int32_t acc, const infr_quant *quant);
 
 /**
+ * @brief [en] Unquantized fp32 exp over `n` floats; in-place is safe.
+ * @brief [zh] 对 `n` 个 float 做非量化 fp32 exp；就地安全。
+ * @since 0.2.0
+ */
+infr_status infr_scalar_exp_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                const infr_quant *quant);
+
+/**
+ * @brief [en] Unquantized fp32 shift: `y[i] = x[i] + inputs[1][0]`.
+ * @brief [zh] 非量化 fp32 平移：`y[i] = x[i] + inputs[1][0]`。
+ * @since 0.2.0
+ */
+infr_status infr_scalar_shift_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                  const infr_quant *quant);
+
+/**
  * @brief [en] Bias add plus requantization over `n` accumulators; `inputs[1]`
  * is an optional int32 bias.
  * @brief [zh] 对 `n` 个累加器做偏置相加与再量化；`inputs[1]` 是可选的 int32

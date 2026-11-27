@@ -90,6 +90,11 @@ infr_status infr_kernel_register_scalar(void) {
          .quant = INFR_QUANT_PER_TENSOR,
          .tier = INFR_TIER_SCALAR,
          .fn = infr_scalar_fc_i16},
+        {.name = "exp",
+         .dtype = INFR_DTYPE_F32,
+         .quant = INFR_QUANT_NONE,
+         .tier = INFR_TIER_SCALAR,
+         .fn = infr_scalar_exp_f32},
         {.name = "max",
          .dtype = INFR_DTYPE_F32,
          .quant = INFR_QUANT_NONE,
@@ -132,6 +137,11 @@ infr_status infr_kernel_register_scalar(void) {
          .quant = INFR_QUANT_NONE,
          .tier = INFR_TIER_SCALAR,
          .fn = infr_scalar_sum_f32},
+        {.name = "shift",
+         .dtype = INFR_DTYPE_F32,
+         .quant = INFR_QUANT_NONE,
+         .tier = INFR_TIER_SCALAR,
+         .fn = infr_scalar_shift_f32},
         /* The other half of a quantized convolution. `fc` cannot serve it: it
        * requantizes in the same call, so a bias has nowhere to go. `dot` stops
        * at the int32 accumulator and `requant` adds the bias and rounds once --

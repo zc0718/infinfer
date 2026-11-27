@@ -44,6 +44,9 @@
       "KernelParityDwconv3x3/ScalarFp32MatchesDoubleReference",
       "KernelParityDwconv3x3/RefusesAMissingPointer"
     ],
+    "exp/fp32/none/scalar": [
+      "KernelParityExp/ScalarFp32MatchesDoubleReference"
+    ],
     "fc/fp32/none/arm_neon": [
       "KernelParityFcNeon/Fp32MatchesScalarWithinAFloatWindow"
     ],
@@ -157,6 +160,9 @@
     ],
     "scale/fp32/none/x86": [
       "KernelParityX86/ScaleFp32MatchesScalarBitwise"
+    ],
+    "shift/fp32/none/scalar": [
+      "KernelParityShift/ScalarFp32MatchesDoubleReference"
     ],
     "sum/fp32/none/arm_neon": [
       "KernelParitySumNeon/Fp32WithinTheFloatWindow"

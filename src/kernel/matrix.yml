@@ -206,6 +206,38 @@ kernels:
     grad_why: >-
       a copy is the identity on values, so a derivative would be the identity too; spending a
       contract on saying that is worse than saying nothing
+  # The two primitives stable softmax is built from. `exp` is declared scalar-only because `expf`
+  # is a libm call: a hand-written vector body would either repeat that call in a loop or carry a
+  # polynomial with its own accuracy contract, and the second belongs to a vendor backend
+  # (ADR-007). `shift` exists because subtracting a constant is the numerical guard softmax and
+  # layer normalisation both need, and neither has an activation to hang it on -- keeping it a
+  # kernel is what lets those operators contain no arithmetic of their own.
+  #
+  # 稳定 softmax 用到的两个原语。`exp` 只声明 scalar 档，因为 `expf` 是一次 libm 调用：手写向量体
+  # 要么把同一个调用套进循环，要么自带一份精度契约的多项式，而后者属于厂商后端（ADR-007）。
+  # `shift` 之所以存在，是因为减去一个常数是 softmax 与 layer normalization 都需要的数值护栏，
+  # 而两者都没有可挂靠的激活——把它做成内核，才让那些算子里没有自己的算术。
+  #
+  # Both mappings are empty on purpose, like `copy`: these are primitives that composed operators
+  # call, not front-end ops we claim to serve. Claiming `Exp` here would say a model containing a
+  # standalone `Exp` node can run, which the importer does not translate -- `census_gate` exists to
+  # catch exactly that sentence.
+  #
+  # 两条前端映射都故意为空，与 `copy` 一致：它们是组合算子调用的原语，不是我们声称支持的前端算子。
+  # 在这里主张 `Exp` 就等于说「带独立 Exp 节点的模型能跑」，而导入器并不翻译它——`census_gate`
+  # 存在的意义正是抓这句话。
+  exp:
+    tflite: []
+    onnx: []
+    dtype_quant: [[fp32, none]]
+    tiers: { scalar: done, autovec: na, x86: na, arm_neon: na, arm_m: na, rvv: na }
+    grad: todo
+  shift:
+    tflite: []
+    onnx: []
+    dtype_quant: [[fp32, none]]
+    tiers: { scalar: done, autovec: na, x86: na, arm_neon: na, arm_m: na, rvv: na }
+    grad: todo
   dwconv3x3:
     tflite: []
     onnx: []
@@ -277,6 +309,39 @@ composed:
     tflite: [SLICE]
     onnx: [{op: Slice}]
     uses: [copy]
+    kat: pending
+  # The fourth layout transform, and the one that pays the strided-read bill: a nearest resize
+  # walks the output in order and moves a run of input elements whenever consecutive outputs land
+  # on consecutive inputs. The integer upscale real models emit therefore costs one `copy` per
+  # `scale` outputs, while a downscale degenerates to one per output -- stating the second half
+  # matters, because it is the honest cost and not a defect of this implementation.
+  #
+  # 第四个布局变换，也是付「带步长的读」这一笔账的那个：最近邻缩放按输出顺序走输入，只要
+  # 相邻输出落在相邻输入上就拼成一段 `copy`。真实模型用的整数上采样因此每 `scale` 个输出
+  # 一次调用，而降采样退化成每输出一次——把后半句写出来很重要，那是诚实的代价，
+  # 不是本实现的缺陷。
+  #
+  # Bilinear is not here yet and is not a flag on this row: it reads four neighbours per output,
+  # so it needs the window arithmetic `conv2d` has (`fc` + `add`), not a `copy`. It gets its own
+  # row when that increment lands.
+  #
+  # 双线性还不在这里，也不是这一行上的一个开关：它每个输出读四个邻点，需要 `conv2d` 那套
+  # 窗口算术（`fc` + `add`），而不是 `copy`。等那一轮落地时它单独占一行。
+  resize:
+    tflite: [RESIZE_NEAREST_NEIGHBOR]
+    onnx: [{op: Resize, where: "mode == nearest"}]
+    uses: [copy]
+    kat: pending
+  # The reduction row's second member, and the first composed operator that needs numerical care
+  # rather than only layout: the slice is gathered, its max subtracted, `exp`, `sum`, `scale` --
+  # four registry calls plus one gather, so the slice's own arithmetic is entirely in kernels.
+  #
+  # 归约行的第二个成员，也是第一个需要数值处理而不只是布局的组合算子：取出切片、减去最大值、
+  # `exp`、`sum`、`scale`——四次注册表调用加一次 gather，切片自己的算术全在内核里。
+  softmax:
+    tflite: [SOFTMAX]
+    onnx: [{op: Softmax}]
+    uses: [max, shift, exp, sum, scale]
     kat: pending
   concat:
     tflite: [CONCATENATION]

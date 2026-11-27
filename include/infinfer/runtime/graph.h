@@ -566,6 +566,128 @@ infr_status infr_slice_output_shape(const infr_shape *input_shape, const infr_sl
 infr_status infr_slice_f32(const infr_tensor *input, const infr_slice_params *params, infr_tensor *output,
                            infr_workspace *workspace);
 
+/**
+ * @brief [en] How a resized axis chooses the input element it copies from.
+ * @brief [zh] 缩放后的轴从哪个输入元素取值。
+ * @since 0.2.0
+ */
+typedef enum infr_resize_mode {
+    /**
+     * @brief [en] Nearest neighbour, `src = (dst * in) / out` in integer arithmetic -- the
+     *            asymmetric mapping ONNX and TFLite exporters emit, and the default upsample of
+     *            the detection models this library targets.
+     * @brief [zh] 最近邻，`src = (dst * in) / out` 全程整数——即 ONNX 与 TFLite 导出器产生的
+     *            asymmetric 映射，也是本库面向的检测模型默认的上采样方式。
+     */
+    INFR_RESIZE_NEAREST = 0
+} infr_resize_mode;
+
+/**
+ * @brief [en] Target shape and interpolation rule of a resize.
+ * @brief [zh] 缩放的目标形状与插值规则。
+ * @since 0.2.0
+ */
+typedef struct infr_resize_params {
+    /**
+     * @brief [en] Rank shared by input and output; 1..`INFR_TENSOR_MAX_RANK`.
+     * @brief [zh] 输入与输出共同的秩；1..`INFR_TENSOR_MAX_RANK`。
+     */
+    uint32_t rank;
+    /**
+     * @brief [en] Extent of each output axis, in element order; every entry must be at least 1.
+     * @brief [zh] 每条输出轴的长度，按元素顺序排列；每项至少为 1。
+     */
+    int64_t out_dims[INFR_TENSOR_MAX_RANK];
+    /**
+     * @brief [en] Interpolation rule.
+     * @brief [zh] 插值规则。
+     */
+    infr_resize_mode mode;
+} infr_resize_params;
+
+/**
+ * @brief [en] Shape `params` resizes `input_shape` to.
+ * @brief [zh] `params` 把 `input_shape` 缩放成的形状。
+ * @param input_shape [en] Rank 1..`INFR_TENSOR_MAX_RANK`, every extent at least 1.
+ * @param input_shape [zh] 秩为 1..`INFR_TENSOR_MAX_RANK`，每维长度至少为 1。
+ * @param params [en] Target extents and the interpolation rule.
+ * @param params [zh] 目标长度与插值规则。
+ * @param out_shape [en] Receives the result; untouched on failure.
+ * @param out_shape [zh] 接收结果；失败时不改动。
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, a rank of 0, a rank that
+ *         differs from the input's, or an extent below 1; INFR_ERR_UNSUPPORTED for a mode this
+ *         build does not implement.
+ * @since 0.2.0
+ */
+infr_status infr_resize_output_shape(const infr_shape *input_shape, const infr_resize_params *params,
+                                     infr_shape *out_shape);
+
+/**
+ * @brief [en] fp32 nearest resize: the input walked in output order, one `copy` per run.
+ * @brief [zh] fp32 最近邻缩放：按输出顺序走输入，每一段一次 `copy`。
+ * @param input [en] fp32 tensor of rank 1..`INFR_TENSOR_MAX_RANK`.
+ * @param input [zh] 秩为 1..`INFR_TENSOR_MAX_RANK` 的 fp32 张量。
+ * @param params [en] Target extents and the interpolation rule.
+ * @param params [zh] 目标长度与插值规则。
+ * @param output [en] fp32 output whose shape must already equal `infr_resize_output_shape`; the
+ *               data is overwritten.
+ * @param output [zh] 形状必须已等于 `infr_resize_output_shape` 的 fp32 输出；数据会被覆盖。
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, a rank or shape mismatch, or an
+ *         extent below 1; INFR_ERR_UNSUPPORTED for a non-fp32 tensor, an unimplemented mode, or
+ *         more than `UINT32_MAX` outputs; INFR_ERR_NOT_IMPLEMENTED when `copy` is not registered.
+ * @note [en] No workspace: the integer mapping is monotone, so the output is written straight
+ *            from the input in order. An integer upscale of `s` costs one call per `s` outputs;
+ *            a downscale costs one call per output, and that is stated rather than optimised
+ *            away, because those outputs really do read non-adjacent inputs.
+ * @note [zh] 不需要工作区：整数映射单调，输出按顺序直接从输入写出。整数上采样 `s` 倍时
+ *            每 `s` 个输出一次调用；降采样每输出一次，这一点写出来而不是「优化掉」，
+ *            因为那些输出读的确实是不同邻的输入。
+ * @note [en] Bilinear is a separate row, not a flag here: it reads four neighbours per output
+ *            and needs arithmetic over a window, which is a different kernel set.
+ * @note [zh] 双线性是单独一行，而不是这里的一个开关：它每个输出读四个邻点并做带权求和，
+ *            需要的是另一套内核。
+ * @since 0.2.0
+ */
+infr_status infr_resize_f32(const infr_tensor *input, const infr_resize_params *params, infr_tensor *output);
+
+/**
+ * @brief [en] Which axis a softmax normalises over.
+ * @brief [zh] softmax 在哪条轴上归一化。
+ * @since 0.2.0
+ */
+typedef struct infr_softmax_params {
+    /**
+     * @brief [en] Axis index in `0..rank-1`; the shape is not changed by this operator.
+     * @brief [zh] 轴下标，取值 `0..rank-1`；本算子不改变形状。
+     */
+    uint32_t axis;
+} infr_softmax_params;
+
+/**
+ * @brief [en] fp32 softmax over one axis: subtract the slice max, `exp`, `sum`, `scale`.
+ * @brief [zh] 对一条轴做 fp32 softmax：减切片最大值、`exp`、`sum`、`scale`。
+ * @param input [en] fp32 tensor of rank 1..`INFR_TENSOR_MAX_RANK`.
+ * @param input [zh] 秩为 1..`INFR_TENSOR_MAX_RANK` 的 fp32 张量。
+ * @param params [en] The axis to normalise over.
+ * @param params [zh] 被归一化的那条轴。
+ * @param output [en] fp32 output with the input's shape; the data is overwritten.
+ * @param output [zh] 形状与输入相同的 fp32 输出；数据会被覆盖。
+ * @param workspace [en] Scratch source; must hold `dim(axis) + 2` floats.
+ * @param workspace [zh] 临时空间来源；需能放下 `dim(axis) + 2` 个 float。
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, an axis out of range or a shape
+ *         mismatch; INFR_ERR_UNSUPPORTED for a non-fp32 tensor; INFR_ERR_BUFFER_TOO_SMALL when the
+ *         workspace cannot hold one slice plus two scalars; INFR_ERR_NOT_IMPLEMENTED when a
+ *         required kernel is missing.
+ * @note [en] The max is subtracted before `exp`, so logits above ~88 still produce a finite
+ *            result; without it `expf` overflows and the division yields NaN. There is no shape
+ *            function because the operator never changes the shape.
+ * @note [zh] 先减去最大值再 `exp`，所以 logit 超过约 88 时结果仍然有限；不减的话 `expf` 溢出、
+ *            除法得到 NaN。没有 shape 函数，因为本算子从不改变形状。
+ * @since 0.2.0
+ */
+infr_status infr_softmax_f32(const infr_tensor *input, const infr_softmax_params *params, infr_tensor *output,
+                             infr_workspace *workspace);
+
 #ifdef __cplusplus
 }
 #endif
