@@ -133,10 +133,10 @@
       "why_not_in_ci": "needs the XNNPACK package and a hand-built clean object set, and it answers a comparison question rather than asserting an invariant"
     },
     {
-      "id": "vendor-track",
-      "command": "python3 .github/project/recipe_mount.py --build && conan create . -s build_type=Release -o '&:with_cmsis_nn=True' --build=missing",
-      "runs_from": "preflight, or any machine where the mount named in recipe-mount.json exists; measured green here on 2026-11-27 (91.9% coverage with the vendor package linked)",
-      "why_not_in_ci": "the mounted recipe lives outside the repository, so a runner without the mount would fail for a reason that has nothing to do with the tree; the default leg runs in CI, the vendor leg runs where the mount is",
+      "id": "local-package-track",
+      "command": "python3 .github/project/package_sources.py && conan create . -s build_type=Release -o '&:with_cmsis_nn=True' --build=missing",
+      "runs_from": "preflight, or any machine -- the artifact is tracked under .github/project/local-packages/, so CI can run it too",
+      "why_not_in_ci": "kept out for cost: it builds the project a second time with the optional backend on, doubling CI minutes for a leg the default build never needs",
       "profiles": [
         "default"
       ]

@@ -56,29 +56,30 @@ requirements:
 - 头文件搜索路径由 `.github/misc/gates.py tidy` 统一提供：`-Iinclude` + eigen（`EIGEN_INC` 可覆盖）+ `GATES_INCLUDE`（`os.pathsep` 分隔）+ `-isystem $ETL_INC`。装到标准前缀（`/usr/include`）的 apt 包无需额外配置；非标准前缀 → 在 workflow 里导出 `GATES_INCLUDE`。
 - 不补映射 → clang-tidy 门禁报 file-not-found（fail-loud 是有意设计）。
 
-## Two Tracks: CCI + mount（双轨：CCI + 私域挂载点）
+## Two Sources: remote + local（两种来源：远端 + 本地制品）
 
-A dependency comes from one of two places, and the source is **data**, not a comment:
+A package comes from one of two places, and the source is **data**, not a comment:
 
-1. **CCI track** — ConanCenter carries it; the version lives in `conandata.yml` and nothing else
-   is needed.
-2. **Mount track** — ConanCenter does not carry it (measure first: `conan search -r conancenter
-   "<name>*"`). The recipe stays **outside** the repository, because a recipe carries a download
-   URL and an upstream sha256 and the plan keeps those out of the version library. The path is
-   declared in `.github/project/recipe-mount.json`, and `python3 .github/project/recipe_mount.py
-   --build` turns a present mount into a package in the local cache.
+1. **remote** — the normal case. A Conan remote carries it; the version lives in `conandata.yml`
+   and nothing else is needed.
+2. **local** — a remote does not carry it (measure first: `conan search -r conancenter
+   "<name>*"`). Keep the **built artifact** under `.github/project/local-packages/<name>/<version>/`
+   and describe it in `.github/project/package-sources.json`. Run
+   `python3 .github/project/package_sources.py` with no arguments: it writes the packaging recipe
+   next to the payload and builds it into the cache. The recipe is generated and has no download
+   step, so no URL or upstream sha256 enters the version library.
 
-Two rules make the mount safe:
+Two rules keep the local source safe:
 
-- **A missing mount is not an error.** The script prints the entry's `if_missing` and exits 0;
-  the leg that needs the mount is the one that says it was skipped. Otherwise every clean clone
-  would be red for a reason that has nothing to do with the tree.
-- **The register is checked, not trusted.** `deps.json` carries the recipe's own file digests and
-  `deps_gate` rule D8 verifies them when the mount is present, so "the recipe on this machine is
-  the one this project built against" is a measurement.
+- **An absent local package is not an error.** The script names the entry, prints its
+  `if_absent` reason and exits zero; the leg that needs the package is the one that reports being
+  skipped. Otherwise every clean clone would be red for a reason unrelated to the tree.
+- **The register is checked, not trusted.** `deps.json` carries the artifact's digests and
+  `deps_gate` rule D8 verifies them, so "the package this machine built is the one this project
+  recorded" is a measurement.
 
-A dependency that needs the mount also needs a compile option to switch it on; that switch is
-declared in `metadata.json:compile_options` (never by editing `conanfile.py` or `CMakeLists.txt`).
+A local package that the build uses also needs a compile option to switch it on; that switch is
+declared in `metadata.json:compile_options` and nowhere else.
 
 ## Switch Map（开关对照）
 

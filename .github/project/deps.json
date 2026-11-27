@@ -162,16 +162,37 @@
         "contains": "arm_nnfunctions.h"
       },
       "attribution": "",
-      "recipe": {
-        "path": "workspace/conan/recipes/cmsis-nn",
-        "why_out_of_tree": "the job of a recipe is to carry a download URL and an upstream sha256; the plan keeps those out of the version library deliberately, so this register records only the digests of the recipe's own files",
+      "local_package": {
+        "path": ".github/project/local-packages/cmsis-nn/8.0.0",
         "files": {
-          "config.yml": "5d553e03456823a529baa5002bfcf4f6c58053f7101042c633e8c4612d53f9cf",
-          "all/conandata.yml": "bfc04f5272bc26825dac3b22ea7754627eccd8adb5f6e5dd46bd3f03b57dabdd",
-          "all/conanfile.py": "8a02aa43eefc98016ac2c5756f9c68f100cb79b3f00dee360a9e4eb97e74ff15",
-          "all/test_package/conanfile.py": "bb6e6a46a2b0a3fd778cd556e54b9c6921e1c45fa9a1a210b45d57b5e9fe4317",
-          "all/test_package/CMakeLists.txt": "e08a9a027115c6f7680e2a5b60a7650c067101ebbebed01be9323c90fd57ee54",
-          "all/test_package/test_package.c": "30091533dc6dc25a5d315f30087acb2fba19bcd468cd927118922044fe38182a"
+          "conanfile.py": "2bee19d0ae253bc81ad27932019111eb",
+          "include/Internal/arm_concatenation_common.h": "425c51fc3e46bc777161f8907b7bf3cf",
+          "include/Internal/arm_conv1x1_opt_common.h": "8449974057b91c51a99137b9545a893c",
+          "include/Internal/arm_conv1x1_opt_f16.h": "dab35a7eaea8e0a66371f02e94a364e8",
+          "include/Internal/arm_conv1x1_opt_f32.h": "452cac27980373aee436a0d71017b2f2",
+          "include/Internal/arm_conv_opt_common.h": "5d95ec0840ad70a04e1c6c272bc94b7a",
+          "include/Internal/arm_conv_opt_f16.h": "81b8fe8a497c5cc97f7142a75e5a86fb",
+          "include/Internal/arm_conv_opt_f32.h": "34f9fcf5d332b5b0ae7a5f85de12b87a",
+          "include/Internal/arm_depthwise_conv_opt_common.h": "99f8d144e3c2a4d277bd8bede39e4a81",
+          "include/Internal/arm_depthwise_conv_opt_f16.h": "e4596a03167bef900d3d0243aeafa1ec",
+          "include/Internal/arm_depthwise_conv_opt_f32.h": "d4677bb1250dfc666aebbfa65c9d2958",
+          "include/Internal/arm_minmax_f16_common.h": "28e17a2ca6d0ff8062d94d5ecb9dfb6e",
+          "include/Internal/arm_minmax_f32_common.h": "5be86add2966c9b68e355ee198a58ff7",
+          "include/Internal/arm_nn_activation_flt.h": "21c461e252fe22218ca60efb2402574f",
+          "include/Internal/arm_nn_compiler.h": "0cc714d91b613f9c1554bba53ac17096",
+          "include/Internal/arm_nn_config.h": "d2087bb49151b14665d70e0f9269b8df",
+          "include/Internal/arm_transpose_common.h": "c279e03cac089932a53a32d03f566843",
+          "include/arm_nn_math_types.h": "0d3b5bf0eb8605cca3607c774c40ba43",
+          "include/arm_nn_math_types_flt.h": "2cc65dc6f8f87a7cf742384d0e8702af",
+          "include/arm_nn_tables.h": "862cd074c391c90b7ca41d2737426b0c",
+          "include/arm_nn_types.h": "b070ae15f82a42d9ea556d9e6209e2b8",
+          "include/arm_nn_types_flt.h": "8d357951415b51c8e20b4a4d2ebff4e3",
+          "include/arm_nnfunctions.h": "58552550dc1041f91a58a0aacd15b278",
+          "include/arm_nnfunctions_flt.h": "9465c91d0e4d6d1d98d20418b87d63a4",
+          "include/arm_nnsupportfunctions.h": "0d5f6dd9f81ae6361e2d0ffa7fa91ccd",
+          "include/arm_nnsupportfunctions_flt.h": "84602dcfe806ae9ea372f0d8d27fcd34",
+          "lib/libcmsis-nn.a": "e314804d5f6f385df505bad9704deac7",
+          "licenses/LICENSE": "b40930bbcf80744c86c46a12bc9da056"
         }
       }
     }

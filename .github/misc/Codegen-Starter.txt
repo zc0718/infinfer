@@ -528,13 +528,16 @@ Before finishing, the agent MUST verify:
 END OF PROMPT — paste this into Copilot agent with all [FILL] sections completed
 ================================================================================
 
-[DEPENDENCIES: TWO TRACKS]
-  Track 1 -- CCI: a package ConanCenter carries is declared by version in conandata.yml only.
-  Track 2 -- mount: a package CCI does not carry keeps its recipe OUTSIDE the repository
-            (a recipe carries a download URL and an upstream sha256, which do not belong in the
-            version library). Its path is declared in .github/project/recipe-mount.json and
-            .github/project/recipe_mount.py turns a present mount into a local package.
-            A missing mount is not an error: the leg that needs it is skipped and says so.
+[DEPENDENCIES: TWO SOURCES]
+  remote -- the normal case: a package a Conan remote carries is declared once, by version, in
+            conandata.yml.
+  local  -- a package no remote carries keeps its BUILT ARTIFACT under
+            .github/project/local-packages/<name>/<version>/ and is described in
+            .github/project/package-sources.json. `python3 .github/project/package_sources.py`
+            (no arguments) writes the packaging recipe and builds it into the cache. The recipe
+            is generated and has no download step, so no URL or upstream sha256 enters the
+            version library. An absent local package is not an error: the leg that needs it is
+            skipped and says so.
 
 [COMPILE OPTIONS]
   A compile-time option is ONE entry in metadata.json:compile_options

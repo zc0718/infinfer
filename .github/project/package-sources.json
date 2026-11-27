@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "Where this project's Conan packages come from. Read this before adding a dependency.",
+    "",
+    "remote -- the normal case. A package ConanCenter (or any configured remote) carries is",
+    "          declared once, by version, in conandata.yml; there is nothing to keep here.",
+    "local  -- a package no remote carries. Keep the BUILT artifact under local-packages/ and",
+    "          describe it here; `python3 .github/project/package_sources.py` turns it into a",
+    "          package in the local cache. The packaging recipe is generated, has no download",
+    "          step, and so no URL or upstream sha256 ever enters the version library.",
+    "",
+    "An absent local package is not an error: the leg that needs it says so and is skipped, which",
+    "is what lets a clean clone build."
+  ],
+  "schema": 1,
+  "packages": [
+    {
+      "name": "cmsis-nn",
+      "version": "8.0.0",
+      "source": "local",
+      "artifact": ".github/project/local-packages/cmsis-nn/8.0.0",
+      "libs": ["cmsis-nn"],
+      "cmake_file_name": "cmsis-nn",
+      "cmake_target_name": "cmsis-nn::cmsis-nn",
+      "needed_by": "compile_options.with_cmsis_nn",
+      "upstream_recipe": "workspace/conan/recipes/cmsis-nn",
+      "if_absent": "the leg that enables compile_options.with_cmsis_nn is skipped and says which local package it wanted; every other leg is unaffected"
+    }
+  ]
+}
