@@ -104,6 +104,33 @@
       ],
       "runs_from": "host-native: no cross profile is involved, so 'host' is the whole requirement; measured 2026-11-27 on this box producing a 290 KB ONNX graph from mobilenet_v3_small",
       "why_not_in_ci": "torch is ~200 MB of wheels that exist to *author* a model, and the project-gates job has no such env -- what CI needs is the ONNX file and the tensors, which are what the export produces. Declared here so the dependency is visible instead of living in a shell history (T5), and so Y5 keeps it out of ci.sh"
+    },
+    {
+      "id": "tier-ab",
+      "command": "g++ -O2 -std=c++17 -Iinclude .github/project/qa/measure/measure_tier_ab.cxx <clean objects> -lm -o /tmp/measure_tier_ab && /tmp/measure_tier_ab",
+      "profiles": [
+        "x86_64-host"
+      ],
+      "runs_from": "any machine with a host toolchain and a clean (non-gcov) build of the library; see .github/project/qa/measure/README.md for the object build loop",
+      "why_not_in_ci": "it links a hand-built object set rather than the Conan package (the packaged archive carries gcov counters that distort timings) and its verdict is a throughput ratio, which is a measurement and not a pass/fail"
+    },
+    {
+      "id": "operator-census",
+      "command": "python3 .github/project/qa/measure/op_census.py",
+      "profiles": [
+        "x86_64-host"
+      ],
+      "runs_from": "any machine with torch, torchvision, onnx and pyyaml; no network needed (random weights, same operator set)",
+      "why_not_in_ci": "torch and onnx are machine-level tooling and are not in the project's dependency buckets; the census is a design input, not a gate"
+    },
+    {
+      "id": "vendor-ab",
+      "command": "g++ -O2 -std=c++17 -Iinclude .github/project/qa/measure/measure_xnnpack_ab.cxx <clean objects> <xnnpack libs> -lm -lpthread -o /tmp/measure_xnn && /tmp/measure_xnn",
+      "profiles": [
+        "x86_64-host"
+      ],
+      "runs_from": "same as tier-ab plus xnnpack/cci.20241203, pthreadpool and cpuinfo from the Conan cache",
+      "why_not_in_ci": "needs the XNNPACK package and a hand-built clean object set, and it answers a comparison question rather than asserting an invariant"
     }
   ],
   "debt": [
