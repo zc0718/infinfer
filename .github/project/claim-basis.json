@@ -112,7 +112,7 @@
         "arm_m": 2,
         "rvv": 1
       },
-      "counts_note": "the counts were 9/2/10 (50 comparisons) until 2026-11-26, when fc/int8 landed on arm_neon and rvv (G-79) and relu/int8 on arm_m (G-83); the claim gate found the staleness on its first run"
+      "counts_note": "the counts were 9/2/10 (50 comparisons) until 2026-11-26, when fc/int8 landed on arm_neon and rvv (G-79) and relu/int8 on arm_m (G-83); the claim gate found the staleness on its first run. They became 11/3/12 (62 comparisons) the same day when `mul` landed (G-94), and this time the gate could not see the change at all -- both sides of the count check derive from `emit_k3_cells.MODES`, so a kernel missing from that map is invisible to it; `census_gate` R11 is the rule that now refuses it. `commit` points at the tree the 62 comparisons were measured on"
     },
     {
       "id": "case-k2-blob-graph",
