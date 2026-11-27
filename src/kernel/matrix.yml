@@ -105,7 +105,21 @@ kernels:
     tflite: []
     onnx: []
     dtype_quant: [[i32, tensor]]
-    tiers: { scalar: done, autovec: na, x86: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    # No per-tier vector body, and that is a measured decision, not an omission:
+    # the operator is called once per output element in the only pipeline that
+    # uses it, so 3.47 ns of every element is the call itself and 1.42 ns is the
+    # arithmetic (gaps G-121). A vector body cannot remove the calls, and it
+    # would have to reproduce the double-domain rounding bit for bit -- a second
+    # definition of rounding for a share of the cost that is already smaller than
+    # the call overhead. The lever, if precision review ever allows it, is a
+    # fixed-point multiplier (a numeric-semantics change), not a tier cell.
+    #
+    # 不写逐档向量体，这是量出来的决定：唯一使用它的流水线是每个输出元素调一
+    # 次，每元素的 3.47 ns 里调用本身就是大头，算术只有 1.42 ns（gaps G-121）。
+    # 向量体去不掉调用，还要逐位复现 double 域的舍入——为一个已经小于调用开销的
+    # 份额再写一份舍入定义。若将来精度评审允许，杠杆是定点乘子（改数值语义），不
+    # 是一个档位格。
+    tiers: { scalar: done, autovec: na, x86: na, arm_neon: na, arm_m: na, rvv: na }
     grad: no-grad
     grad_why: >-
       round-and-saturate is a step function: a gradient needs a straight-through estimator, and
@@ -114,10 +128,21 @@ kernels:
     tflite: [QUANTIZE]
     onnx: [{op: QuantizeLinear}]
     dtype_quant: [[fp32, tensor]]
-    # `arm_neon` stays `todo` on purpose: the reference divides, and AArch32 NEON has no IEEE
-    # float divide, so a reciprocal body would be a different function -- and the claim is per
-    # tier, not per build. See src/kernel/arm_neon/quant.c and gaps G-77.
-    tiers: { scalar: done, autovec: na, arm_neon: todo, arm_m: na, rvv: done }
+    # `arm_neon` is `na` for two reasons that both have to be written down.
+    # First, the reference divides and AArch32 NEON has no IEEE float divide, so a
+    # reciprocal body would be a different function -- and the claim is per tier,
+    # not per build (src/kernel/arm_neon/quant.c, gaps G-77). Second, the tier now
+    # belongs to the vendor-backend domain: ADR-007 puts `arm_neon` on the SoC
+    # side, where XNNPACK supplies the kernels, so a hand-written body here would
+    # be a new SoC vector cell that buys nothing. Cells already `done` stay: they
+    # are the fallback and the parity oracle.
+    #
+    # `arm_neon` 记 `na`，两条理由都要写下来：其一，参考实现做除法，而 AArch32
+    # NEON 没有 IEEE 除法，倒数的体是另一个函数，而主张是按档、不是按构建（gaps
+    # G-77）；其二，这一档已归入厂商后端域——ADR-007 把 `arm_neon` 划到 SoC 侧，
+    # 内核由 XNNPACK 提供，此时手写体买不到任何东西。已 `done` 的格保留：它们是
+    # 后备与 parity oracle。
+    tiers: { scalar: done, autovec: na, arm_neon: na, arm_m: na, rvv: done }
     grad: no-grad
     grad_why: >-
       quantisation is a step function, so a derivative needs a straight-through estimator,
