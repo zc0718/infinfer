@@ -434,40 +434,45 @@ int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *inp
              * exactly that (a 1x1xC vector times an HxWxC feature map), and writing it as
              * a full-size constant would cost 1.7 MB of weights to say 96 numbers.
              *
-             * The work is done by the registered `scale` kernel, not by a new one: `scale`
-             * already means `y[i] = a[i] * factor` with the factor in a one-element buffer,
-             * so a per-channel multiply is that call once per channel. Nothing here
-             * re-implements arithmetic that the matrix already covers.
+             * The map is NHWC, so the elements that share a factor sit at `pixel * C + c`
+             * for a fixed `c`: they are **C apart**, not adjacent. `scale` multiplies one
+             * contiguous run by one factor, so calling it once per channel would take
+             * channel 0's first element, channel 1's first element, ... as one run -- the
+             * wrong factors, on a map with more than one pixel. `mul` over one pixel's C
+             * elements is the same arithmetic with the access pattern the layout really
+             * has: one call per pixel, no new claim, and no materialised gate.
              *
-             * `p[0] == 1`：右操作数是**每个输出通道一个因子**，而不是同形状的张量——MobileNet
-             * 的 SE 门正是这个形状（1x1xC 向量乘 HxWxC 特征图），把它写成整尺寸常量等于花
-             * 1.7 MB 权重去表达 96 个数。实际计算交给已注册的 `scale` 核，而不是新增一个：
-             * `scale` 的语义就是 `y[i] = a[i] * factor`（因子放在单元素缓冲里），所以逐通道
-             * 相乘就是把它按通道调用一次——这里不重写矩阵已经覆盖的算术。 */
+             * `p[0] == 1`：右操作数是**每个输出通道一个因子**而不是同形状张量——MobileNet
+             * 的 SE 门正是这个形状，写成整尺寸常量等于花 1.7 MB 权重去表达 96 个数。特征图
+             * 是 NHWC，共享同一因子的元素下标为 `pixel * C + c`，**相隔 C** 而不是相邻；
+             * `scale` 是“一段连续元素乘同一个因子”，按通道各调一次等于把各通道首元素当成
+             * 同一通道。改为对一个像素的 C 个元素调一次 `mul`：算术相同、访问顺序正确，
+             * 不需要新 claim，也不需要物化门向量。旧写法乘错因子这件事见 gaps G-103。 */
             if (node->p[0] == 1U) {
                 const uint32_t channels = out_slot->dims[3];
-                const uint32_t plane = channels == 0U ? 0U : count / channels;
-                const infr_kernel_desc *scale;
+                const uint32_t pixels = channels == 0U ? 0U : count / channels;
+                const infr_kernel_desc *gate;
                 float *out_data = arena + out_slot->arena;
                 const float *in_data = arena + a_slot->arena;
                 const float *factors = constant_of(bytes, b_slot);
-                uint32_t channel;
+                uint32_t pixel;
                 if (node->op != KAT_BLOB_OP_MUL || count == 0U || channels == 0U ||
-                    plane * channels != count || slot_floats(a_slot) != count ||
+                    pixels * channels != count || slot_floats(a_slot) != count ||
                     slot_floats(b_slot) != channels) {
                     return KAT_BLOB_ERR_SHAPE;
                 }
-                scale = infr_kernel_find("scale", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
-                if (scale == 0) {
+                gate = infr_kernel_find("mul", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+                if (gate == 0) {
                     return INFR_ERR_NOT_IMPLEMENTED;
                 }
-                for (channel = 0U; channel < channels; ++channel) {
-                    const void *scaled_in[2];
-                    void *scaled_out[1];
-                    scaled_in[0] = in_data + ((size_t)channel * plane);
-                    scaled_in[1] = factors + channel;
-                    scaled_out[0] = out_data + ((size_t)channel * plane);
-                    status = scale->fn(scaled_in, scaled_out, plane, 0);
+                status = INFR_OK;
+                for (pixel = 0U; pixel < pixels; ++pixel) {
+                    const void *gate_in[2];
+                    void *gate_out[1];
+                    gate_in[0] = in_data + ((size_t)pixel * channels);
+                    gate_in[1] = factors;
+                    gate_out[0] = out_data + ((size_t)pixel * channels);
+                    status = gate->fn(gate_in, gate_out, channels, 0);
                     if (status != INFR_OK) {
                         break;
                     }

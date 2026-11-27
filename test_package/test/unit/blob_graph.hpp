@@ -534,42 +534,51 @@ inline bool run(Blob& blob, float* arena, std::size_t arena_len, infr_workspace*
             /* `p[0] == 1`: the right operand is one factor per output channel, not a tensor
              * of the same shape. MobileNet's squeeze-and-excite gate is this shape (a
              * 1x1xC vector times an HxWxC map); spelling it as a full-size constant would
-             * cost 1.7 MB of weights to say 96 numbers. It is carried out by the registered
-             * `scale` kernel -- `y[i] = a[i] * factor` with the factor in a one-element
-             * buffer -- called once per channel, so no arithmetic is re-implemented here.
+             * cost 1.7 MB of weights to say 96 numbers.
+             *
+             * The map is NHWC, so the elements sharing a factor are `pixel * C + c` for a
+             * fixed `c` -- **C apart**, not adjacent. `scale` multiplies one contiguous run
+             * by one factor, so calling it once per channel would read channel 0's first
+             * element, channel 1's first element, ... as one run: the wrong factors, on any
+             * map with more than one pixel. One `mul` per pixel over its C elements is the
+             * same arithmetic with the access pattern the layout really has, and needs
+             * neither a new claim nor a materialised gate.
              *
              * `p[0] == 1`：右操作数是每个输出通道一个因子，而不是同形状张量。MobileNet 的
-             * SE 门就是这个形状；写成整尺寸常量等于花 1.7 MB 权重去表达 96 个数。计算交给
-             * 已注册的 `scale` 核（`y[i] = a[i] * factor`，因子放在单元素缓冲里）按通道各调
-             * 一次，这里不重写任何算术。 */
+             * SE 门就是这个形状；写成整尺寸常量等于花 1.7 MB 权重去表达 96 个数。特征图是
+             * NHWC，共享同一因子的元素**相隔 C** 而不是相邻；`scale` 是“一段连续元素乘同一个
+             * 因子”，按通道各调一次等于把各通道首元素当成同一通道。改为对一个像素的 C 个
+             * 元素调一次 `mul`：算术相同、访问顺序正确，不需新 claim，也不需物化门向量。
+             * 旧写法乘错因子这件事见 gaps G-103。 */
             if (node.p[0] == 1) {
                 const std::size_t channels = out_slot.dims[3];
                 if (node.op != kOpMul || channels == 0 || count == 0 || count % channels != 0 ||
                     detail::slot_floats(blob.slots[node.in_slot]) != count ||
                     detail::slot_floats(blob.slots[node.w_slot]) != channels) {
-                    *err = where + ": a per-channel scale needs (H,W,C) times (C,)";
+                    *err = where + ": a per-channel gate needs (H,W,C) times (C,)";
                     return false;
                 }
-                const std::size_t plane = count / channels;
-                const infr_kernel_desc* scale =
-                    infr_kernel_find("scale", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
-                if (scale == nullptr) {
-                    *err = where + ": the scale kernel is not registered";
+                const std::size_t pixels = count / channels;
+                const infr_kernel_desc* gate =
+                    infr_kernel_find("mul", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+                if (gate == nullptr) {
+                    *err = where + ": the mul kernel is not registered";
                     return false;
                 }
                 float* out_data = detail::slot_data(blob, arena, node.out_slot);
                 const float* in_data = detail::slot_data(blob, arena, node.in_slot);
                 const float* factors = detail::slot_data(blob, arena, node.w_slot);
-                for (std::size_t channel = 0; channel < channels; ++channel) {
-                    const void* scaled_in[2] = {in_data + channel * plane, factors + channel};
-                    void* scaled_out[1] = {out_data + channel * plane};
-                    status = scale->fn(scaled_in, scaled_out, static_cast<std::uint32_t>(plane), nullptr);
+                status = INFR_OK;
+                for (std::size_t pixel = 0; pixel < pixels; ++pixel) {
+                    const void* gate_in[2] = {in_data + (pixel * channels), factors};
+                    void* gate_out[1] = {out_data + (pixel * channels)};
+                    status = gate->fn(gate_in, gate_out, static_cast<std::uint32_t>(channels), nullptr);
                     if (status != INFR_OK) {
                         break;
                     }
                 }
                 if (status != INFR_OK) {
-                    *err = where + ": scale (per channel) failed: " + infr_status_str(status);
+                    *err = where + ": mul (per-channel gate) failed: " + infr_status_str(status);
                     return false;
                 }
                 if (node.act != 0) {
