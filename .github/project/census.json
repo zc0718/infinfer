@@ -36,6 +36,10 @@
     "dot/int8/tensor/x86": [
       "KernelParityX86/DotInt8MatchesScalarBitwise"
     ],
+    "dwconv3x3/fp32/none/scalar": [
+      "KernelParityDwconv3x3/ScalarFp32MatchesDoubleReference",
+      "KernelParityDwconv3x3/RefusesAMissingPointer"
+    ],
     "fc/fp32/none/arm_neon": [
       "KernelParityFcNeon/Fp32MatchesScalarWithinAFloatWindow"
     ],

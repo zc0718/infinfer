@@ -169,6 +169,34 @@ kernels:
     dtype_quant: [[fp32, none]]
     tiers: { scalar: done, autovec: na, x86: done, arm_neon: done, arm_m: na, rvv: done }
     grad: todo
+  # The fused depthwise window. It exists because expressing a depthwise convolution
+  # as one `fc` per output element made the **call** the dominant cost: 18.6 ns of
+  # fixed cost against 36.7 ns total, i.e. half the time was the call (gaps G-129).
+  # Batching the channels of one output pixel into a single call removes 127 of every
+  # 128 calls, and the inner dimension stays fixed by the kernel identity, so INV-3
+  # holds without a shape in the signature.
+  #
+  # Every vector tier is `na` on purpose: the win here is the call count, not the tap
+  # sum, and ISA-level work on those tiers belongs to the vendor backend (ADR-007).
+  # `arm_m` has no fp32 at all on the no-FPU profile, same as the other fp32 cells.
+  #
+  # 融合的深卷积窗口。它存在的原因是：把深卷积写成「每个输出元素一次 `fc`」之后，**调用**
+  # 成了主要成本——每次调用 18.6 ns 固定开销、每次总共只有 36.7 ns，即一半时间花在调用上
+  # （gaps G-129）。把一个输出像素的所有通道批进一次调用，就能去掉 128 次里的 127 次，而
+  # 内维由内核身份固定，所以 INV-3 的「签名里没有形状」仍然成立。
+  #
+  # 向量档全部记 `na` 是故意的：这里的收益是**调用次数**而不是抽头求和，而那些档的 ISA 层
+  # 工作属于厂商后端（ADR-007）。`arm_m` 在无 FPU 的档上根本没有 fp32，与其它 fp32 格一致。
+  dwconv3x3:
+    tflite: []
+    onnx: []
+    dtype_quant: [[fp32, none]]
+    tiers: { scalar: done, autovec: na, x86: na, arm_neon: na, arm_m: na, rvv: na }
+    grad: no-grad
+    grad_why: >-
+      a depthwise window is a linear map like any convolution, so a derivative exists, but
+      nothing in this library asks for one and inventing a contract here would be the same
+      mistake `conv2d` avoided by staying composed
   sum:
     tflite: [SUM]
     onnx: [{op: ReduceSum}]

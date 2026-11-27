@@ -226,14 +226,27 @@ infr_status infr_conv2d_f32(const infr_tensor* input, const infr_tensor* filter,
             return INFR_ERR_NOT_IMPLEMENTED;
         }
     }
+    /* A depthwise 3x3 window can be batched: one call for a whole output pixel
+     * instead of one call per output channel. Optional on purpose -- if the cell is
+     * absent this operator keeps working through `fc`.
+     *
+     * 深卷积 3×3 窗口可以批处理：一个输出像素一次调用，而不是每个输出通道一次。刻意
+     * 做成可选——该格缺席时本算子仍走 `fc` 正常工作。 */
+    const infr_kernel_desc* dwconv = infr_kernel_find_best("dwconv3x3", INFR_DTYPE_F32, INFR_QUANT_NONE);
 
     /* Borrow scratch and hand it back on every path: `EVAL` must not grow with the
      * number of nodes executed. */
     const size_t mark = infr_workspace_mark(workspace);
     void* window_raw = nullptr;
     void* acc_raw = nullptr;
-    status = infr_workspace_alloc(workspace, static_cast<size_t>(plan.window_len) * sizeof(float), alignof(float),
-                                  &window_raw);
+    /* The fused path gathers one window per output channel, so it needs
+     * `out_channels * 9` floats where the per-channel path needs a single window.
+     *
+     * 融合路径要 gather 每个输出通道一个窗口，所以需要 `out_channels * 9` 个 float，
+     * 而逐通道路径只要一个窗口。 */
+    const bool fused3x3 = (plan.kh == 3U) && (plan.kw == 3U) && (plan.in_per_group == 1U) && (dwconv != nullptr);
+    const size_t window_floats = fused3x3 ? (static_cast<size_t>(plan.out_c) * 9U) : plan.window_len;
+    status = infr_workspace_alloc(workspace, window_floats * sizeof(float), alignof(float), &window_raw);
     if (status == INFR_OK) {
         status =
             infr_workspace_alloc(workspace, static_cast<size_t>(plan.out_c) * sizeof(float), alignof(float), &acc_raw);
@@ -254,7 +267,43 @@ infr_status infr_conv2d_f32(const infr_tensor* input, const infr_tensor* filter,
         for (uint32_t ox = 0U; ox < plan.out_w; ++ox) {
             const int32_t base_x = static_cast<int32_t>(ox * plan.stride_w) - static_cast<int32_t>(plan.pad_w);
 
-            for (uint32_t group = 0U; group < plan.groups; ++group) {
+            if (fused3x3) {
+                /* Depthwise: every channel owns its own window, so gather them all and
+                 * let one call do the whole pixel (gaps G-129).
+                 *
+                 * 深卷积：每个通道各有自己的窗口，所以全部 gather 好，一次调用算完整个
+                 * 像素（gaps G-129）。 */
+                /* One window per **output** channel, not per group: with a single input
+                 * channel per group a dense convolution (`groups == 1`) and a depthwise
+                 * one (`groups == out_c`) differ only in which input channel each output
+                 * channel reads, and this loop covers both. Iterating groups instead
+                 * filled one window and left the rest reading past it -- measured as
+                 * "odd output elements are zero" in GraphConv2d.
+                 *
+                 * 每个**输出**通道一个窗口，而不是每个分组：在「每分组一个输入通道」的前提下，
+                 * 普通卷积（`groups == 1`）与深卷积（`groups == out_c`）的差别只在每个输出
+                 * 通道读哪个输入通道，这个循环两种都覆盖。若按分组迭代，就只填了一个窗口、
+                 * 其余读到窗口之外——实测表现是 GraphConv2d 里「奇数输出元素为 0」。 */
+                for (uint32_t oc = 0U; oc < plan.out_c; ++oc) {
+                    const uint32_t group = oc / plan.out_per_group;
+                    float* w9 = window + (static_cast<size_t>(oc) * 9U);
+                    for (uint32_t ky = 0U; ky < 3U; ++ky) {
+                        for (uint32_t kx = 0U; kx < 3U; ++kx) {
+                            const int32_t iy = base_y + static_cast<int32_t>(ky);
+                            const int32_t ix = base_x + static_cast<int32_t>(kx);
+                            w9[(ky * 3U) + kx] = gather_one(in, plan, group, iy, ix);
+                        }
+                    }
+                }
+                const void* fused_inputs[2] = {window, weights};
+                void* fused_output[1] = {accum};
+                status = dwconv->fn(fused_inputs, fused_output, plan.out_c, nullptr);
+                if (status != INFR_OK) {
+                    (void)infr_workspace_release(workspace, mark);
+                    return status;
+                }
+            }
+            for (uint32_t group = 0U; !fused3x3 && group < plan.groups; ++group) {
                 /* Gather this group's window once, then feed every output channel of
                  * the group from it: the gather is the only shape-dependent work. */
                 const uint32_t channel_base = group * plan.in_per_group;

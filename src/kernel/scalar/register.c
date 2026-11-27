@@ -43,6 +43,17 @@ infr_status infr_kernel_register_scalar(void) {
          .quant = INFR_QUANT_NONE,
          .tier = INFR_TIER_SCALAR,
          .fn = infr_scalar_mul_f32},
+        /* The fused depthwise window: one call per output pixel instead of one per
+         * output element, which is where half of a depthwise convolution's time went
+         * (gaps G-129).
+         *
+         * 融合的深卷积窗口：一个输出像素一次调用，而不是一个输出元素一次——深卷积一半
+         * 的时间就花在那里（gaps G-129）。 */
+        {.name = "dwconv3x3",
+         .dtype = INFR_DTYPE_F32,
+         .quant = INFR_QUANT_NONE,
+         .tier = INFR_TIER_SCALAR,
+         .fn = infr_scalar_dwconv3x3_f32},
         {.name = "fc",
          .dtype = INFR_DTYPE_F32,
          .quant = INFR_QUANT_NONE,

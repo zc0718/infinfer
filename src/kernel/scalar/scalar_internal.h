@@ -143,6 +143,14 @@ infr_status infr_scalar_mul_f32(const void *const *inputs, void *const *outputs,
                                 const infr_quant *quant);
 
 /**
+ * @brief [en] Fused 3x3 depthwise convolution over a gathered window plane.
+ * @brief [zh] 在已 gather 的窗口平面上做融合 3×3 深卷积。
+ * @since 0.2.0
+ */
+infr_status infr_scalar_dwconv3x3_f32(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                                      const infr_quant *quant);
+
+/**
  * @brief [en] Sum of `element_count` floats written to `outputs[0]`.
  * @brief [zh] 把 `element_count` 个 float 求和写入 `outputs[0]`。
  * @since 0.1.0

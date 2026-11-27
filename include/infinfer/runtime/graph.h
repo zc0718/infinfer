@@ -140,14 +140,25 @@ infr_status infr_conv2d_output_shape(const infr_conv2d_params *params, const inf
  *         or a filter larger than the padded input; INFR_ERR_UNSUPPORTED for a dtype,
  *         quantisation or grouping outside the stated subset;
  *         INFR_ERR_BUFFER_TOO_SMALL when the workspace cannot hold the scratch
- *         (`kernel_h * kernel_w * in_channels/groups + out_channels` floats).
+ *         (`max(kernel_h * kernel_w * in_channels/groups, out_channels * kernel_h * kernel_w) +
+ *         out_channels` floats).
  * @note [en] The inner loop is a call to the registered `fc` (dot product) and the
  *            bias step is a call to the registered `add`, so a faster tier of those
  *            two kernels speeds this operator up without touching this file. The
  *            gather is the only shape-dependent work, and it is scalar here.
+ * @note [en] A 3x3 window with one input channel per group takes the registered
+ *            `dwconv3x3` instead: one call for a whole output pixel rather than one call
+ *            per output channel, because a call cost more than the nine multiplications
+ *            it performed (measured, gaps G-129). That path gathers one window per
+ *            output channel, which is why the scratch requirement above is the larger of
+ *            the two shapes. When the cell is absent the operator falls back to `fc`.
  * @note [zh] 内层循环是一次对已注册 `fc`（点积）的调用，偏置步是一次对已注册 `add`
  *            的调用——所以那两个 kernel 换了更快的档位，本算子自动变快，无需改这里。
  *            只有 gather 是依赖 shape 的活，它在本档是标量实现。
+ * @note [zh] 每分组一个输入通道且窗口为 3×3 时，改走已注册的 `dwconv3x3`：一个输出像素
+ *            一次调用，而不是每个输出通道一次——因为一次调用的成本高于它执行的九次乘法
+ *            （实测，gaps G-129）。那条路径为**每个输出通道** gather 一个窗口，所以上面的
+ *            scratch 需求取两种形状里较大的那个。该格缺席时本算子退回 `fc`。
  * @since 0.1.0
  */
 infr_status infr_conv2d_f32(const infr_tensor *input, const infr_tensor *filter, const float *bias,
