@@ -43,6 +43,7 @@
 // arena 上，图跑完 arena 用量不变，这正是 INV-8 要的性质在最外层被观测到。
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -253,16 +254,79 @@ inline bool parse(std::vector<unsigned char> bytes, Blob* out, std::string* err)
         }
     }
 
-    // Arena layout: runtime slots get consecutive float ranges, in slot order.
-    std::size_t cursor = 0;
-    for (Slot& slot : out->slots) {
-        if (slot.byte_len != 0) {
-            continue;
-        }
-        slot.arena = cursor;
-        cursor += detail::slot_floats(slot);
+    // Arena layout: **first-fit reuse over live ranges**, not the literal sum of every
+    // runtime slot. A slot is released into the free list at the end of the node that
+    // last touches it, so node i's output may land on a slot whose last use was node
+    // i-1; two slots that are live at the same time never overlap, and a node never
+    // lands on its own input (the release happens *after* the node runs).
+    //
+    // 布局是**按活跃区间首次适配复用**，不是"每个中间量各占一段再求和"。槽在其最后一个
+    // 使用它的节点执行完之后才回到空闲表，所以第 i 个节点的输出可以落在第 i-1 个节点最后
+    // 用过的槽上；同时活跃的两个槽永不重叠，节点也永不会覆盖自己的输入（释放发生在节点
+    // 执行之后）。
+    const std::size_t count = out->slots.size();
+    std::vector<bool> is_runtime(count, false);
+    std::vector<bool> is_written(count, false);
+    std::vector<std::size_t> last_use(count, 0);
+    for (std::size_t index = 0; index < count; ++index) {
+        is_runtime[index] = out->slots[index].byte_len == 0;
     }
-    out->arena_floats = cursor;
+    for (std::size_t position = 0; position < out->nodes.size(); ++position) {
+        const Node& node = out->nodes[position];
+        const std::uint32_t refs[3] = {node.in_slot, node.w_slot, node.b_slot};
+        for (std::uint32_t ref : refs) {
+            if (ref != kNoSlot && is_runtime[ref]) {
+                last_use[ref] = position;
+            }
+        }
+        last_use[node.out_slot] = position;
+        is_written[node.out_slot] = true;
+    }
+    // A runtime slot nobody writes has no offset to start from: the layout would be
+    // built on an uninitialised value, so it is refused instead of guessed.
+    for (std::size_t index = 0; index < count; ++index) {
+        if (is_runtime[index] && !is_written[index]) {
+            *err = "runtime slot " + out->slots[index].name + " is never written";
+            return false;
+        }
+    }
+
+    struct Free {
+        std::size_t offset;
+        std::size_t length;
+    };
+    std::vector<Free> free_blocks;
+    std::size_t tail = 0;
+    for (std::size_t position = 0; position < out->nodes.size(); ++position) {
+        Slot& produced = out->slots[out->nodes[position].out_slot];
+        const std::size_t need = detail::slot_floats(produced);
+        bool placed = false;
+        for (std::size_t block = 0; block < free_blocks.size(); ++block) {
+            if (free_blocks[block].length >= need) {
+                produced.arena = free_blocks[block].offset;
+                if (free_blocks[block].length > need) {
+                    free_blocks[block].offset += need;
+                    free_blocks[block].length -= need;
+                } else {
+                    free_blocks.erase(free_blocks.begin() + static_cast<std::ptrdiff_t>(block));
+                }
+                placed = true;
+                break;
+            }
+        }
+        if (!placed) {
+            produced.arena = tail;
+            tail += need;
+        }
+        for (std::size_t index = 0; index < count; ++index) {
+            if (is_runtime[index] && last_use[index] == position) {
+                free_blocks.push_back(Free{out->slots[index].arena, detail::slot_floats(out->slots[index])});
+            }
+        }
+        std::sort(free_blocks.begin(), free_blocks.end(),
+                  [](const Free& lhs, const Free& rhs) { return lhs.offset < rhs.offset; });
+    }
+    out->arena_floats = tail;
     out->bytes = std::move(bytes);
     return true;
 }

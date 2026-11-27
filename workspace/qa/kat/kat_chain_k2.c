@@ -258,6 +258,15 @@ int kat_k2_run(kat_k2_result *result) {
      * 就是独立重述，所以要求两者在每个目标上逐位相等，正是这条链的意义——也是只跑宿主的
      * 测试给不出的证据。 */
     {
+        /* The size the layout needs is not this number: it is `view.arena_floats`,
+         * reported back by the executor after it has placed every slot. This buffer is
+         * the *capacity* (the earlier per-slot sum was 3866 floats; live-range reuse
+         * brought it to 2816), and the check below makes the difference visible
+         * instead of leaving a hand-picked constant as the only record.
+         *
+         * 需要的不是这个数，而是执行器排完布局后报回的 `view.arena_floats`。这块是**容量**
+         * （按槽逐段相加曾是 3866 float，活跃区间复用后是 2816），下面的检查让这个差额有
+         * 记录，而不是只剩一个手挑的常数。 */
         static float arena[4096];
         kat_blob_view view;
         int blob_status;
@@ -266,6 +275,9 @@ int kat_k2_run(kat_k2_result *result) {
                                    (uint32_t)(sizeof arena / sizeof arena[0]), &workspace, &view);
         if (blob_status != KAT_BLOB_OK) {
             return blob_status;
+        }
+        if (view.arena_floats * sizeof(float) >= sizeof arena) {
+            return KAT_BLOB_ERR_ARENA;
         }
         if (view.out_len != K2_FC_OC || memcmp(view.out, result->out, K2_FC_OC * sizeof(float)) != 0) {
             return KAT_BLOB_ERR_MISMATCH;

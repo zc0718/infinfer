@@ -66,6 +66,14 @@ typedef struct kat_blob_view {
      * @brief [zh] 该槽的元素个数。
      */
     uint32_t out_len;
+    /**
+     * @brief [en] Floats the executor's own layout actually needed, i.e. the first-fit
+     *        reuse high-water mark. Reported so a caller can size the arena from the
+     *        graph instead of trusting a number written in a document.
+     * @brief [zh] 执行器自己排出的布局真正需要的 float 个数，即首次适配复用的高水位。
+     *        报出来是为了让调用方能按图算 arena 大小，而不是相信文档里的数字。
+     */
+    uint32_t arena_floats;
 } kat_blob_view;
 
 /**
@@ -79,9 +87,12 @@ typedef struct kat_blob_view {
  * @param input [zh] 输入槽的数据；图里没有 `input` 节点时为 NULL。
  * @param input_len [en] Element count of `input`; must equal the input slot's extent.
  * @param input_len [zh] `input` 的元素个数；必须等于输入槽的容量。
- * @param arena [en] Scratch for every runtime slot; the required size is the sum of
- *              their extents, and `KAT_BLOB_ERR_ARENA` is returned when it is short.
- * @param arena [zh] 所有运行期槽的临时空间；所需大小是它们容量之和，不够时返回
+ * @param arena [en] Scratch for every runtime slot. The size it needs is the
+ *              first-fit high-water mark of the slots' live ranges (not the sum of
+ *              their extents: a slot is reused once the node that last reads it has
+ *              run), and `KAT_BLOB_ERR_ARENA` is returned when it is short.
+ * @param arena [zh] 所有运行期槽的临时空间。所需大小是各槽活跃区间按首次适配排出的高水位
+ *              （不是容量之和：最后一个读它的节点跑完之后这个槽就可以被复用），不够时返回
  *              `KAT_BLOB_ERR_ARENA`。
  * @param arena_len [en] Element count of `arena`.
  * @param arena_len [zh] `arena` 的元素个数。

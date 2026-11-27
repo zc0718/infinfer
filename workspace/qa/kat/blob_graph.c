@@ -100,6 +100,15 @@ int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *inp
     static const unsigned char magic[8] = {'I', 'N', 'F', 'R', 'K', 'A', 'T', '\0'};
     kat_blob_slot slots[KAT_BLOB_MAX_SLOTS];
     kat_blob_node nodes[KAT_BLOB_MAX_NODES];
+    uint32_t last_use[KAT_BLOB_MAX_SLOTS];
+    uint8_t written[KAT_BLOB_MAX_SLOTS];
+    /* One extra: while node i's output is being placed, every slot it releases is
+     * inserted into a list that may already hold all the others.
+     *
+     * 多一格：给第 i 个节点定位输出时，它释放的槽要插进一个"可能已经装了其余全部"的表里。 */
+    uint32_t free_off[KAT_BLOB_MAX_SLOTS + 1U];
+    uint32_t free_len[KAT_BLOB_MAX_SLOTS + 1U];
+    uint32_t free_count;
     uint32_t node_count;
     uint32_t slot_count;
     uint32_t offset;
@@ -170,16 +179,89 @@ int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *inp
             offset += slots[i].byte_len;
         } else {
             slots[i].offset = 0U;
-            slots[i].arena = cursor;
-            cursor += slot_floats(&slots[i]);
+            slots[i].arena = 0U; /* assigned by the layout pass below */
         }
     }
     if (offset != byte_len) {
         return KAT_BLOB_ERR_SLOT;
     }
+
+    /* Layout: first-fit reuse over live ranges. A runtime slot goes back into the free
+     * list after the node that last touches it, so node i's output may land on a slot
+     * whose last use was node i-1. Slots that are live at the same time never overlap,
+     * and a node never lands on its own input (the release happens after the node).
+     *
+     * 布局：按活跃区间首次适配复用。槽在最后一个碰它的节点之后才回到空闲表，所以第 i 个
+     * 节点的输出可以落在第 i-1 个节点最后用过的槽上。同时活跃的槽永不重叠，节点也永不会
+     * 覆盖自己的输入（释放发生在节点之后）。 */
+    for (i = 0U; i < slot_count; ++i) {
+        last_use[i] = 0U;
+        written[i] = 0;
+    }
+    for (i = 0U; i < node_count; ++i) {
+        const uint32_t refs[3] = {nodes[i].in_slot, nodes[i].w_slot, nodes[i].b_slot};
+        for (k = 0U; k < 3U; ++k) {
+            if (refs[k] != KAT_BLOB_NO_SLOT && slots[refs[k]].byte_len == 0U) {
+                last_use[refs[k]] = i;
+            }
+        }
+        last_use[nodes[i].out_slot] = i;
+        written[nodes[i].out_slot] = 1;
+    }
+    for (i = 0U; i < slot_count; ++i) {
+        if (slots[i].byte_len == 0U && written[i] == 0) {
+            return KAT_BLOB_ERR_SLOT; /* no writer: there is no offset to reuse */
+        }
+    }
+    cursor = 0U;
+    free_count = 0U;
+    for (i = 0U; i < node_count; ++i) {
+        uint32_t need = slot_floats(&slots[nodes[i].out_slot]);
+        uint32_t placed = 0U;
+        int found = 0;
+        for (k = 0U; k < free_count; ++k) {
+            if (free_len[k] >= need) {
+                placed = free_off[k];
+                if (free_len[k] > need) {
+                    free_off[k] += need;
+                    free_len[k] -= need;
+                } else {
+                    uint32_t move;
+                    for (move = k; move + 1U < free_count; ++move) {
+                        free_off[move] = free_off[move + 1U];
+                        free_len[move] = free_len[move + 1U];
+                    }
+                    --free_count;
+                }
+                found = 1;
+                break;
+            }
+        }
+        if (found == 0) {
+            placed = cursor;
+            cursor += need;
+        }
+        slots[nodes[i].out_slot].arena = placed;
+        /* Release every slot whose last use was this node, keeping the list sorted by
+         * offset so the scan above is first-fit. */
+        for (k = 0U; k < slot_count; ++k) {
+            if (slots[k].byte_len == 0U && last_use[k] == i && written[k] != 0) {
+                uint32_t at = free_count;
+                while (at > 0U && free_off[at - 1U] > slots[k].arena) {
+                    free_off[at] = free_off[at - 1U];
+                    free_len[at] = free_len[at - 1U];
+                    --at;
+                }
+                free_off[at] = slots[k].arena;
+                free_len[at] = slot_floats(&slots[k]);
+                ++free_count;
+            }
+        }
+    }
     if (cursor > arena_len) {
         return KAT_BLOB_ERR_ARENA;
     }
+    view->arena_floats = cursor;
 
     /* Every reference has to resolve, and no node may write into a constant. */
     for (i = 0U; i < node_count; ++i) {

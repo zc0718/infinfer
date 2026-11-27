@@ -47,12 +47,16 @@ TEST(GraphBlobK2, TheBlobOwnsTheGraph) {
     EXPECT_EQ(6U, blob.nodes.size());
     EXPECT_EQ(infrb::kOpInput, blob.nodes.front().op);
     EXPECT_EQ(infrb::kOpFc, blob.nodes.back().op);
-    /* Every stage is a runtime buffer except the six constants, and the arena is
-     * exactly the sum of their extents -- so the caller's buffer size is derivable
-     * from the blob instead of being guessed. */
+    /* Every stage is a runtime buffer except the six constants. The arena is the
+     * first-fit high-water mark of their live ranges, so it is **not** the sum of the
+     * extents -- but it can never exceed it, and two slots that are live at the same
+     * time must not overlap. Those two properties are what make the number trustworthy
+     * without re-running the allocator here. */
     std::size_t runtime_slots = 0;
-    std::size_t expected_arena = 0;
-    for (const auto& slot : blob.slots) {
+    std::size_t naive_arena = 0;
+    std::vector<std::size_t> extent(blob.slots.size(), 0);
+    for (std::size_t index = 0; index < blob.slots.size(); ++index) {
+        const auto& slot = blob.slots[index];
         if (slot.byte_len != 0) {
             continue;
         }
@@ -61,10 +65,49 @@ TEST(GraphBlobK2, TheBlobOwnsTheGraph) {
         for (std::uint32_t axis = 0; axis < slot.rank; ++axis) {
             count *= slot.dims[axis];
         }
-        expected_arena += count;
+        extent[index] = count;
+        naive_arena += count;
     }
     EXPECT_EQ(6U, runtime_slots);
-    EXPECT_EQ(expected_arena, blob.arena_floats);
+    EXPECT_LE(blob.arena_floats, naive_arena);
+    EXPECT_LT(blob.arena_floats, naive_arena) << "a chain of stages must be able to reuse";
+
+    // Live range of a runtime slot: the node that writes it through the last node that
+    // reads it. Recomputed here on purpose -- the check is worth nothing if it asks the
+    // executor what it decided.
+    std::vector<std::size_t> live_from(blob.slots.size(), std::size_t(-1));
+    std::vector<std::size_t> live_to(blob.slots.size(), 0);
+    for (std::size_t position = 0; position < blob.nodes.size(); ++position) {
+        const auto& node = blob.nodes[position];
+        const std::uint32_t refs[3] = {node.in_slot, node.w_slot, node.b_slot};
+        for (std::uint32_t ref : refs) {
+            if (ref != infrb::kNoSlot && extent[ref] != 0) {
+                live_to[ref] = position;
+            }
+        }
+        live_from[node.out_slot] = position;
+        live_to[node.out_slot] = position;
+    }
+    for (std::size_t a = 0; a < blob.slots.size(); ++a) {
+        if (extent[a] == 0) {
+            continue;
+        }
+        for (std::size_t b = a + 1; b < blob.slots.size(); ++b) {
+            if (extent[b] == 0) {
+                continue;
+            }
+            const bool overlap_in_time = live_from[a] <= live_to[b] && live_from[b] <= live_to[a];
+            if (!overlap_in_time) {
+                continue;
+            }
+            const auto& first = blob.slots[a];
+            const auto& second = blob.slots[b];
+            const bool overlap_in_memory =
+                first.arena < second.arena + extent[b] && second.arena < first.arena + extent[a];
+            EXPECT_FALSE(overlap_in_memory)
+                << first.name << " and " << second.name << " are live at the same time";
+        }
+    }
     EXPECT_NE(infrb::kNoSlot, infrb::input_slot(blob));
     EXPECT_NE(infrb::kNoSlot, infrb::output_slot(blob));
 }
