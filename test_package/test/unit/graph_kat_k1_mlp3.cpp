@@ -16,10 +16,10 @@
  * @brief [en] Graph-level KAT: the `k1_mlp3` blob (fc 16->32, relu, fc 32->4) must reproduce the expectation.
  * @brief [zh] 图级 KAT：`k1_mlp3` blob（fc 16→32、relu、fc 32→4）必须复现期望输出。
  * @note [en] The blob and the expectation are produced by
- *      `workspace/qa/prep/emit_k1_blob.py` with numpy, so agreement means the kernels are right,
+ *      `.github/project/qa/prep/emit_k1_blob.py` with numpy, so agreement means the kernels are right,
  *      not that the code equals itself (PLAN §3.10: generation is a maintainer step, CI only
  *      reads the bytes). Bitwise cross-target equality is judged separately by the QEMU matrix.
- * @note [zh] blob 与期望由 `workspace/qa/prep/emit_k1_blob.py` 用 numpy 生成，所以"一致"说明
+ * @note [zh] blob 与期望由 `.github/project/qa/prep/emit_k1_blob.py` 用 numpy 生成，所以"一致"说明
  *      内核是对的，而不是代码等于它自己（PLAN §3.10：生成归维护者，CI 只读字节）。跨目标逐位
  *      相等由 QEMU 矩阵单独判定。
  * @since 0.1.0

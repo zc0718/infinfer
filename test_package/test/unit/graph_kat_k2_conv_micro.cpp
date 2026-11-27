@@ -18,11 +18,11 @@
  *            through the four `composed` operators.
  * @brief [zh] 图级 KAT：`k2_conv_micro` blob 必须经四个 `composed` 算子复现期望输出。
  * @note [en] The blob and the expectation are produced by
- *            `workspace/qa/prep/emit_k2_blob.py` in float64 from the definition of each
+ *            `.github/project/qa/prep/emit_k2_blob.py` in float64 from the definition of each
  *            operator, so agreement means the composition is right, not that the code
  *            equals itself (PLAN §3.10). Bitwise cross-target equality is judged
  *            separately by the QEMU matrix.
- * @note [zh] blob 与期望由 `workspace/qa/prep/emit_k2_blob.py` 按各算子的定义在 float64
+ * @note [zh] blob 与期望由 `.github/project/qa/prep/emit_k2_blob.py` 按各算子的定义在 float64
  *            下生成，所以"一致"说明组合是对的，而不是代码等于它自己（PLAN §3.10）。
  *            跨目标逐位相等由 QEMU 矩阵单独判定。
  * @since 0.1.0

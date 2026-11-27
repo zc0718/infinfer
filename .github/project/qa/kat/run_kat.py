@@ -21,6 +21,7 @@ recorded as a gap, not decided here.
 """
 import argparse
 import glob
+import hashlib
 import json
 import os
 import pathlib
@@ -30,10 +31,29 @@ import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
+# Root by marker, not by depth. This tree has already moved once (`workspace/qa` ->
+# `.github/project/qa` on 2026-11-27) and a `parents[N]` constant goes silently wrong when it
+# happens again -- `metadata.json` sits at the repository root by INV-11 and is the marker.
+# 根目录按标记找，不按层数：这棵树已经搬过一次（2026-11-27 从 `workspace/qa` 到
+# `.github/project/qa`），`parents[N]` 那种常数下次就会静静地错；`metadata.json` 由 INV-11
+# 固定放在仓根，就是那个标记。
+ROOT = next(p for p in (HERE, *HERE.parents) if (p / "metadata.json").is_file())
 BOARDS = HERE.parent / "qemu" / "boards"
-BUILD = HERE / "build"
-GENERATED = HERE / "generated"
+# The emitters are siblings of this chain directory, and they are named through `HERE` rather
+# than a repo-relative string: the two halves of the pipeline move together or not at all.
+PREP = HERE.parent / "prep"
+# Build output does not live in the tree. It never was source, and keeping it out means the
+# repository needs no ignore rule for it -- `.gitignore` is exactly the template's file, with
+# nothing added. The cache is keyed by the repository path so two checkouts on one machine cannot
+# mistake each other's objects for fresh ones; `INFRINFER_QA_CACHE` overrides the location.
+# 构建产物不放进树里。它本来就不是源码，放外面就使仓库不需要为它写任何忽略规则——
+# `.gitignore` 就是模板原文件，一个字节没加。缓存按仓库路径分键，所以同一台机器上的两个
+# checkout 不会互相当成“上次编好的”；位置可用 `INFRINFER_QA_CACHE` 覆盖。
+CACHE = (pathlib.Path(os.environ.get("INFRINFER_QA_CACHE",
+                                    pathlib.Path.home() / ".cache" / "infinfer" / "qa"))
+         / hashlib.sha256(str(ROOT).encode("utf-8")).hexdigest()[:8])
+BUILD = CACHE / "build"
+GENERATED = CACHE / "generated"
 
 KERNEL_SOURCES = [
     ROOT / "src/kernel/contract.c",
@@ -89,7 +109,7 @@ TIER_CHAINS = {"k3"}
 MATRIX = ROOT / "src/kernel/matrix.yml"
 TIER_CELLS_HEADER = GENERATED / "kat_k3_cells.h"
 CPP_FLAGS = ["-fno-exceptions", "-fno-rtti", "-fno-threadsafe-statics"]
-INCLUDES = ["-I", str(ROOT / "include"), "-I", str(HERE)]
+INCLUDES = ["-I", str(ROOT / "include"), "-I", str(HERE), "-I", str(CACHE)]
 FP_FLAGS = ["-ffp-contract=off"]
 # A KAT image should contain what it calls and nothing else. Without this the
 # link pulls whole library objects in: the k0 image was 3.4 KB of intent and
@@ -279,11 +299,11 @@ def emit_k2_model_header():
     cannot land on one path and miss the other. 两个头都只从一个来源（blob）生成，
     所以模型改动不可能只落在一条路径上。
     """
-    run([sys.executable, ROOT / "workspace/qa/prep/emit_k2_model_header.py",
+    run([sys.executable, PREP / "emit_k2_model_header.py",
          ROOT / "test_package/resources/kat/k2_conv_micro/model.blob",
          ROOT / "test_package/resources/kat/k2_conv_micro/input.bin",
          GENERATED / "kat_k2_model.h"])
-    run([sys.executable, ROOT / "workspace/qa/prep/emit_blob_image.py",
+    run([sys.executable, PREP / "emit_blob_image.py",
          "--name", "kat_k2_blob",
          ROOT / "test_package/resources/kat/k2_conv_micro/model.blob",
          GENERATED / "kat_k2_blob.h"])
@@ -302,9 +322,9 @@ def emit_k2m_blob_header():
     目标看到的东西全部从那个文件派生。
     """
     model = BUILD / "mobilenet" / "model.blob"
-    run([sys.executable, ROOT / "workspace/qa/prep/emit_mobilenet_blob.py",
+    run([sys.executable, PREP / "emit_mobilenet_blob.py",
          "--width", "0.25", "--res", "96", "--write", "--out", str(model.parent)])
-    run([sys.executable, ROOT / "workspace/qa/prep/emit_blob_image.py", "--segment",
+    run([sys.executable, PREP / "emit_blob_image.py", "--segment",
          "--name", "kat_k2m_blob", model, GENERATED / "kat_k2m_blob.h"])
 
 
@@ -339,7 +359,7 @@ def build_host_emit(cc, chain):
 
 def emit_header(blob, chain):
     header = GENERATED / f"kat_{chain}_image.h"
-    run([sys.executable, ROOT / "workspace/qa/prep/emit_kat_image.py", blob, header,
+    run([sys.executable, PREP / "emit_kat_image.py", blob, header,
          "--id", CHAIN_IDS[chain]])
     return header
 
@@ -513,7 +533,7 @@ def run_k3(boards, cc, use_variants=True):
             print(f"[run_kat] k3 SKIP {board_name}: the profile declares no tier", flush=True)
             continue
         tier = spec["name"]
-        run([sys.executable, ROOT / "workspace/qa/prep/emit_k3_cells.py", MATRIX, tier,
+        run([sys.executable, PREP / "emit_k3_cells.py", MATRIX, tier,
              TIER_CELLS_HEADER])
         toolchain = board["toolchain"]
         probe = toolchain["version_probe"]

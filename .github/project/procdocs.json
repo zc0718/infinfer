@@ -2,27 +2,34 @@
   "_comment": [
     "Which paths must never be published, as data.",
     "The owner's instruction (2026-11-26): the working papers -- the gap ledger and the plan -- cannot become",
-    "public by any route, while the rest of the execution subset is tracked normally. `procdocs_gate.py`",
-    "enforces that from the index side and this list is the only place the set is written down.",
+    "public by any route. Since 2026-11-27 the rule is the whole directory: `workspace/` holds the owner's",
+    "material (working papers, compliance ledger, local conan recipes, vendored upstream trees) and **no code**,",
+    "because the execution surface moved to `.github/project/qa/`. That makes one pattern both sufficient and",
+    "exact, and it is the same line the template's own `.gitignore` already carries: `/workspace/`.",
+    "`procdocs_gate.py` enforces it from the index side and this list is the only place the set is written down.",
     "",
     "为什么是数据而不是写在门禁里：这份集合会变（新的过程文档会出现），而「哪些东西不能公开」是业主的决定，",
     "不该埋在代码的判断里。改这里等于改一条安全属性，所以门禁对每一条都要求 .gitignore 里也有对应规则——",
     "两个独立的锁，缺一个就红。",
     "",
+    "2026-11-27 起规则收紧成整个目录：`workspace/` 里只有业主的材料（过程文档、合规台账、本地 conan 配方、",
+    "随仓上游代码），**不再有代码**——执行面已经搬到 `.github/project/qa/`。于是一条模式既充分又精确，",
+    "而且正是模板自带 `.gitignore` 里那条 `/workspace/`。",
+    "",
     "Patterns use a simple intent: `dir/**` protects the directory and everything below it;",
     "`prefix/*.md` protects the matches directly in `prefix`; anything else is a plain glob.",
-    "Do NOT use `workspace/**`: that would protect the code, which is the opposite of the point."
+    "The earlier warning against `workspace/**` ('that would protect the code, which is the opposite of the",
+    "point') is retired: that is exactly what we want now, because the code is no longer there."
   ],
   "protected": [
-    "workspace/audit/**",
-    "workspace/PLAN-*.md"
+    "workspace/**"
   ],
   "markdown": [
     "workspace/audit/gaps.md",
     "workspace/PLAN-*.md"
   ],
   "ignore_file": ".gitignore",
-  "why": "process notes: self-criticism, internal sequencing, owner instructions. Kept locally, never shipped.",
+  "why": "process material: self-criticism, internal sequencing, owner instructions, and since 2026-11-27 also the compliance ledger and the local conan recipes. The whole directory is local-only; the code it used to hold is published under .github/project/qa/.",
   "why_markdown": [
     "Documents whose whole value is being readable: a table that renders as bare `|` text is not a ledger.",
     "The gap ledger grew by appending single rows separated by blank lines; a Markdown table ends at the first blank",

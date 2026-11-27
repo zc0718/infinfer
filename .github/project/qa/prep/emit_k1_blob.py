@@ -9,7 +9,7 @@ compiles in, so the host blob and the cross-target chain describe one model.
 The expectation is computed **independently of the C code** -- numpy float32
 matmul, a different summation order -- so agreement means the kernel is right,
 not that the code equals itself. Bitwise cross-target equality is a separate
-judgement (see `workspace/qa/kat/run_kat.py`); here the tolerance is the plan's
+judgement (see `.github/project/qa/kat/run_kat.py`); here the tolerance is the plan's
 FP32 window.
 
 The blob is the `INFRKAT` **v2 graph blob**: weights *and* the graph live in the file,

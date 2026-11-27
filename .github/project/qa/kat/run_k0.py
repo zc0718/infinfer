@@ -17,16 +17,28 @@ memcmp'd bytes against the same baked arrays.
 import argparse
 import glob
 import json
+import hashlib
 import os
 import pathlib
 import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
+# Same root-by-marker rule as run_kat.py: the tree moved on 2026-11-27 and a fixed depth
+# would have kept pointing one level short.
+ROOT = next(p for p in (HERE, *HERE.parents) if (p / "metadata.json").is_file())
 BOARDS = HERE.parent / "qemu" / "boards"
-BUILD = HERE / "build"
-GENERATED = HERE / "generated"
+# The emitters are siblings of this chain directory; naming them through `HERE` keeps the two
+# halves of the pipeline from being able to disagree about where they live.
+PREP = HERE.parent / "prep"
+# Same cache rule as run_kat.py: build output stays out of the tree, so `.gitignore` needs no
+# entry for it. Kept identical on purpose -- two scripts with two different output roots would be
+# a divergence nobody would notice until a stale expectation turned up.
+CACHE = (pathlib.Path(os.environ.get("INFRINFER_QA_CACHE",
+                                    pathlib.Path.home() / ".cache" / "infinfer" / "qa"))
+         / hashlib.sha256(str(ROOT).encode("utf-8")).hexdigest()[:8])
+BUILD = CACHE / "build"
+GENERATED = CACHE / "generated"
 
 KERNEL_SOURCES = [
     ROOT / "src/kernel/contract.c",
@@ -74,7 +86,7 @@ def build_host_emit(cc):
 
 def emit_header(blob):
     header = GENERATED / "kat_k0_image.h"
-    run([sys.executable, ROOT / "workspace/qa/prep/emit_kat_image.py", blob, header])
+    run([sys.executable, PREP / "emit_kat_image.py", blob, header])
     return header
 
 

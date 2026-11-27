@@ -44,6 +44,7 @@ PATENTS = "workspace/compliance/patents/INDEX.md"
 REQUIRED = ("id", "kind", "title", "status", "source_url", "verified_at")
 ID_SHAPE = re.compile(r"^S-\d{3}$")
 PATENT_NUMBER = re.compile(r"\b(?:CN|US|EP|JP|KR|WO)\s?\d{6,}[A-Z]?\d?\b")
+SKIP = "SKIP"
 
 
 def check(root):
@@ -55,8 +56,20 @@ def check(root):
     patents_path = root / PATENTS
 
     if not ledger_path.is_file():
-        problems.append(f"compliance: '{LEDGER}' is missing -- the claims have no citation ledger")
-        return problems, reported
+        # The ledger is not published: `workspace/**` is local-only (procdocs.json), and since
+        # 2026-11-27 that is the *whole* directory -- the code moved to `.github/project/qa/`, the
+        # material stayed. So a clean clone is **expected** not to have it, exactly like the gap
+        # ledger (gaps_gate.py prints the same kind of skip). What must not happen is a silent
+        # pass: the skip is printed with the reason, and `check()` returns None so the caller cannot
+        # mistake it for a green run.
+        #
+        # 台账不随仓发布：`workspace/**` 是本地专属（procdocs.json），2026-11-27 起是整个目录——
+        # 代码搬去 `.github/project/qa/`，材料留下。所以新 clone **本来就不该有它**，与差距台账
+        # 同类（gaps_gate.py 打的是同一种 skip）。但不能静默通过：skip 必须带理由打出来，且
+        # `check()` 返回 None，调用方无法把它当成绿。
+        print(f"[compliance] {SKIP} '{LEDGER}' is not in this tree (workspace/ is local-only, "
+              f"procdocs.json), so the citation ledger and K2/K4 went unchecked here")
+        return None, reported
     if not schema_path.is_file():
         problems.append(f"compliance: '{SCHEMA}' is missing, so K2/K4 cannot be checked")
         return problems, reported
@@ -230,6 +243,16 @@ def selftest():
             failures += 1
             print(f"[compliance:selftest] FAIL K4 expected the undeclared-field report, got {problems}")
 
+        # K0 -- absence is a skip, and a skip is not a pass: the return value has to be None so
+        # a caller cannot read it as "no problems".
+        (root / LEDGER).unlink()
+        result, _ = check(root)
+        if result is None:
+            print("[compliance:selftest] PASS K0 an absent ledger is a skip, not a pass")
+        else:
+            failures += 1
+            print(f"[compliance:selftest] FAIL K0 expected None for an absent ledger, got {result}")
+
     if failures:
         print(f"[compliance:selftest] FAIL ({failures} fixture(s))", file=sys.stderr)
         return 1
@@ -247,6 +270,9 @@ def main():
         return selftest()
 
     problems, reported = check(ROOT)
+    if problems is None:
+        # K0: the ledger is local-only, so absence is a printed skip and a green exit.
+        return 0
     if problems:
         for problem in problems:
             print(f"[compliance] {problem}", file=sys.stderr)

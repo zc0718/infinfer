@@ -26,7 +26,7 @@
       "path": "metadata.json",
       "key": "workflow_triggers.on_board",
       "must_be": false,
-      "why": "benchmark/platform/*.json lists the physical devices wired into CI (hardware in the loop, the self-hosted board route). This plan covers the virtualised matrix under workspace/qa only, so the board route stays off and no :fire: commit is pushed.",
+      "why": "benchmark/platform/*.json lists the physical devices wired into CI (hardware in the loop, the self-hosted board route). This plan covers the virtualised matrix under .github/project/qa only, so the board route stays off and no :fire: commit is pushed.",
       "exit": "turn it on in the plan that owns hardware, not here."
     }
   ]

@@ -10,7 +10,7 @@ it is a gate and not a paragraph.
 
   T1 nothing on the surface we own names a third-party toolchain. Our own
      scripts must resolve compilers from the declared house packages, by version
-     probe, the way `workspace/qa/kat/run_kat.py` does.
+     probe, the way `.github/project/qa/kat/run_kat.py` does.
   T2 every debt entry carries `path`, `contains`, `why` and `exit`. Debt that is
      not written down with a removal condition becomes folklore, and the next
      person "fixes" it by adding another compiler.
@@ -36,7 +36,7 @@ G-46 的由来是同一棵树被两套编译器构建：KAT 矩阵全部从 Cona
 根本不可比——这种失败是静默的，所以它必须是一条门禁，而不是一段话。
 
   T1 我们自己拥有的面上不得出现第三方工具链的名字；自有脚本必须像
-     `workspace/qa/kat/run_kat.py` 那样，按声明的版本探针从 house 包解析。
+     `.github/project/qa/kat/run_kat.py` 那样，按声明的版本探针从 house 包解析。
   T2 每条债务都要写 `path` / `contains` / `why` / `exit`；没有退出条件的债务会变成
      口口相传，下一个人只会再加一个编译器来"修复"它。
   T3 每条债务仍然成立：它点名的字面量还在文件里。比代码活得久的声明比没有更糟——

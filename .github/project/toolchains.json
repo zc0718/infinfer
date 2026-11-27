@@ -16,7 +16,7 @@
         "aarch64-none-linux-gnu",
         "arm-none-linux-gnueabihf"
       ],
-      "resolved_by": "declared version probe against the Conan cache (workspace/qa/kat/run_kat.py: find_tool)",
+      "resolved_by": "declared version probe against the Conan cache (.github/project/qa/kat/run_kat.py: find_tool)",
       "why": "the four Cortex-M boards, the two ARM Linux userspace boards and every ARM variant are built by it"
     },
     "rv-toolchain/14.3.rel1": {
@@ -41,18 +41,6 @@
   ],
   "skip_dirs": [
     {
-      "path": "workspace/qa/kat/build",
-      "why": "generated objects and ELFs: build output, not a surface anyone maintains"
-    },
-    {
-      "path": "workspace/qa/qemu/build",
-      "why": "same"
-    },
-    {
-      "path": "workspace/qa/prep/generated",
-      "why": "headers generated from the model blobs at build time"
-    },
-    {
       "path": "workspace/referential_repos",
       "why": "vendored upstream sources used for parity (tflite-micro / CMSIS-NN / XNNPACK / llama.cpp …): their CI is not our surface and we never run it, so their compiler names are not a drift we own"
     }
@@ -67,7 +55,7 @@
     ".yml",
     ".yaml"
   ],
-  "boards_dir": "workspace/qa/qemu/boards",
+  "boards_dir": ".github/project/qa/qemu/boards",
   "heavy_checks": [
     {
       "id": "cross-build-library",
@@ -81,7 +69,7 @@
     },
     {
       "id": "tier-parity",
-      "command": "python3 workspace/qa/kat/run_kat.py --chain k3",
+      "command": "python3 .github/project/qa/kat/run_kat.py --chain k3",
       "profiles": [
         "armv8",
         "armv7hf",
@@ -94,7 +82,7 @@
     },
     {
       "id": "kat-chains",
-      "command": "python3 workspace/qa/kat/run_kat.py --chain all",
+      "command": "python3 .github/project/qa/kat/run_kat.py --chain all",
       "profiles": [
         "cortex-m3",
         "cortex-m4",

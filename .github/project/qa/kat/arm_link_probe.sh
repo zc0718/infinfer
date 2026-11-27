@@ -10,11 +10,13 @@
 # calls one real operator through the public C ABI, and runs it under QEMU. Exit 0
 # means the call returned INFR_OK; anything else prints what failed.
 #
-# Usage: workspace/qa/kat/arm_link_probe.sh [cpu] [board]
+# Usage: .github/project/qa/kat/arm_link_probe.sh [cpu] [board]
 #        defaults: cortex-m3 / mps2-an385
 set -euo pipefail
 
-ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
+# Root from git, not from a `../..` count: the tree moved on 2026-11-27 and a fixed number of
+# `..` is the kind of constant that keeps working right up until it silently does not.
+ROOT=$(git rev-parse --show-toplevel)
 CPU=${1:-cortex-m3}
 BOARD=${2:-mps2-an385}
 OUT=${OUT:-/tmp/infr-arm-probe}
@@ -40,7 +42,7 @@ for src in "$ROOT"/src/kernel/contract.c "$ROOT"/src/kernel/scalar/*.c; do
 done
 
 echo "[probe] compiling the driver"
-"$GCC" "${COMMON[@]}" -std=c11 "${INCLUDES[@]}" -c "$ROOT/workspace/qa/kat/arm_link_probe.c" -o "$OUT/probe_main.o"
+"$GCC" "${COMMON[@]}" -std=c11 "${INCLUDES[@]}" -c "$(dirname "$0")/arm_link_probe.c" -o "$OUT/probe_main.o"
 
 echo "[probe] linking"
 # The C++ objects may reference libstdc++ symbols; linking the same driver with the

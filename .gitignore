@@ -7,51 +7,7 @@ __pycache__/
 *.pyc
 
 # process artifacts (audit/plan docs live in the working copy only)
-#
-# 2026-11-26, owner's instruction (gaps G-75): while every development step is local and nothing has
-# been pushed, `/workspace/` stays **tracked**. Keeping the execution subset out of git made every
-# KAT, board-profile and tier-parity conclusion "local_only": reproducible on this machine and
-# invisible to anyone else, including a fresh clone. The receipts live next to the code now.
-#
-# 2026-11-26，按业主指示（gaps G-75）：在全部开发都在本地、尚未 push 的阶段，`/workspace/` **入库**。
-# 把执行子集留在 git 之外，会让每一条 KAT / 板型 / 档位 parity 结论都变成 "local_only"：只在这台
-# 机器上可复现，别人（包括新 clone）看不到。证据现在和代码放在一起。
-#
-# Restore the single `/workspace/` rule before the first push, or decide per subtree then. This is a
-# temporary arrangement, and it is written down rather than remembered.
-# /workspace/
-
-# What stays out of git inside workspace/ is not "our work": it is vendored upstream trees and
-# derived output. Ignoring these by name (rather than ignoring the whole directory) is what makes the
-# line above safe -- 726 MB of third-party sources would otherwise enter the repository.
-# workspace/ 里仍然不入库的不是"我们的工作"，而是随仓上游代码与派生产物；按名字忽略这些（而不是忽略
-# 整个目录）正是上面那一条能安全注释掉的原因——否则 726 MB 第三方源码会进仓。
-/workspace/referential_repos/
-/workspace/qa/kat/build/
-/workspace/qa/kat/generated/
-/workspace/qa/qemu/build/
-
-# Local Conan recipes are not ours to ship: they carry download URLs and sha256 pins, and the plan
-# forbids moving them into the version library (PLAN line 416 and the hard prohibition on line 1004).
-# Distribution goes through the private `hetai` remote; `conandata.yml` keeps only the requirement
-# line and the version. Only the README is tracked, so the empty-looking directory explains itself.
-# 本地 Conan 配方不该随仓发布：里面是下载地址与 sha256 钉子，而计划明令不许把它们搬进版本库（PLAN 416
-# 行，以及 1004 行的硬禁止）。分发走私有 remote `hetai`，`conandata.yml` 只留需求行与版本。只放行
-# README，好让这个看起来空的目录自己解释自己。
-/workspace/conan/recipes/*
-!/workspace/conan/recipes/README.md
-
-# Process documents: kept locally, never shipped (owner's instruction, 2026-11-26 -- gaps G-76).
-# The gap ledger and the plan carry self-criticism and internal sequencing, so the requirement is
-# that they cannot be published **by any route**, not that we remember not to push them. Two locks:
-# this list, and `procdocs_gate.py`, which fails the build when one of them reaches the index --
-# including via `git add -f`, which bypasses this file completely.
-#
-# 过程文档：只在本地保留，永不随仓发布（业主指示，2026-11-26，gaps G-76）。差距台账与计划里有自我批评
-# 与内部排序，所以要求是「任何途径都不能公开」，而不是「记得别 push」。两把锁：下面两条规则，以及
-# `procdocs_gate.py`——它在本索引里发现它们就判红，包括绕过本文件的 `git add -f`。
-/workspace/audit/
-/workspace/PLAN-*.md
+/workspace/
 
 # agent-skill adapter views (generated symlinks/junctions; canonical source is .github/skills)
 # Default: .agents only. Optional: .claude / .codex via `sync --harness claude|codex`.
@@ -85,5 +41,3 @@ CMakeUserPresets.json
 # megalinter reports
 /megalinter-reports/
 mega-linter.log
-# docs/build.py writes its doxygen scratch here when run from the repo root
-/build_sub/

@@ -19,6 +19,11 @@ Rules:
      a tag or a sha pins what ran, a branch makes "it passed yesterday" a statement about
      someone else's repository
   Y4 the repository has at least one workflow: an empty policy check is a vacuous one
+  Y5 no heavy check declared as not-in-CI (`toolchains.json:heavy_checks`) is run by `ci.sh` or
+     by any workflow. The project-gates job has no conan cache, no house cross toolchain and no
+     qemu, so running one there is red for reasons that have nothing to do with the tree -- and
+     the usual answer to that redness is a skip, which is how a check stops meaning anything.
+     T5 owns *declaring* the heavy checks; Y5 owns keeping CI out of them.
 
 Usage:
 
@@ -27,6 +32,7 @@ Usage:
 """
 
 import argparse
+import json
 import pathlib
 import re
 import sys
@@ -35,10 +41,36 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 MOVEING_REFS = ("main", "master", "head", "latest", "develop", "trunk")
 USES = re.compile(r"^\s*(?:-\s*)?uses:\s*([^\s#]+)", re.M)
 SECRET_DUMP = re.compile(r"toJSON\s*\(\s*secrets\s*\)", re.I)
+HEAVY_MANIFEST = ".github/project/toolchains.json"
+# The scripts a heavy-check command names. A token has to look like a path to a runnable file:
+# `conan create …` has none and contributes nothing, which is correct -- conan is the tool, not a
+# script we could accidentally wire into CI.
+SCRIPT_TOKEN = re.compile(r"[\w./-]+\.(?:py|sh|rb|pl)")
 
 
 def workflows(root):
     return sorted((pathlib.Path(root) / ".github/workflows").glob("*.y*ml"))
+
+
+def heavy_scripts(root):
+    """`[(check id, script path)]` for the checks declared as not-in-CI.
+
+    `None` means the manifest is absent (nothing to guard in this tree); a **string** means it is
+    there and unreadable, which is reported rather than passed -- a policy rule that cannot run is
+    not a policy rule that holds.
+    """
+    path = pathlib.Path(root) / HEAVY_MANIFEST
+    if not path.is_file():
+        return None
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return f"{HEAVY_MANIFEST} cannot be read ({error}), so Y5 cannot run"
+    scripts = []
+    for entry in manifest.get("heavy_checks") or []:
+        for token in SCRIPT_TOKEN.findall(str(entry.get("command", ""))):
+            scripts.append((str(entry.get("id", "?")), token))
+    return scripts
 
 
 def check(root):
@@ -82,6 +114,34 @@ def check(root):
 
     total_refs = sum(len(USES.findall(p.read_text(encoding="utf-8", errors="replace"))) for p in files)
     reported.append(f"{len(files)} workflow(s), {total_refs} action reference(s) checked")
+
+    # Y5 -- CI must not run what CI has been told it cannot run.
+    heavy = heavy_scripts(root)
+    if heavy is None:
+        reported.append("Y5 skipped: no toolchains.json in this tree")
+    elif isinstance(heavy, str):
+        problems.append(f"ci-policy: {heavy}")
+    elif not heavy:
+        problems.append(
+            "ci-policy: toolchains.json declares no heavy_checks, so Y5 has nothing to guard -- "
+            "an empty policy check is a vacuous one"
+        )
+    else:
+        runners = []
+        ci = pathlib.Path(root) / ".github/project/ci.sh"
+        if ci.is_file():
+            runners.append((".github/project/ci.sh", ci.read_text(encoding="utf-8", errors="replace")))
+        runners += [(path.relative_to(root).as_posix(),
+                     path.read_text(encoding="utf-8", errors="replace")) for path in files]
+        for check_id, script in heavy:
+            for where, text in runners:
+                if script in text:
+                    problems.append(
+                        f"ci-policy: {where} runs '{script}', which toolchains.json declares as the "
+                        f"heavy check '{check_id}' that CI cannot run; say where it *does* run in "
+                        f"`runs_from` (T5 keeps that declaration honest) and keep CI out of it"
+                    )
+        reported.append(f"{len({script for _, script in heavy})} heavy-check script(s) kept out of CI")
     return problems, reported
 
 
@@ -143,6 +203,35 @@ def selftest():
         else:
             failures += 1
             print(f"[ci-policy:selftest] FAIL Y4 expected the empty-tree report, got {problems}")
+
+        # Y5 -- two fixtures, because the rule has to be able to *go green* as well: one where
+        # ci.sh runs a declared heavy check, one where it does not.
+        heavy_root = pathlib.Path(workdir) / "heavy"
+        (heavy_root / ".github/project").mkdir(parents=True)
+        (heavy_root / ".github/workflows").mkdir(parents=True)
+        (heavy_root / ".github/workflows/w.yml").write_text(clean, encoding="utf-8")
+        (heavy_root / ".github/project/toolchains.json").write_text(
+            json.dumps({"heavy_checks": [{"id": "kat-chains",
+                                           "command": "python3 qa/kat/run_kat.py --chain all"}]}),
+            encoding="utf-8",
+        )
+        (heavy_root / ".github/project/ci.sh").write_text(
+            "python3 qa/kat/run_kat.py --chain all\n", encoding="utf-8")
+        problems = check(heavy_root)[0]
+        if any("declares as the heavy check 'kat-chains'" in p for p in problems):
+            print("[ci-policy:selftest] PASS Y5 a heavy check that CI runs is red")
+        else:
+            failures += 1
+            print(f"[ci-policy:selftest] FAIL Y5 expected the heavy-check report, got {problems}")
+
+        (heavy_root / ".github/project/ci.sh").write_text(
+            "echo no heavy check here\n", encoding="utf-8")
+        problems = check(heavy_root)[0]
+        if not problems:
+            print("[ci-policy:selftest] PASS Y5 a heavy check kept out of CI is green")
+        else:
+            failures += 1
+            print(f"[ci-policy:selftest] FAIL Y5 expected a clean run, got {problems}")
 
     if failures:
         print(f"[ci-policy:selftest] FAIL ({failures} fixture(s))", file=sys.stderr)

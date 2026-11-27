@@ -43,7 +43,7 @@ DATA = ROOT / ".github/project/claim-basis.json"
 CI = ROOT / ".github/project/ci.sh"
 TOOLCHAINS = ROOT / ".github/project/toolchains.json"
 MATRIX = ROOT / "src/kernel/matrix.yml"
-EMITTER = ROOT / "workspace/qa/prep/emit_k3_cells.py"
+EMITTER = ROOT / ".github/project/qa/prep/emit_k3_cells.py"
 REQUIRED = ("id", "claim", "gate", "commit", "host", "date")
 
 
@@ -80,7 +80,7 @@ def matrix_cells(root, emitter_path=None):
     Imported from the emitter instead of re-implemented: a second copy of the rule would
     drift from the chain that actually runs, which is the failure mode this gate exists for.
     """
-    path = pathlib.Path(emitter_path) if emitter_path is not None else root / "workspace/qa/prep/emit_k3_cells.py"
+    path = pathlib.Path(emitter_path) if emitter_path is not None else root / ".github/project/qa/prep/emit_k3_cells.py"
     if not path.is_file():
         return None
     spec = importlib.util.spec_from_file_location("emit_k3_cells", path)
@@ -185,8 +185,10 @@ def selftest():
         subprocess.run(["git", "-C", str(root), "config", "user.email", "t@t"], check=True)
         subprocess.run(["git", "-C", str(root), "config", "user.name", "t"], check=True)
         (root / "src/kernel").mkdir(parents=True)
-        (root / "workspace/qa/prep").mkdir(parents=True)
-        (root / ".github/project").mkdir(parents=True)
+        # The emitter lives under `.github/project/qa/prep` now, which creates `.github/project`
+        # on the way -- so that parent has to accept already existing.
+        (root / ".github/project/qa/prep").mkdir(parents=True)
+        (root / ".github/project").mkdir(parents=True, exist_ok=True)
         (root / "src/kernel/matrix.yml").write_text(
             "kernels:\n"
             "  add:\n"
@@ -203,7 +205,7 @@ def selftest():
         (root / ".github/project/toolchains.json").write_text(
             json.dumps({"heavy_checks": [{"id": "tier-parity"}]}), encoding="utf-8"
         )
-        (root / "workspace/qa/prep/emit_k3_cells.py").write_text(
+        (root / ".github/project/qa/prep/emit_k3_cells.py").write_text(
             "import pathlib\n"
             "def load_yaml(path):\n"
             "    import yaml\n"
@@ -238,7 +240,7 @@ def selftest():
 
         ci = root / ".github/project/ci.sh"
         toolchains = root / ".github/project/toolchains.json"
-        emitter = root / "workspace/qa/prep/emit_k3_cells.py"
+        emitter = root / ".github/project/qa/prep/emit_k3_cells.py"
 
         def run(claims):
             data = {"schema": 1, "claims": claims}

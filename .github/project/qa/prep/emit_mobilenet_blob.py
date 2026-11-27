@@ -27,7 +27,7 @@ paper's MobileNetV3-Small block list, the values are not a trained model. Swappi
 real weights later is P5.3's job and does not change the blob layout.
 
 Usage:
-    emit_mobilenet_blob.py --width 0.5 --res 160 --out workspace/qa/kat/build/mobilenet
+    emit_mobilenet_blob.py --width 0.5 --res 160 --out "$INFRINFER_QA_CACHE/build/mobilenet"
 """
 import argparse
 import json
@@ -38,7 +38,12 @@ import numpy as np
 
 import blobfmt
 
-ROOT = pathlib.Path(__file__).resolve().parents[3]
+ROOT = next(p for p in (pathlib.Path(__file__).resolve().parents)
+            if (p / "metadata.json").is_file())
+# `<file>.parents` starts at the containing directory, so this is the same marker rule the
+# KAT scripts use; it replaced `parents[3]` when `workspace/qa` became `.github/project/qa`.
+# 与 KAT 脚本同一条“按标记找根”规则；`workspace/qa` 变成 `.github/project/qa` 时它替掉了
+# 原来的 `parents[3]`。
 
 # MobileNetV3-Small, the paper's block list: (kernel, expand, out, squeeze-excite, stride).
 BLOCKS = (
@@ -201,8 +206,9 @@ def main() -> int:
     ap.add_argument("--width", type=float, default=0.5)
     ap.add_argument("--res", type=int, default=160)
     ap.add_argument("--classes", type=int, default=1000)
-    ap.add_argument("--out", default="workspace/qa/kat/build/mobilenet",
-                    help="output directory, relative to the repository root")
+    ap.add_argument("--out", default=None,
+                    help="output directory; required with --write, and run_kat.py always passes the "
+                         "cache path (build output does not live in the tree)")
     ap.add_argument("--write", action="store_true", help="write model.blob and manifest.json")
     args = ap.parse_args()
 
@@ -229,6 +235,9 @@ def main() -> int:
     print(json.dumps(report, indent=2))
 
     if args.write:
+        if not args.out:
+            ap.error("--write needs --out: build output does not live in the tree, so there is no "
+                     "default worth guessing")
         blob = blobfmt.build(builder.slots, builder.nodes)
         out = ROOT / args.out
         out.mkdir(parents=True, exist_ok=True)

@@ -345,7 +345,7 @@ def check_matrix(data):
     return problems, cells, status_by_key, set(kernels)
 
 
-# The tiers `workspace/qa/kat/run_kat.py` builds a chain for. A `done` cell on one of them
+# The tiers `.github/project/qa/kat/run_kat.py` builds a chain for. A `done` cell on one of them
 # is supposed to be compared against the scalar row **on the target**; a cell the cell
 # generator cannot express is never compared anywhere but on the host.
 TIER_CHAIN_TIERS = ("arm_neon", "arm_m", "rvv")
@@ -362,10 +362,10 @@ def check_tier_chain_coverage(data, status_by_key, problems):
     `arm_neon`/`rvv` cell whose only evidence is a host test, presented as if it had
     cross-target evidence. `mul` was added exactly that way (gaps G-94).
     """
-    prep = ROOT / "workspace" / "qa" / "prep"
+    prep = ROOT / ".github" / "project" / "qa" / "prep"
     if not (prep / "emit_k3_cells.py").is_file():
         problems.append(
-            "R11: workspace/qa/prep/emit_k3_cells.py is missing, so no vector-tier cell can "
+            "R11: .github/project/qa/prep/emit_k3_cells.py is missing, so no vector-tier cell can "
             "be checked against the chain that is supposed to prove it"
         )
         return
@@ -410,7 +410,7 @@ def check_scalar_reference(status_by_key, problems):
 def check_blob_activation_table(problems, header_text=None, act_map=None):
     """R12: the blob format's frozen activation table must mirror `kernel.h`.
 
-    `workspace/qa/prep/blobfmt.py` freezes the activation codes on purpose: a blob already
+    `.github/project/qa/prep/blobfmt.py` freezes the activation codes on purpose: a blob already
     in the tree must keep its meaning even if somebody renumbers the enum. The price of
     freezing is a second copy, and a second copy drifts. It did: `mul` landed with
     hard-sigmoid in the header while the blob table still stopped at hard-swish, so the
@@ -419,11 +419,11 @@ def check_blob_activation_table(problems, header_text=None, act_map=None):
     table invents, and a code both have at different numbers are all red.
     """
     if header_text is None or act_map is None:
-        prep = ROOT / "workspace" / "qa" / "prep"
+        prep = ROOT / ".github" / "project" / "qa" / "prep"
         header = ROOT / "include" / "infinfer" / "kernel" / "kernel.h"
         if not (prep / "blobfmt.py").is_file() or not header.is_file():
             problems.append(
-                "R12: workspace/qa/prep/blobfmt.py or include/infinfer/kernel/kernel.h is "
+                "R12: .github/project/qa/prep/blobfmt.py or include/infinfer/kernel/kernel.h is "
                 "missing, so the blob's activation table cannot be checked against the header"
             )
             return

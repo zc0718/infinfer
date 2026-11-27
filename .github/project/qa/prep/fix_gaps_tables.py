@@ -20,8 +20,8 @@ the escape (which normalises back to the same text), the empty cells, and the on
 cell that was lost when the row was truncated.
 
 Usage:
-    python3 workspace/qa/prep/fix_gaps_tables.py            # dry run, prints the plan
-    python3 workspace/qa/prep/fix_gaps_tables.py --apply    # write
+    python3 .github/project/qa/prep/fix_gaps_tables.py            # dry run, prints the plan
+    python3 .github/project/qa/prep/fix_gaps_tables.py --apply    # write
 """
 
 from __future__ import annotations
