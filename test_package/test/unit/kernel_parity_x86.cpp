@@ -73,7 +73,7 @@ constexpr const char* kNoVector = "no SSE2 in this build: the x86 row is absent 
 
 const std::uint32_t kLengths[] = {0U, 1U, 3U, 4U, 5U, 7U, 16U, 17U, 64U, 257U};
 
-}  // namespace
+} // namespace
 
 TEST(KernelParityX86, AddFp32MatchesScalarBitwise) {
     Pair pair = {};
@@ -100,8 +100,7 @@ TEST(KernelParityX86, AddFp32MatchesScalarBitwise) {
         ASSERT_EQ(INFR_OK, pair.scalar->fn(inputs, want_out, n, nullptr));
         ASSERT_EQ(INFR_OK, pair.vector->fn(inputs, got_out, n, nullptr));
         for (std::uint32_t i = 0; i < n; ++i) {
-            EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i]))
-                << "element " << i << " of " << n;
+            EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i])) << "element " << i << " of " << n;
         }
     }
 }
@@ -131,8 +130,7 @@ TEST(KernelParityX86, MulFp32MatchesScalarBitwise) {
         ASSERT_EQ(INFR_OK, pair.scalar->fn(inputs, want_out, n, nullptr));
         ASSERT_EQ(INFR_OK, pair.vector->fn(inputs, got_out, n, nullptr));
         for (std::uint32_t i = 0; i < n; ++i) {
-            EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i]))
-                << "element " << i << " of " << n;
+            EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i])) << "element " << i << " of " << n;
         }
     }
 }
@@ -196,8 +194,7 @@ TEST(KernelParityX86, ReluFp32MatchesScalarBitwise) {
         ASSERT_EQ(INFR_OK, pair.scalar->fn(inputs, want_out, n, nullptr));
         ASSERT_EQ(INFR_OK, pair.vector->fn(inputs, got_out, n, nullptr));
         for (std::uint32_t i = 0; i < n; ++i) {
-            EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i]))
-                << "element " << i << " of " << n;
+            EXPECT_EQ(infr_test::float_bits(want[i]), infr_test::float_bits(got[i])) << "element " << i << " of " << n;
         }
     }
 }
@@ -284,10 +281,8 @@ TEST(KernelParityX86, SumFp32WithinTheFloatWindow) {
 TEST(KernelParityX86, ReluInt8MatchesScalarBitwise) {
     EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
     EXPECT_EQ(INFR_OK, infr_kernel_register_x86());
-    const infr_kernel_desc* scalar =
-        infr_kernel_find("relu", INFR_DTYPE_I8, INFR_QUANT_NONE, INFR_TIER_SCALAR);
-    const infr_kernel_desc* row =
-        infr_kernel_find("relu", INFR_DTYPE_I8, INFR_QUANT_NONE, INFR_TIER_X86);
+    const infr_kernel_desc* scalar = infr_kernel_find("relu", INFR_DTYPE_I8, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+    const infr_kernel_desc* row = infr_kernel_find("relu", INFR_DTYPE_I8, INFR_QUANT_NONE, INFR_TIER_X86);
     ASSERT_NE(nullptr, scalar) << "relu/int8/none/scalar is not registered";
     if (row == nullptr) {
         GTEST_SKIP() << kNoVector;
@@ -316,8 +311,7 @@ TEST(KernelParityX86, ReluInt8MatchesScalarBitwise) {
         ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, nullptr));
         ASSERT_EQ(INFR_OK, row->fn(inputs, got_out, n, nullptr));
         for (std::uint32_t i = 0; i < n; ++i) {
-            EXPECT_EQ(static_cast<int>(want[i]), static_cast<int>(got[i]))
-                << "element " << i << " of " << n;
+            EXPECT_EQ(static_cast<int>(want[i]), static_cast<int>(got[i])) << "element " << i << " of " << n;
         }
     }
 
@@ -331,10 +325,8 @@ TEST(KernelParityX86, ReluInt8MatchesScalarBitwise) {
 TEST(KernelParityX86, FcInt8MatchesScalarBitwise) {
     EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
     EXPECT_EQ(INFR_OK, infr_kernel_register_x86());
-    const infr_kernel_desc* scalar =
-        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
-    const infr_kernel_desc* row =
-        infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_X86);
+    const infr_kernel_desc* scalar = infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* row = infr_kernel_find("fc", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_X86);
     ASSERT_NE(nullptr, scalar) << "fc/int8/tensor/scalar is not registered";
     if (row == nullptr) {
         GTEST_SKIP() << kNoVector;
@@ -391,10 +383,8 @@ TEST(KernelParityX86, FcInt8MatchesScalarBitwise) {
 TEST(KernelParityX86, FcInt16MatchesScalarBitwise) {
     EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
     EXPECT_EQ(INFR_OK, infr_kernel_register_x86());
-    const infr_kernel_desc* scalar =
-        infr_kernel_find("fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
-    const infr_kernel_desc* row =
-        infr_kernel_find("fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_X86);
+    const infr_kernel_desc* scalar = infr_kernel_find("fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* row = infr_kernel_find("fc", INFR_DTYPE_I16, INFR_QUANT_PER_TENSOR, INFR_TIER_X86);
     ASSERT_NE(nullptr, scalar) << "fc/int16/tensor/scalar is not registered";
     if (row == nullptr) {
         GTEST_SKIP() << kNoVector;
@@ -445,4 +435,48 @@ TEST(KernelParityX86, FcInt16MatchesScalarBitwise) {
     unresolved.requant_multiplier = 1.0F;
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, row->fn(inputs, out_ptr, 4U, &unresolved));
     EXPECT_EQ(INFR_ERR_INVALID_ARGUMENT, scalar->fn(inputs, out_ptr, 4U, &unresolved));
+}
+
+// Census cell: dot/int8/tensor/x86.
+//
+// The x86 row of the accumulator cell. Two things are asserted that a "compare against the same
+// loop" test would not catch: the vector body must agree with the scalar reference on window
+// lengths that are **not** multiples of 16 (a 3x3x3 window is 27, which is the ordinary case and
+// the usual place a vector tail stops agreeing), and the accumulator must stay exact against an
+// int64 reference, so no int32 wrap can hide inside a plausible-looking total.
+TEST(KernelParityX86, DotInt8MatchesScalarBitwise) {
+    EXPECT_EQ(INFR_OK, infr_kernel_register_scalar());
+    EXPECT_EQ(INFR_OK, infr_kernel_register_x86());
+    const infr_kernel_desc* scalar = infr_kernel_find("dot", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* x86 = infr_kernel_find("dot", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_X86);
+    ASSERT_NE(nullptr, scalar);
+    if (x86 == nullptr) {
+        GTEST_SKIP() << "no SSE2 in this build: the x86 row is absent by design";
+    }
+
+    for (std::uint32_t n : {0U, 1U, 9U, 16U, 17U, 27U, 31U, 144U, 576U}) {
+        std::vector<std::int8_t> x(n == 0U ? 1U : n, 0);
+        std::vector<std::int8_t> w(n == 0U ? 1U : n, 0);
+        for (std::uint32_t i = 0; i < n; ++i) {
+            x[i] = static_cast<std::int8_t>((i * 37U) % 255U - 127);
+            w[i] = static_cast<std::int8_t>((i * 53U) % 255U - 127);
+        }
+        std::int32_t want = 0;
+        std::int32_t got = 0;
+        const void* inputs[2] = {x.data(), w.data()};
+        void* want_out[1] = {&want};
+        void* got_out[1] = {&got};
+        ASSERT_EQ(INFR_OK, scalar->fn(inputs, want_out, n, nullptr));
+        ASSERT_EQ(INFR_OK, x86->fn(inputs, got_out, n, nullptr));
+        EXPECT_EQ(want, got) << "element_count " << n;
+
+        // And the reference is exact, so agreement cannot be agreement about a wrapped value.
+        std::int64_t exact = 0;
+        for (std::uint32_t i = 0; i < n; ++i) {
+            exact += static_cast<std::int64_t>(x[i]) * static_cast<std::int64_t>(w[i]);
+        }
+        ASSERT_GE(exact, INT32_MIN);
+        ASSERT_LE(exact, INT32_MAX);
+        EXPECT_EQ(static_cast<std::int32_t>(exact), got) << "element_count " << n;
+    }
 }

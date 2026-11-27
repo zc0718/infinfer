@@ -24,6 +24,9 @@
     "dot/int8/tensor/scalar": [
       "KernelParityDot/ScalarI8MatchesInt32Reference"
     ],
+    "dot/int8/tensor/x86": [
+      "KernelParityX86/DotInt8MatchesScalarBitwise"
+    ],
     "fc/fp32/none/arm_neon": [
       "KernelParityFcNeon/Fp32MatchesScalarWithinAFloatWindow"
     ],

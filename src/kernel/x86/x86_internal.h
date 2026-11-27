@@ -117,3 +117,11 @@ infr_status infr_x86_fc_i16(const void *const *inputs, void *const *outputs, uin
                             const infr_quant *quant);
 
 #endif /* INFR_SRC_KERNEL_X86_INTERNAL_H */
+
+/**
+ * @brief [en] int8 dot product into an int32 accumulator; `quant` is ignored (NULL is legal).
+ * @brief [zh] int8 点积写进 int32 累加器；`quant` 被忽略（NULL 合法）。
+ * @since 0.2.0
+ */
+infr_status infr_x86_dot_i8(const void *const *inputs, void *const *outputs, uint32_t element_count,
+                            const infr_quant *quant);

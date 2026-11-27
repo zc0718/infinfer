@@ -95,7 +95,7 @@ kernels:
     tflite: []
     onnx: []
     dtype_quant: [[int8, tensor]]
-    tiers: { scalar: done, autovec: na, x86: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    tiers: { scalar: done, autovec: na, x86: done, arm_neon: todo, arm_m: todo, rvv: todo }
     grad: no-grad
     grad_why: >-
       the output is an exact int32 accumulator, so a derivative would have to be defined by

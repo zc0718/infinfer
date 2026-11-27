@@ -305,6 +305,12 @@
         "min_packed": 1,
         "measured": 14,
         "what": "sum with lane fold"
+      },
+      "src/kernel/x86/dot.c": {
+        "tier": "x86",
+        "min_packed": 1,
+        "measured": 0,
+        "what": "int8 dot via pmaddwd into int32 lanes (the accumulator half of a quantized conv)"
       }
     },
     "excluded": {

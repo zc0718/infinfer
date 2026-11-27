@@ -33,6 +33,12 @@ infr_status infr_kernel_register_x86(void) {
          .quant = INFR_QUANT_PER_TENSOR,
          .tier = INFR_TIER_X86,
          .fn = infr_x86_fc_i8},
+        /* The accumulator half of a quantized convolution; see dot.c for why `fc` cannot serve. */
+        {.name = "dot",
+         .dtype = INFR_DTYPE_I8,
+         .quant = INFR_QUANT_PER_TENSOR,
+         .tier = INFR_TIER_X86,
+         .fn = infr_x86_dot_i8},
         {.name = "fc",
          .dtype = INFR_DTYPE_I16,
          .quant = INFR_QUANT_PER_TENSOR,
