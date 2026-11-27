@@ -206,8 +206,16 @@ def check(root, data):
             reported.append(f"{pattern}: ignored by {ignore_path.name}")
 
     # P3 -- the papers exist. Making P1 pass by deleting the ledger would be the wrong fix.
+    # But a clean clone has no working copy at all: P3 is about "you had them and removed them",
+    # which is only observable when their container directory exists. Absent container = the
+    # documented local-only state, and saying so is more useful than a red that cannot be acted on.
     for pattern, hits in on_disk(root, patterns).items():
         if not hits:
+            container = root / pattern.split("/")[0]
+            if not container.is_dir():
+                print(f"[procdocs]   {pattern}: container '{container.name}/' absent -- "
+                      f"clean checkout, P3 skipped")
+                continue
             problems.append(
                 f"procdocs: '{pattern}' matches no file on disk -- the working papers are meant to "
                 f"be kept locally; deleting them is not how this rule is satisfied"

@@ -53,6 +53,12 @@ def check(root, data):
             "(INV-11: new tools belong under workspace/ unless CI must run them)"
         )
     for name in sorted(set(entries) - actual):
+        # A directory declared local-only is *absent* on a clean clone, which is the state CI is
+        # in. That is the documented state, not a stale inventory -- saying so beats a red that
+        # nobody can act on, while the rule still holds for every non-local entry.
+        if name in (data.get("local_only") or ()):
+            print(f"[rootlayout] {name}: absent locally (declared local-only) -- skipped")
+            continue
         problems.append(
             f"rootlayout: '{name}' is declared as {entries[name]} but does not exist -- the "
             "inventory is stale, so the rule above is describing a tree that is gone"

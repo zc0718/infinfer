@@ -75,5 +75,8 @@
   "toolchain": [
     ".git",
     ".agents"
+  ],
+  "local_only": [
+    "workspace"
   ]
 }

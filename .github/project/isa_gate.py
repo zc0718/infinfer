@@ -114,6 +114,10 @@ def count_packed(path, compiler, flags, workdir, objdump="objdump", pattern=PACK
     if done.returncode != 0:
         return None, (done.stderr.strip().splitlines() or ["compile failed"])[-1]
     dis = _run([objdump, "-d", obj])
+    if objdump != "objdump" or compiler != "cc":
+        # A zero from a tool nobody can name is not diagnosable; name the tools once per call.
+        ver = _run([compiler, "--version"]).stdout.splitlines()[:1]
+        print(f"[isa]   tools: {compiler} ({ver[0] if ver else 'unknown'}), disassembler {objdump}")
     if dis.returncode != 0 or not re.search(r"^\s+[0-9a-f]+:", dis.stdout, re.M):
         return None, (dis.stderr.strip().splitlines() or ["objdump produced no disassembly"])[-1]
     return len(pattern.findall(dis.stdout)), None
@@ -128,6 +132,9 @@ def resolve_tool(spec):
     """
     if spec == "host":
         found = shutil.which("cc")
+        if found:
+            ver = _run([found, "--version"]).stdout.splitlines()[:1]
+            print(f"[isa] tool: {found} ({ver[0] if ver else 'version unknown'}), objdump from PATH")
         return (found, "objdump", "PATH") if found else (None, None, "PATH (cc not found)")
     binary = spec.split("house:", 1)[1] if spec.startswith("house:") else spec
     env_key = "INFR_ISA_" + re.sub(r"[^A-Z0-9]+", "_", binary.upper()) + "_CC"

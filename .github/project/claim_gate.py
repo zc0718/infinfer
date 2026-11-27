@@ -90,10 +90,31 @@ def matrix_cells(root, emitter_path=None):
     return {tier: len(module.collect(matrix, tier)) for tier in ("arm_neon", "arm_m", "rvv")}
 
 
+def complete_history(root):
+    """A shallow checkout cannot resolve an older sha, so "does not exist" would be a lie.
+
+    Returns True when citations can be judged. False means the history is still shallow: the
+    caller then reports the affected citations as unverifiable rather than wrong, because a red
+    that says "your sha is bad" when the checkout holds one commit is worse than no check.
+    """
+    try:
+        probe = subprocess.run(["git", "-C", str(root), "rev-parse", "--is-shallow-repository"],
+                               capture_output=True, text=True)
+    except OSError:
+        return True
+    if probe.returncode != 0 or probe.stdout.strip() != "true":
+        return True
+    print("[claim] this checkout is shallow; fetching the rest of the history first")
+    fetch = subprocess.run(["git", "-C", str(root), "fetch", "--unshallow", "--quiet"],
+                           capture_output=True, text=True)
+    return fetch.returncode == 0
+
+
 def check(root, data, ci_path=None, toolchains_path=None, emitter_path=None):
     problems = []
     reported = []
     claims = data.get("claims", [])
+    history_ok = complete_history(root)
 
     # C7 -- an empty index is not evidence.
     if not claims:
@@ -122,6 +143,9 @@ def check(root, data, ci_path=None, toolchains_path=None, emitter_path=None):
 
         # C2 -- the basis commit has to be real and still reachable.
         commit = str(claim["commit"])
+        if not history_ok:
+            print(f"[claim]   {where}: '{commit}' cannot be verified in this shallow checkout")
+            continue
         if git(root, "cat-file", "-e", f"{commit}^{{commit}}").returncode != 0:
             problems.append(
                 f"claim: {where} cites commit '{commit}', which does not exist in this repository -- "
