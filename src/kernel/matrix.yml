@@ -255,6 +255,16 @@ composed:
   #
   # `kat: pending` 是诚实而不是遗漏：该算子今天由 `GraphConcatF32/*` 与调用计数测试判定，
   # 而把它放进 KAT blob 的图层链是下一步。这里的 `pending` 就是矩阵把这件事说出来。
+  # The second layout transform, and the one that proves the cost model holds when no
+  # contiguous run exists: NHWC to NCHW gathers into the workspace and still costs one call.
+  #
+  # 第二个布局变换，也是证明"输出顺序里没有连续段时代价模型仍成立"的那个：NHWC 转 NCHW
+  # gather 进工作区，代价仍是一次调用。
+  transpose:
+    tflite: [TRANSPOSE]
+    onnx: [{op: Transpose}]
+    uses: [copy]
+    kat: pending
   concat:
     tflite: [CONCATENATION]
     onnx: [{op: Concat}]

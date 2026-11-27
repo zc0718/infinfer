@@ -398,6 +398,83 @@ infr_status infr_concat_output_shape(const infr_tensor *const *inputs, const inf
 infr_status infr_concat_f32(const infr_tensor *const *inputs, const infr_concat_params *params, infr_tensor *output,
                             infr_workspace *workspace);
 
+/**
+ * @brief [en] Which input axis becomes which output axis.
+ * @brief [zh] 哪条输入轴变成哪条输出轴。
+ * @since 0.2.0
+ */
+typedef struct infr_transpose_params {
+    /**
+     * @brief [en] Number of axes; 0 means "no permutation given", and the axes are reversed.
+     * @brief [zh] 轴数；0 表示"没给置换"，各轴反转。
+     */
+    uint32_t rank;
+    /**
+     * @brief [en] `perm[a]` is the input axis that becomes output axis `a`, as in ONNX
+     *            `Transpose`; entries above `rank` are ignored.
+     * @brief [zh] `perm[a]` 是变成输出轴 `a` 的输入轴，与 ONNX `Transpose` 一致；
+     *            `rank` 以上的项被忽略。
+     */
+    uint32_t perm[INFR_TENSOR_MAX_RANK];
+} infr_transpose_params;
+
+/**
+ * @brief [en] Shape produced by transposing `input_shape` with `params`.
+ * @brief [zh] 用 `params` 对 `input_shape` 转置后得到的形状。
+ * @param input_shape [en] Rank 1..`INFR_TENSOR_MAX_RANK`.
+ * @param input_shape [zh] 秩为 1..`INFR_TENSOR_MAX_RANK`。
+ * @param params [en] Permutation; `params->rank` must be 0 or equal to `input_shape->rank`.
+ * @param params [zh] 置换；`params->rank` 必须是 0 或等于 `input_shape->rank`。
+ * @param out_shape [en] Receives the result; untouched on failure.
+ * @param out_shape [zh] 接收结果；失败时不改动。
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, a rank mismatch, or a
+ *         `perm` that is not a permutation (an entry out of range or appearing twice).
+ * @note [en] A repeated or out-of-range entry is refused rather than clamped: clamping would
+ *            produce a legal-looking transpose of the wrong thing.
+ * @note [zh] 重复或越界的项被拒绝而不是夹取：夹取会产出一个"看起来合法"的错转置。
+ * @since 0.2.0
+ */
+infr_status infr_transpose_output_shape(const infr_shape *input_shape, const infr_transpose_params *params,
+                                        infr_shape *out_shape);
+
+/**
+ * @brief [en] fp32 transpose: permute the axes, moving values with the `copy` kernel.
+ * @brief [zh] fp32 转置：置换各轴，用 `copy` 内核搬值。
+ * @param input [en] fp32 tensor of rank 1..`INFR_TENSOR_MAX_RANK`.
+ * @param input [zh] 秩为 1..`INFR_TENSOR_MAX_RANK` 的 fp32 张量。
+ * @param params [en] Permutation; `params->rank` must be 0 or equal to the input rank.
+ * @param params [zh] 置换；`params->rank` 必须是 0 或等于输入的秩。
+ * @param output [en] fp32 output whose shape must already equal `infr_transpose_output_shape`;
+ *               the data is overwritten.
+ * @param output [zh] 形状必须已等于 `infr_transpose_output_shape` 的 fp32 输出；数据会被覆盖。
+ * @param workspace [en] Scratch source. Needed only when no contiguous run exists in output
+ *                  order (the NHWC to NCHW case), where it must hold `output->shape.count`
+ *                  floats; rewound before returning, on every path.
+ * @param workspace [zh] 临时空间来源。只有在输出顺序里不存在连续段时（NHWC 转 NCHW 那种）
+ *                  才用到，此时需能放下 `output->shape.count` 个 float；任何返回路径上都会
+ *                  先回退。
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, a rank or shape mismatch;
+ *         INFR_ERR_UNSUPPORTED for a non-fp32 tensor or more than `UINT32_MAX` elements;
+ *         INFR_ERR_BUFFER_TOO_SMALL when the workspace cannot hold the gathered output;
+ *         INFR_ERR_NOT_IMPLEMENTED when `copy` is not registered.
+ * @note [en] Three paths, chosen by what can be a contiguous copy: identity is one call; a
+ *            permutation that keeps the last axis in place is one call per position of the
+ *            outer axes; everything else gathers into the workspace and issues one call. So
+ *            the kernel-call cost is never above one per output element, which is the line the
+ *            call-count metric draws.
+ * @note [zh] 三条路径，按"什么能成为连续拷贝"来选：恒等是一次调用；保持末轴不动的置换是外层
+ *            轴每个位置一次调用；其余情况 gather 进工作区后发一次调用。所以内核调用代价永远
+ *            不超过每输出元素一次，也就是调用计数指标画的那条线。
+ * @note [en] `perm[0]` is the input axis that becomes output axis 0. A `params->rank` of 0
+ *            means the front-end omitted `perm`, and the axes are reversed, which is the ONNX
+ *            default.
+ * @note [zh] `perm[0]` 是变成输出轴 0 的输入轴。`params->rank` 为 0 表示前端省略了
+ *            `perm`，此时各轴反转，这是 ONNX 的默认行为。
+ * @since 0.2.0
+ */
+infr_status infr_transpose_f32(const infr_tensor *input, const infr_transpose_params *params, infr_tensor *output,
+                               infr_workspace *workspace);
+
 #ifdef __cplusplus
 }
 #endif
