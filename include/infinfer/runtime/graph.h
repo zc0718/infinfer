@@ -154,6 +154,55 @@ infr_status infr_conv2d_f32(const infr_tensor *input, const infr_tensor *filter,
                             const infr_conv2d_params *params, infr_tensor *output, infr_workspace *workspace);
 
 /**
+ * @brief [en] int8 convolution (dense or depthwise) over an NHWC tensor, with an int32 bias and one
+ *            requantization.
+ * @brief [zh] 在 NHWC 张量上做 int8 卷积（普通或逐通道），偏置为 int32，全程只再量化一次。
+ * @param input [en] Rank-4 NHWC int8 input, `[1, in_h, in_w, in_channels]`, quantised per tensor
+ *            with a zero point of 0. Padding is the quantised zero, so an asymmetric (u8-style)
+ *            input is refused rather than silently padded with the wrong value.
+ * @param input [zh] 4 维 NHWC int8 输入，`[1, in_h, in_w, in_channels]`，按张量量化且零点为 0。
+ *            填充用的是量化后的零，所以非对称（u8 风格）输入会被**拒绝**，而不是被填错值。
+ * @param filter [en] OHWI int8 filter, `[out_channels, kernel_h, kernel_w, in_channels/groups]`,
+ *            quantised per channel (or per tensor); scales must be positive.
+ * @param filter [zh] OHWI int8 滤波器，`[out_channels, kernel_h, kernel_w, in_channels/groups]`，
+ *            逐通道（或逐张量）量化；scale 必须为正。
+ * @param bias [en] `out_channels` int32 offsets, or NULL for none. Added to the accumulator
+ *            *before* the requantization, which is the reason this operator is its own function.
+ * @param bias [zh] `out_channels` 个 int32 偏移，不用时为 NULL。它加在**再量化之前**的累加器上
+ *            ——这正是本算子自成一个函数的理由。
+ * @param params [en] Geometry; `in_channels`/`out_channels` must match the tensors.
+ * @param params [zh] 几何参数；`in_channels`/`out_channels` 必须与张量一致。
+ * @param output [en] Rank-4 NHWC int8 output whose shape must already equal
+ *            `infr_conv2d_output_shape`; quantised per tensor, and its zero point may be anything.
+ * @param output [zh] 4 维 NHWC int8 输出，其形状必须已等于 `infr_conv2d_output_shape`；按张量
+ *            量化，零点可以任意。
+ * @param workspace [en] Scratch source; rewound before returning, on every path. Needs
+ *            `kernel_h * kernel_w * in_channels/groups` **bytes**, not floats: the accumulator for
+ *            one output element lives in a local, so there is no second buffer to borrow.
+ * @param workspace [zh] 临时空间来源；任何返回路径上都会先回退。需要
+ *            `kernel_h * kernel_w * in_channels/groups` 个**字节**而非 float：单个输出元素的
+ *            累加器在局部变量里，因此没有第二块缓冲区要借。
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, mismatched shapes, a
+ *         non-positive scale, or a filter larger than the padded input; INFR_ERR_UNSUPPORTED for a
+ *         dtype, quantisation scheme or grouping outside the stated subset;
+ *         INFR_ERR_BUFFER_TOO_SMALL when the workspace cannot hold the window;
+ *         INFR_ERR_NOT_IMPLEMENTED when no registered tier supplies `dot` or `requant`.
+ * @note [en] The multiplier is resolved once per output channel as
+ *            `(input.scale * weight.scale[oc]) / output.scale` and handed to `requant`, so the
+ *            division never appears in the inner loop and rounding has exactly one definition.
+ * @note [zh] 乘子按输出通道解析一次为 `(input.scale * weight.scale[oc]) / output.scale` 后交给
+ *            `requant`，因此内层循环里不出现除法，而舍入只有一处定义。
+ * @note [en] Two indirect calls per output element (`dot`, then `requant`). That is the call
+ *            structure the fp32 operator above already has, and it is deliberate: a faster tier of
+ *            either kernel speeds this operator up without a line changing here.
+ * @note [zh] 每个输出元素两次间接调用（先 `dot`，再 `requant`）。这与上面的 fp32 算子调用结构
+ *            相同，而且是刻意的：那两个内核哪一档变快，本算子就随之变快，这里一行都不用改。
+ * @since 0.2.0
+ */
+infr_status infr_conv2d_i8(const infr_tensor *input, const infr_tensor *filter, const int32_t *bias,
+                           const infr_conv2d_params *params, infr_tensor *output, infr_workspace *workspace);
+
+/**
  * @brief [en] Window geometry of a pooling operator.
  * @brief [zh] 池化算子的窗口几何。
  * @since 0.1.0

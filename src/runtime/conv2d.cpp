@@ -52,9 +52,6 @@ infr_status build_plan(const infr_tensor* input, const infr_tensor* filter, cons
     if (input->shape.rank != 4U || filter->shape.rank != 4U || output->shape.rank != 4U) {
         return INFR_ERR_UNSUPPORTED; /* batch-first 3-D and NCHW are out of the subset */
     }
-    if (!infr_detail::is_f32(input) || !infr_detail::is_f32(filter) || !infr_detail::is_f32(output)) {
-        return INFR_ERR_UNSUPPORTED;
-    }
     if (input->shape.dims[0] != 1U || output->shape.dims[0] != 1U) {
         return INFR_ERR_UNSUPPORTED; /* batch 1 only */
     }
@@ -125,6 +122,37 @@ float gather_one(const float* in, const conv_plan& plan, uint32_t channel, int32
     return in[(pixel * plan.in_c) + channel];
 }
 
+/* The int8 equivalent, and the reason padding is worth a comment here: in a quantised
+ * tensor the value that means "zero" is the zero point, not the byte 0. The operator
+ * only admits a zero point of 0 (see the header), so the two coincide and this returns
+ * 0; if asymmetric inputs are ever admitted, this is the line that has to change.
+ *
+ * int8 的对应物，也是填充在这里值得写一条注释的原因：在量化张量里表示“零”的是零点，
+ * 而不是字节 0。本算子只接受零点为 0（见头文件），两者因而重合、这里返回 0；将来若
+ * 接纳非对称输入，就是这一行要改。 */
+int8_t gather_one_i8(const int8_t* in, const conv_plan& plan, uint32_t channel, int32_t iy, int32_t ix) {
+    if (iy < 0 || ix < 0 || iy >= static_cast<int32_t>(plan.in_h) || ix >= static_cast<int32_t>(plan.in_w)) {
+        return INT8_C(0);
+    }
+    const uint32_t row = static_cast<uint32_t>(iy) * plan.in_w;
+    const uint32_t pixel = row + static_cast<uint32_t>(ix);
+    return in[(static_cast<size_t>(pixel) * plan.in_c) + channel];
+}
+
+/* Per-output-channel requantization multiplier, `(input.scale * weight.scale) / output.scale`.
+ * A per-tensor filter is the degenerate case and is read through the same helper, so the
+ * inner loop never learns which scheme was declared. */
+bool channel_multiplier(const infr_tensor& filter, const infr_tensor& input, const infr_tensor& output,
+                        uint32_t channel, float* multiplier) {
+    const float weight_scale =
+        filter.quant.kind == INFR_QUANT_PER_CHANNEL ? filter.quant.channel_scales[channel] : filter.quant.scale;
+    if (!(weight_scale > 0.0F)) {
+        return false;
+    }
+    *multiplier = (input.quant.scale * weight_scale) / output.quant.scale;
+    return *multiplier > 0.0F;
+}
+
 } // namespace
 
 /**
@@ -165,6 +193,13 @@ infr_status infr_conv2d_f32(const infr_tensor* input, const infr_tensor* filter,
     if (input == nullptr || filter == nullptr || params == nullptr || output == nullptr || workspace == nullptr ||
         input->data == nullptr || filter->data == nullptr || output->data == nullptr) {
         return INFR_ERR_INVALID_ARGUMENT;
+    }
+
+    /* The dtype gate is checked before the geometry on purpose: the documented contract says an
+     * unsupported dtype answers UNSUPPORTED, and a caller whose tensor is the wrong type should not
+     * first be told its filter shape is wrong. That order is a promise the f32 tests already pin. */
+    if (!infr_detail::is_f32(input) || !infr_detail::is_f32(filter) || !infr_detail::is_f32(output)) {
+        return INFR_ERR_UNSUPPORTED;
     }
 
     conv_plan plan{};
@@ -267,4 +302,126 @@ infr_status infr_conv2d_f32(const infr_tensor* input, const infr_tensor* filter,
     }
 
     return infr_workspace_release(workspace, mark);
+}
+
+/* The quantised counterpart of the operator above. The structure is the same on purpose --
+ * gather, dot product per output channel, offset -- and only two things differ: the gather
+ * reads bytes and the last step is a requantization rather than a float add.
+ *
+ * 上方算子的量化版本。结构刻意保持一致——gather、逐输出通道点积、加偏移——只有两处不同：
+ * gather 读的是字节，最后一步是再量化而不是浮点加法。 */
+
+/**
+ * @brief [en] int8 convolution (dense or depthwise) over an NHWC tensor, with an int32 bias and one
+ *            requantization.
+ * @brief [zh] 在 NHWC 张量上做 int8 卷积（普通或逐通道），偏置为 int32，全程只再量化一次。
+ * @since 0.2.0
+ */
+infr_status infr_conv2d_i8(const infr_tensor* input, const infr_tensor* filter, const int32_t* bias,
+                           const infr_conv2d_params* params, infr_tensor* output, infr_workspace* workspace) {
+    if (input == nullptr || filter == nullptr || params == nullptr || output == nullptr || workspace == nullptr ||
+        input->data == nullptr || filter->data == nullptr || output->data == nullptr) {
+        return INFR_ERR_INVALID_ARGUMENT;
+    }
+
+    /* The subset this operator promises, checked before the geometry for the same reason the f32
+     * operator checks its dtype first: an unsupported dtype answers UNSUPPORTED. Asymmetric input
+     * is refused rather than approximated -- the padding value would be wrong, and a wrong padding
+     * value is invisible in the output. */
+    const bool input_ok = input->dtype == INFR_DTYPE_I8 && input->quant.kind == INFR_QUANT_PER_TENSOR &&
+                          input->quant.scale > 0.0F && input->quant.zero_point == 0;
+    const bool filter_ok = filter->dtype == INFR_DTYPE_I8 &&
+                           ((filter->quant.kind == INFR_QUANT_PER_TENSOR && filter->quant.scale > 0.0F) ||
+                            (filter->quant.kind == INFR_QUANT_PER_CHANNEL && filter->quant.channel_scales != nullptr));
+    const bool output_ok =
+        output->dtype == INFR_DTYPE_I8 && output->quant.kind == INFR_QUANT_PER_TENSOR && output->quant.scale > 0.0F;
+    if (!input_ok || !filter_ok || !output_ok) {
+        return INFR_ERR_UNSUPPORTED;
+    }
+
+    conv_plan plan{};
+    infr_status status = build_plan(input, filter, params, output, &plan);
+    if (status != INFR_OK) {
+        return status;
+    }
+
+    status = infr_kernel_register_scalar();
+    if (status != INFR_OK) {
+        return status;
+    }
+    const infr_kernel_desc* dot = infr_kernel_find("dot", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* requant =
+        infr_kernel_find("requant", INFR_DTYPE_I32, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    if (dot == nullptr || requant == nullptr) {
+        return INFR_ERR_NOT_IMPLEMENTED;
+    }
+
+    const size_t mark = infr_workspace_mark(workspace);
+    void* window_raw = nullptr;
+    status = infr_workspace_alloc(workspace, static_cast<size_t>(plan.window_len) * sizeof(int8_t), alignof(int8_t),
+                                  &window_raw);
+    if (status != INFR_OK) {
+        return status;
+    }
+
+    auto* window = static_cast<int8_t*>(window_raw);
+    const auto* in = static_cast<const int8_t*>(input->data);
+    const auto* weights = static_cast<const int8_t*>(filter->data);
+    auto* out = static_cast<int8_t*>(output->data);
+
+    for (uint32_t oy = 0U; oy < plan.out_h && status == INFR_OK; ++oy) {
+        const int32_t base_y = static_cast<int32_t>(oy * plan.stride_h) - static_cast<int32_t>(plan.pad_h);
+        for (uint32_t ox = 0U; ox < plan.out_w && status == INFR_OK; ++ox) {
+            const int32_t base_x = static_cast<int32_t>(ox * plan.stride_w) - static_cast<int32_t>(plan.pad_w);
+            int8_t* pixel = out + ((static_cast<size_t>(oy) * plan.out_w) + ox) * plan.out_c;
+
+            for (uint32_t group = 0U; group < plan.groups; ++group) {
+                const uint32_t channel_base = group * plan.in_per_group;
+                for (uint32_t ky = 0U; ky < plan.kh; ++ky) {
+                    for (uint32_t kx = 0U; kx < plan.kw; ++kx) {
+                        const int32_t iy = base_y + static_cast<int32_t>(ky);
+                        const int32_t ix = base_x + static_cast<int32_t>(kx);
+                        const uint32_t slot = ((ky * plan.kw) + kx) * plan.in_per_group;
+                        for (uint32_t ci = 0U; ci < plan.in_per_group; ++ci) {
+                            window[slot + ci] = gather_one_i8(in, plan, channel_base + ci, iy, ix);
+                        }
+                    }
+                }
+
+                for (uint32_t k = 0U; k < plan.out_per_group; ++k) {
+                    const uint32_t oc = (group * plan.out_per_group) + k;
+                    const int8_t* row = weights + (static_cast<size_t>(oc) * plan.window_len);
+                    int32_t accumulator = 0;
+                    const void* dot_inputs[2] = {window, row};
+                    void* dot_output[1] = {&accumulator};
+                    status = dot->fn(dot_inputs, dot_output, plan.window_len, nullptr);
+                    if (status != INFR_OK) {
+                        break;
+                    }
+
+                    /* One channel at a time, because the multiplier is per output channel: the
+                     * graph layer resolves the channel's parameters and calls the kernel once per
+                     * slice, which is the rule quant.c states. */
+                    infr_quant quant{};
+                    quant.kind = INFR_QUANT_PER_TENSOR;
+                    quant.zero_point = output->quant.zero_point;
+                    if (!channel_multiplier(*filter, *input, *output, oc, &quant.requant_multiplier)) {
+                        status = INFR_ERR_INVALID_ARGUMENT;
+                        break;
+                    }
+                    const int32_t channel_bias = bias != nullptr ? bias[oc] : 0;
+                    const int32_t with_bias = accumulator + channel_bias;
+                    const void* requant_inputs[2] = {&with_bias, nullptr};
+                    void* requant_outputs[1] = {&pixel[oc]};
+                    status = requant->fn(requant_inputs, requant_outputs, 1U, &quant);
+                    if (status != INFR_OK) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    const infr_status released = infr_workspace_release(workspace, mark);
+    return status == INFR_OK ? released : status;
 }
