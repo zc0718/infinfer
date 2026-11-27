@@ -464,6 +464,84 @@ infr_status infr_kernel_register(const infr_kernel_desc *kernel);
 const infr_kernel_desc *infr_kernel_find(const char *name, infr_dtype dtype, infr_quant_kind quant, infr_tier tier);
 
 /**
+ * @brief [en] Register every kernel tier this build compiled, and point the default tier at the best of them.
+ * @brief [zh] 注册本构建编译进来的全部档位，并把默认档指向其中最好的那一档。
+ * @return INFR_OK, or the first registration error (see infr_kernel_register).
+ * @note [en] Idempotent, and it also **resets the tier policy** to this build's default, which
+ *            is why a test can call it in `TearDown` to undo an `infr_kernel_set_tier`.
+ * @note [en] The default is decided by the same preprocessor guard each tier body uses
+ *            (`__SSE2__`, `__ARM_NEON`, `__ARM_FEATURE_DSP`, `__riscv_vector`), so a tier is
+ *            the default exactly when its bodies were compiled. It is **not** a CPU probe:
+ *            every tier in this library is covered by the baseline that built it, and a build
+ *            that disables the ISA (`-march=armv8-a+nosimd`) registers no row for it and falls
+ *            back per cell. See the note on runtime probing in gaps G-125.
+ * @note [zh] 幂等；它还会把档位策略**重置**为本构建的默认值，所以测试可以在 `TearDown`
+ *            里调它来撤销 `infr_kernel_set_tier`。
+ * @note [zh] 默认档用的是各档内核体自己的那套预处理守卫（`__SSE2__`、`__ARM_NEON`、
+ *            `__ARM_FEATURE_DSP`、`__riscv_vector`），所以「某档是默认」等价于「它的体被
+ *            编进来了」。这**不是** CPU 探测：本库的每一档都被构建它的基线覆盖，而关掉该
+ *            ISA 的构建（`-march=armv8-a+nosimd`）根本登记不了那一行，于是按格退到 scalar。
+ *            运行期探测的取舍见 gaps G-125。
+ * @since 0.2.0
+ */
+infr_status infr_kernel_init(void);
+
+/**
+ * @brief [en] Set the tier the composed operators ask for.
+ * @brief [zh] 设置组合算子要用的档位。
+ * @param tier [en] Tier to prefer.
+ * @param tier [zh] 优先使用的档位。
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT when `tier` is not one of the enum values.
+ * @note [en] This is a **policy, not a promise**: `infr_kernel_find_best` still falls back to
+ *            the scalar reference for any cell the requested tier does not have, so asking for
+ *            a tier this build cannot provide degrades per cell instead of failing the graph.
+ *            Setting a tier to measure it is the intended use; a consumer sets it once at init.
+ * @note [zh] 这是**策略而不是承诺**：请求的档位没有某格时，`infr_kernel_find_best` 仍会退到
+ *            scalar 参考实现，所以「要一个本构建给不出的档」是按格降级，而不是让整张图失败。
+ *            它的正当用途是选档测量；消费者在初始化时设置一次即可。
+ * @note [en] Single-threaded, at init time, like the registry itself.
+ * @note [zh] 与注册表一样，初始化阶段单线程调用。
+ * @since 0.2.0
+ */
+infr_status infr_kernel_set_tier(infr_tier tier);
+
+/**
+ * @brief [en] Report the tier policy in force.
+ * @brief [zh] 报告当前生效的档位策略。
+ * @return [en] The tier the composed operators will ask for first.
+ * @return [zh] 组合算子会优先请求的档位。
+ * @note [en] `INFR_TIER_SCALAR` until something calls `infr_kernel_init`; after an explicit
+ *            `infr_kernel_set_tier` it keeps returning that choice, because an explicit
+ *            decision outranks the platform default.
+ * @note [zh] 在有人调 `infr_kernel_init` 之前是 `INFR_TIER_SCALAR`；显式调用过
+ *            `infr_kernel_set_tier` 之后一直返回那个选择，因为显式决定优先于平台默认。
+ * @since 0.2.0
+ */
+infr_tier infr_kernel_tier(void);
+
+/**
+ * @brief [en] Find the row for the current tier policy, falling back to the scalar reference.
+ * @brief [zh] 按当前档位策略查行，取不到时退到 scalar 参考实现。
+ * @param name [en] Matrix kernel key.
+ * @param name [zh] 矩阵表里的内核键名。
+ * @param dtype [en] Element type.
+ * @param dtype [zh] 元素类型。
+ * @param quant [en] Quantization scheme.
+ * @param quant [zh] 量化方案。
+ * @return [en] The policy's row, else the scalar row, else NULL; a NULL body is never registered.
+ * @return [zh] 策略档的行，否则 scalar 行，再否则 NULL（NULL 实现永不入库）。
+ * @note [en] This is the only place the composed operators ask the registry: the tier is a
+ *            property of the platform, so it is decided here instead of at seven call sites.
+ *            Asking for a specific tier is still `infr_kernel_find`, which is what the parity
+ *            tests use to compare two bodies on one target.
+ * @note [zh] 组合算子只在这里向注册表提问：档位是平台的属性，所以在这一处决定，而不是散在
+ *            七个调用点上。要指定某一档仍用 `infr_kernel_find`，parity 测试正是用它把两个体
+ *            放在同一目标上对比。
+ * @since 0.2.0
+ */
+const infr_kernel_desc *infr_kernel_find_best(const char *name, infr_dtype dtype, infr_quant_kind quant);
+
+/**
  * @brief [en] Register every scalar kernel compiled into this library (idempotent).
  * @brief [zh] 注册本库内已编译的全部 scalar 内核（幂等）。
  * @return INFR_OK, or the first registration error (see infr_kernel_register).

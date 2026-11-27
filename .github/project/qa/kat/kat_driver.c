@@ -103,6 +103,29 @@ typedef kat_k0_result kat_result;
 #define kat_expect kat_k0_expect
 #endif
 
+/* The image certifies the **reference** tier, and says so instead of relying on
+ * it. The operators register on every entry now, so on a build that carries a
+ * vector tier (x86-64, aarch64, armv7hf+neon-vfpv4, rv64gcv) the policy would
+ * otherwise become that tier on the first operator call. The emitter and the
+ * checker must agree, or the golden is produced under one tier and compared
+ * under another: the memcmp at the end of every chain would go red for a reason
+ * that has nothing to do with the graph.
+ *
+ * 本镜像认证的是**参考档**，而且写出来而不是靠默认。算子现在每次入口都注册，所以在
+ * 带向量档的构建上（x86-64、aarch64、armv7hf+neon-vfpv4、rv64gcv），策略会在第一次
+ * 调算子时变成那一档。发射器与校验器必须一致，否则 golden 在一个档下发射、在另一个档
+ * 下比较——每条链末尾的 memcmp 会为了与图无关的理由变红。 */
+#if defined(KAT_CHAIN_K2) || defined(KAT_CHAIN_K2M) || defined(KAT_CHAIN_K2I8)
+static int kat_pin_reference_tier(void) { return infr_kernel_set_tier(INFR_TIER_SCALAR) == INFR_OK ? 0 : 1; }
+#else
+/* `k0`/`k1`/`k3` look their kernels up by name and never reach a composed
+ * operator, so they do not link the dispatcher and there is no policy to pin.
+ *
+ * `k0`/`k1`/`k3` 按名字查内核、从不经过组合算子，所以它们不链接分发器，也没有策略
+ * 要钉。 */
+static int kat_pin_reference_tier(void) { return 0; }
+#endif
+
 #if defined(KAT_EMIT)
 
 /* Expectation blob: magic, version, length, then the two checked tensors as raw
@@ -131,6 +154,9 @@ int main(int argc, char **argv) {
     if (argc != 2) {
         (void)fprintf(stderr, "usage: %s <out.bin>\n", argv[0]);
         return 2;
+    }
+    if (kat_pin_reference_tier() != 0) {
+        return KAT_EXIT_CHAIN;
     }
     int run_status = kat_run(&r);
 
@@ -337,6 +363,21 @@ int kat_check(void) {
     /* Before the first vector instruction of the image, which is inside the chain. */
     kat_enable_vector_state();
 #endif
+    /* The image certifies the **reference** tier, and says so instead of relying
+     * on it. The operators register on every entry now, so on a target whose
+     * build carries a vector tier (aarch64, armv7hf+neon-vfpv4, rv64gcv) the
+     * policy would otherwise become that tier on the first operator call and the
+     * goldens, which are emitted by the host's reference run, would stop being
+     * bit-comparable -- memcmp at the end of every chain would go red for a
+     * reason that has nothing to do with the graph.
+     *
+     * 本镜像认证的是**参考档**，而且写出来而不是靠默认。算子现在每次入口都注册，
+     * 所以在带向量档的构建上（aarch64、armv7hf+neon-vfpv4、rv64gcv），策略会在第一次
+     * 调算子时变成那一档，而由宿主参考运行发射的 golden 就不再逐位可比——每条链末尾的
+     * memcmp 会为了与图无关的理由变红。 */
+    if (kat_pin_reference_tier() != 0) {
+        return KAT_EXIT_CHAIN;
+    }
     int status = kat_run(&r);
 
     if (status != INFR_OK) {

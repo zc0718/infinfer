@@ -202,6 +202,30 @@ def sources(chain, tier=None):
         # next to the header by `emit_k2m_blob_header()`, and listed here so every build of
         # this chain -- host and target -- links the same bytes.
         extra = [GENERATED / "kat_k2m_blob.S"]
+    if chain in CHAINS_NEEDING_CPP:
+        # The composed operators call `infr_kernel_init` on every entry, and that function
+        # names all five register functions, so an image that links only the scalar bodies
+        # cannot link at all. Every tier goes in, by glob: the files whose ISA guard is off
+        # compile to nothing, so a target only gains its own tier's bodies. `kat_check` pins
+        # the reference tier, so what the chain computes does not change.
+        #
+        # Only the chains that reach the composed operators need this. `k3` builds a single
+        # tier on purpose and globs it itself, so adding the tiers here would define every
+        # symbol twice (measured: `multiple definition of infr_arm_m_relu_i8`).
+        #
+        # 组合算子每次入口都会调 `infr_kernel_init`，而它点名了五个注册函数，只链接
+        # scalar 体的镜像根本链不起来。所以整档按 glob 加进来：ISA 守卫关着的文件编成空，
+        # 目标端只多出自己那一档的体。`kat_check` 钉住参考档，链算出来的东西不变。
+        # 只有走组合算子的链需要这份清单。`k3` 故意只建一档并自己 glob，在这里再加会
+        # 让每个符号定义两次（实测：`multiple definition of infr_arm_m_relu_i8`）。
+        extra = [
+            *extra,
+            ROOT / "src/kernel/dispatch.c",
+            *sorted((ROOT / "src/kernel/x86").glob("*.c")),
+            *sorted((ROOT / "src/kernel/arm_neon").glob("*.c")),
+            *sorted((ROOT / "src/kernel/arm_m").glob("*.c")),
+            *sorted((ROOT / "src/kernel/rvv").glob("*.c")),
+        ]
     return [*CHAIN_SOURCES[chain], HERE / "kat_driver.c", *KERNEL_SOURCES, *extra]
 
 

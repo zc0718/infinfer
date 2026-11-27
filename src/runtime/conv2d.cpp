@@ -209,18 +209,19 @@ infr_status infr_conv2d_f32(const infr_tensor* input, const infr_tensor* filter,
     }
 
     /* The composition is the point: both halves come from the registry, so the tier
-     * that wins for `fc`/`add` is the tier this operator runs at. */
-    status = infr_kernel_register_scalar();
+     * that wins for `fc`/`add` is the tier this operator runs at. Which tier that is
+     * is the platform's decision, taken once in `infr_kernel_find_best`. */
+    status = infr_kernel_init();
     if (status != INFR_OK) {
         return status;
     }
-    const infr_kernel_desc* dot = infr_kernel_find("fc", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+    const infr_kernel_desc* dot = infr_kernel_find_best("fc", INFR_DTYPE_F32, INFR_QUANT_NONE);
     if (dot == nullptr) {
         return INFR_ERR_NOT_IMPLEMENTED;
     }
     const infr_kernel_desc* sum_vec = nullptr;
     if (bias != nullptr) {
-        sum_vec = infr_kernel_find("add", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+        sum_vec = infr_kernel_find_best("add", INFR_DTYPE_F32, INFR_QUANT_NONE);
         if (sum_vec == nullptr) {
             return INFR_ERR_NOT_IMPLEMENTED;
         }
@@ -345,13 +346,12 @@ infr_status infr_conv2d_i8(const infr_tensor* input, const infr_tensor* filter, 
         return status;
     }
 
-    status = infr_kernel_register_scalar();
+    status = infr_kernel_init();
     if (status != INFR_OK) {
         return status;
     }
-    const infr_kernel_desc* dot = infr_kernel_find("dot", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
-    const infr_kernel_desc* requant =
-        infr_kernel_find("requant", INFR_DTYPE_I32, INFR_QUANT_PER_TENSOR, INFR_TIER_SCALAR);
+    const infr_kernel_desc* dot = infr_kernel_find_best("dot", INFR_DTYPE_I8, INFR_QUANT_PER_TENSOR);
+    const infr_kernel_desc* requant = infr_kernel_find_best("requant", INFR_DTYPE_I32, INFR_QUANT_PER_TENSOR);
     if (dot == nullptr || requant == nullptr) {
         return INFR_ERR_NOT_IMPLEMENTED;
     }

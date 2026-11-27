@@ -47,12 +47,12 @@ infr_status infr_mean_hw_f32(const infr_tensor* input, infr_tensor* output, infr
         return INFR_ERR_INVALID_ARGUMENT;
     }
 
-    infr_status status = infr_kernel_register_scalar();
+    infr_status status = infr_kernel_init();
     if (status != INFR_OK) {
         return status;
     }
-    const infr_kernel_desc* reduce = infr_kernel_find("sum", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
-    const infr_kernel_desc* scale = infr_kernel_find("scale", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+    const infr_kernel_desc* reduce = infr_kernel_find_best("sum", INFR_DTYPE_F32, INFR_QUANT_NONE);
+    const infr_kernel_desc* scale = infr_kernel_find_best("scale", INFR_DTYPE_F32, INFR_QUANT_NONE);
     if (reduce == nullptr || scale == nullptr) {
         return INFR_ERR_NOT_IMPLEMENTED;
     }

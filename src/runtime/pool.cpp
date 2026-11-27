@@ -147,11 +147,11 @@ infr_status infr_max_pool2d_f32(const infr_tensor* input, const infr_pool_params
         return status;
     }
 
-    status = infr_kernel_register_scalar();
+    status = infr_kernel_init();
     if (status != INFR_OK) {
         return status;
     }
-    const infr_kernel_desc* reduce = infr_kernel_find("max", INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+    const infr_kernel_desc* reduce = infr_kernel_find_best("max", INFR_DTYPE_F32, INFR_QUANT_NONE);
     if (reduce == nullptr) {
         return INFR_ERR_NOT_IMPLEMENTED;
     }
