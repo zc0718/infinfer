@@ -81,6 +81,35 @@ kernels:
       arm_m: { fp32/none: na, int8/tensor: done, int16/tensor: done }
       rvv: { fp32/none: done, int8/tensor: done, int16/tensor: done }
     grad: todo
+  # The two cells a quantized convolution needs and `fc` cannot supply: `fc` requantizes inside the
+  # same call, so there is nowhere to put a bias. `dot` stops at the int32 accumulator, `requant`
+  # adds the bias and rounds once. Both declare an empty tflite/onnx claim on purpose -- no
+  # front-end operator maps to either cell, and borrowing conv2d's claim would give that op two
+  # claimants with no `where` (R4).
+  #
+  # 量化卷积需要、而 `fc` 给不了的两个格：`fc` 在同一次调用里就再量化，偏置无处可放。
+  # `dot` 停在 int32 累加器，`requant` 加偏置并只舍入一次。两者的 tflite/onnx 声明都**故意**
+  # 为空——没有前端算子映射到这两格，而借用 conv2d 的声明会让那个算子有两个无 `where` 的
+  # 主张方（R4）。
+  dot:
+    tflite: []
+    onnx: []
+    dtype_quant: [[int8, tensor]]
+    tiers: { scalar: done, autovec: na, x86: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    grad: no-grad
+    grad_why: >-
+      the output is an exact int32 accumulator, so a derivative would have to be defined by
+      whatever quantization scheme surrounds it -- a graph-layer decision, the same reason
+      `quantize` is no-grad
+  requant:
+    tflite: []
+    onnx: []
+    dtype_quant: [[i32, tensor]]
+    tiers: { scalar: done, autovec: na, x86: todo, arm_neon: todo, arm_m: todo, rvv: todo }
+    grad: no-grad
+    grad_why: >-
+      round-and-saturate is a step function: a gradient needs a straight-through estimator, and
+      where to pretend the step is linear is the same graph-layer decision `quantize` records
   quantize:
     tflite: [QUANTIZE]
     onnx: [{op: QuantizeLinear}]

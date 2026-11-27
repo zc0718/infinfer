@@ -1,5 +1,4 @@
 {
-  "schema": 1,
   "cells": {
     "add/fp32/none/arm_neon": [
       "KernelParityAddNeon/Fp32MatchesScalarBitwise"
@@ -13,18 +12,6 @@
     "add/fp32/none/x86": [
       "KernelParityX86/AddFp32MatchesScalarBitwise"
     ],
-    "mul/fp32/none/arm_neon": [
-      "KernelParityMulNeon/Fp32MatchesScalarBitwise"
-    ],
-    "mul/fp32/none/rvv": [
-      "KernelParityRvv/MulFp32MatchesScalarBitwise"
-    ],
-    "mul/fp32/none/scalar": [
-      "KernelParityMul/ScalarFp32MatchesDoubleReference"
-    ],
-    "mul/fp32/none/x86": [
-      "KernelParityX86/MulFp32MatchesScalarBitwise"
-    ],
     "dequantize/int8/tensor/arm_neon": [
       "KernelParityQuantNeon/DequantizeInt8MatchesScalarBitwise"
     ],
@@ -33,6 +20,9 @@
     ],
     "dequantize/int8/tensor/scalar": [
       "KernelParityQuant/ScalarDequantizeMatchesDefinition"
+    ],
+    "dot/int8/tensor/scalar": [
+      "KernelParityDot/ScalarI8MatchesInt32Reference"
     ],
     "fc/fp32/none/arm_neon": [
       "KernelParityFcNeon/Fp32MatchesScalarWithinAFloatWindow"
@@ -88,6 +78,18 @@
     "max/fp32/none/x86": [
       "KernelParityX86/MaxFp32MatchesScalarBitwise"
     ],
+    "mul/fp32/none/arm_neon": [
+      "KernelParityMulNeon/Fp32MatchesScalarBitwise"
+    ],
+    "mul/fp32/none/rvv": [
+      "KernelParityRvv/MulFp32MatchesScalarBitwise"
+    ],
+    "mul/fp32/none/scalar": [
+      "KernelParityMul/ScalarFp32MatchesDoubleReference"
+    ],
+    "mul/fp32/none/x86": [
+      "KernelParityX86/MulFp32MatchesScalarBitwise"
+    ],
     "quantize/fp32/tensor/rvv": [
       "KernelParityRvv/QuantizeFp32MatchesScalarBitwise"
     ],
@@ -121,6 +123,9 @@
     "relu/int8/none/x86": [
       "KernelParityX86/ReluInt8MatchesScalarBitwise"
     ],
+    "requant/i32/tensor/scalar": [
+      "KernelParityRequant/ScalarI32MatchesWrittenRule"
+    ],
     "scale/fp32/none/arm_neon": [
       "KernelParityScaleNeon/Fp32MatchesScalarBitwise"
     ],
@@ -145,5 +150,6 @@
     "sum/fp32/none/x86": [
       "KernelParityX86/SumFp32WithinTheFloatWindow"
     ]
-  }
+  },
+  "schema": 1
 }

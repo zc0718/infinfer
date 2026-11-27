@@ -48,13 +48,18 @@ TIER_ENUM = {
     "arm_m": "INFR_TIER_ARM_M",
     "rvv": "INFR_TIER_RVV",
 }
-DTYPE_ENUM = {"fp32": "INFR_DTYPE_F32", "int8": "INFR_DTYPE_I8", "int16": "INFR_DTYPE_I16"}
+DTYPE_ENUM = {
+    "fp32": "INFR_DTYPE_F32",
+    "int8": "INFR_DTYPE_I8",
+    "int16": "INFR_DTYPE_I16",
+    "i32": "INFR_DTYPE_I32",
+}
 QUANT_ENUM = {
     "none": "INFR_QUANT_NONE",
     "tensor": "INFR_QUANT_PER_TENSOR",
     "channel": "INFR_QUANT_PER_CHANNEL",
 }
-DTYPE_SUFFIX = {"fp32": "f32", "int8": "i8", "int16": "i16"}
+DTYPE_SUFFIX = {"fp32": "f32", "int8": "i8", "int16": "i16", "i32": "i32"}
 
 ROW_RE = re.compile(
     r"\{\.name = \"([a-z0-9_]+)\"\s*,\s*"
