@@ -144,18 +144,18 @@
     },
     {
       "id": "mbv3-real-model-numerics",
-      "claim": "a MobileNetV3-Small exported by torch and imported by `onnx_subset.translate` computes what PyTorch computes: on the pretrained model at 96x96 the worst |difference| is 2.69e-02 on logits of about 7e3 (1e-5..1e-4 relative), and onnxruntime sits *between* the two (5.86e-03 from this executor, 2.49e-02 from torch), so what is left is float32 accumulation order rather than a defect",
+      "claim": "a real, pretrained MobileNetV3-Small runs here, on the targets: timm's `mobilenetv3_small_050` (568,224 parameters, 2,270,992 B blob) is exported by torch, imported by `onnx_subset.translate`, and executed from the blob on `m4-an386` and `m7-an500` -- both bit-identical to the host run of the same chain. On the host the worst |difference| against PyTorch is 1.02e-03 on feature values of about 1.6e2 (6e-6 relative), and on the 1000-class head at 96x96 onnxruntime sits between this executor and PyTorch (5.86e-03 vs 2.49e-02), so the residual is float32 accumulation order rather than a defect",
       "why_it_was_missing": "until 2026-11-27 the importer had only ever seen the synthetic graph `emit_onnx_blob.py` builds itself, so 'it takes a real model' rested on nothing",
-      "how": "`export_mobilenet_onnx.py` exports torchvision's `mobilenet_v3_small` (2,542,856 parameters) at a static 96x96, writes the input in blob order (NHWC) and PyTorch's own output as the expectation; the C++ blob executor is compared against both that output and onnxruntime inside one probe. The first real export also exposed six assumptions (gaps G-107), including that a real squeeze-and-excite gate is computed rather than stored",
+      "how": "`export_mobilenet_onnx.py` exports a real pretrained model -- torchvision's `mobilenet_v3_small` for the numerics, timm's `mobilenetv3_small_050` backbone for the target run, because the 1000-class head is 1.0 M of its 2.5 M parameters and no fp32 width fits a 4 MB flash with it (gaps G-109) -- writes the input in blob order (NHWC) and PyTorch's own output as the expectation. The target run is the k2m chain with `INFRINFER_K2M_BLOB` pointing at the imported blob, so the same chain code that runs the synthetic model runs the real one",
       "gate": "torch-export",
       "commit": "474c812",
       "host": "zc Linux, torch 2.15.0+cpu / torchvision 0.29.2+cpu / onnxruntime 1.32.0",
       "date": "2026-11-27",
       "local_only": true,
-      "reproduce": "python3 .github/project/qa/prep/export_mobilenet_onnx.py --pretrained --out /tmp/mbv3p && python3 .github/project/qa/prep/emit_onnx_blob.py /tmp/mbv3p/model.onnx /tmp/mbv3p/model.blob",
+      "reproduce": "python3 .github/project/qa/prep/export_mobilenet_onnx.py --engine timm --model mobilenetv3_small_050 --num-classes 0 --pretrained --out /tmp/real && python3 .github/project/qa/prep/emit_onnx_blob.py /tmp/real/model.onnx /tmp/real/model.blob && INFRINFER_K2M_BLOB=/tmp/real/model.blob python3 .github/project/qa/kat/run_kat.py --chain k2m",
       "excluded": {
-        "accuracy": "the input is a deterministic ramp, not an image, and no ImageNet claim is made anywhere -- this is a statement about two implementations agreeing on the same numbers",
-        "target_run": "the real blob has not been executed on a QEMU target yet; the chain still points at the synthetic MobileNet"
+        "accuracy": "the input is a deterministic ramp, not an image, and no ImageNet claim is made anywhere -- this is a statement about implementations agreeing",
+        "head": "the target run uses the backbone without the classifier head; the head is exercised only on the host, where flash is not a constraint"
       },
       "not_in_ci": "torch is a machine-level dependency (it authors a model; the repository ships the ONNX and the tensors) and the project-gates job has none of it; Y5 keeps this out of ci.sh by construction"
     },

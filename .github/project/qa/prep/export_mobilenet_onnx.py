@@ -64,15 +64,33 @@ def fixed_input(shape, seed=0):
     return ramp.reshape(*shape)
 
 
-def build_model(name, pretrained):
-    import torch
-    import torchvision
+def build_model(args):
+    """A model from torchvision or timm, in eval mode.
 
-    factory = getattr(torchvision.models, name, None)
-    if factory is None:
-        raise SystemExit(f"export_mobilenet_onnx: torchvision has no model '{name}'")
-    weights = "DEFAULT" if pretrained else None
-    model = factory(weights=weights)
+    `num_classes=0` (timm) drops the ImageNet head and leaves the pooled features. That is what
+    makes a real network fit a 4 MB flash: MobileNetV3-Small's `Linear(1024, 1000)` is 1.0 M of
+    its 2.5 M parameters, and a deployment that wants features rather than 1000 logits should not
+    pay for them. The measurement is in gaps G-109.
+
+    `num_classes=0`（timm）去掉 ImageNet 头、只留池化后的特征。真网络能进 4 MB flash 靠的就是这个：
+    MobileNetV3-Small 那个 `Linear(1024, 1000)` 占它 2.5 M 参数里的 1.0 M，而一个要特征不要 1000 个
+    logit 的部署不该为它付钱。
+    """
+    if args.engine == "timm":
+        import timm
+
+        model = timm.create_model(args.model, pretrained=args.pretrained,
+                                  num_classes=args.num_classes)
+    else:
+        import torchvision
+
+        factory = getattr(torchvision.models, args.model, None)
+        if factory is None:
+            raise SystemExit(f"export_mobilenet_onnx: torchvision has no model '{args.model}'")
+        if args.num_classes is not None:
+            raise SystemExit("export_mobilenet_onnx: --num-classes is a timm option; "
+                             "torchvision models carry the head the class defines")
+        model = factory(weights="DEFAULT" if args.pretrained else None)
     model.eval()
     return model
 
@@ -84,7 +102,7 @@ def export(args):
     if args.seed is not None:
         torch.manual_seed(args.seed)
 
-    model = build_model(args.model, args.pretrained)
+    model = build_model(args)
     shape = [1, 3, args.res, args.res]
     x = fixed_input(shape)
     out_dir = pathlib.Path(args.out)
@@ -112,6 +130,8 @@ def export(args):
 
     report = {
         "model": args.model,
+        "engine": args.engine,
+        "num_classes": args.num_classes,
         "weights": "pretrained" if args.pretrained else f"random(seed={args.seed})",
         "resolution": args.res,
         "input_nchw": shape,
@@ -132,6 +152,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--model", default="mobilenet_v3_small")
+    parser.add_argument("--engine", choices=("torchvision", "timm"), default="torchvision",
+                        help="torchvision names are attribute names; timm names carry the width "
+                             "(e.g. mobilenetv3_small_050)")
+    parser.add_argument("--num-classes", type=int, default=None,
+                        help="timm only: 0 drops the ImageNet head, which is what makes a real "
+                             "network fit a small flash")
     parser.add_argument("--res", type=int, default=96,
                         help="square input resolution; the graph is fully convolutional")
     parser.add_argument("--seed", type=int, default=0,
@@ -149,6 +175,12 @@ def main():
               "(see this file's header): pip install --index-url "
               "https://download.pytorch.org/whl/cpu torch torchvision", file=sys.stderr)
         return 1
+    if args.engine == "timm":
+        try:
+            import timm  # noqa: F401
+        except ImportError:
+            print("[export] --engine timm needs timm: pip install timm", file=sys.stderr)
+            return 1
     return export(args)
 
 

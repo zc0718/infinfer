@@ -321,9 +321,25 @@ def emit_k2m_blob_header():
     一个没人能 review 的产物。两步、一个来源——`emit_mobilenet_blob.py` 写出 `model.blob`，
     目标看到的东西全部从那个文件派生。
     """
-    model = BUILD / "mobilenet" / "model.blob"
-    run([sys.executable, PREP / "emit_mobilenet_blob.py",
-         "--width", "0.25", "--res", "96", "--write", "--out", str(model.parent)])
+    override = os.environ.get("INFRINFER_K2M_BLOB")
+    if override:
+        # The chain is data-driven -- input size, arena and hash all come from whatever blob is
+        # emitted -- so a real, imported MobileNetV3 runs through exactly the same code path as
+        # the synthetic one. The blob is named by the environment because it is 2 MB of weights
+        # produced by a machine-level export, not something to commit or to rebuild silently.
+        #
+        # 这条链是数据驱动的——输入尺寸、arena、哈希全部来自实际发射的那个 blob——所以真实的、导入
+        # 来的 MobileNetV3 与合成网走的是同一条代码路径。blob 由环境变量指定，因为那是 2 MB 权重、
+        # 由机器级导出产生，既不该入库也不该被悄悄重建。
+        model = pathlib.Path(override).expanduser().resolve()
+        if not model.is_file():
+            raise SystemExit(f"run_kat: INFRINFER_K2M_BLOB names {model}, which is not a file")
+        print(f"[run_kat] k2m uses the imported blob {model} "
+              f"({model.stat().st_size} B)", flush=True)
+    else:
+        model = BUILD / "mobilenet" / "model.blob"
+        run([sys.executable, PREP / "emit_mobilenet_blob.py",
+             "--width", "0.25", "--res", "96", "--write", "--out", str(model.parent)])
     run([sys.executable, PREP / "emit_blob_image.py", "--segment",
          "--name", "kat_k2m_blob", model, GENERATED / "kat_k2m_blob.h"])
 
