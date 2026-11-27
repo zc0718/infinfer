@@ -240,6 +240,26 @@ kernels:
       this reduce-max returns the value, not the index, so a subgradient has no target to
       route to; argmax routing needs the index-returning kernel, which is not declared here
 composed:
+  # A layout transform, not arithmetic: every input is a run of `copy` calls into a strided
+  # window of the output. It is the first of the four layout operators G-136 measured as
+  # missing (concat, slice, resize, transpose) and it exists as the proof that the pattern is
+  # cheap to add: one kernel (`copy`) plus one loop over runs.
+  #
+  # 布局变换而非算术：每个输入是若干次 `copy` 调用，写进输出里一个带步长的窗口。它是
+  # G-136 实测缺失的四个布局算子（concat、slice、resize、transpose）里的第一个，也用来
+  # 证明这个模式加起来的代价很低：一个内核（`copy`）加一个按段的循环。
+  #
+  # `kat: pending` is honest, not an omission: the operator is judged today by
+  # `GraphConcatF32/*` and by the call-count test, and the graph level chain that would put it
+  # in a KAT blob is the next step. A `pending` here is the matrix saying so out loud.
+  #
+  # `kat: pending` 是诚实而不是遗漏：该算子今天由 `GraphConcatF32/*` 与调用计数测试判定，
+  # 而把它放进 KAT blob 的图层链是下一步。这里的 `pending` 就是矩阵把这件事说出来。
+  concat:
+    tflite: [CONCATENATION]
+    onnx: [{op: Concat}]
+    uses: [copy]
+    kat: pending
   conv2d:
     tflite: [CONV_2D]
     onnx: [{op: Conv, where: "group == 1"}]

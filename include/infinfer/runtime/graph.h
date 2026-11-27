@@ -334,6 +334,70 @@ infr_status infr_max_pool2d_f32(const infr_tensor *input, const infr_pool_params
  */
 infr_status infr_mean_hw_f32(const infr_tensor *input, infr_tensor *output, infr_workspace *workspace);
 
+/**
+ * @brief [en] Which axis is being concatenated, and how many inputs there are.
+ * @brief [zh] 沿哪条轴拼接，以及有多少个输入。
+ * @since 0.2.0
+ */
+typedef struct infr_concat_params {
+    /**
+     * @brief [en] Zero-based axis index; every input must agree on all the others.
+     * @brief [zh] 从 0 开始的轴序号；所有输入必须在其它的轴上完全一致。
+     */
+    uint32_t axis;
+    /**
+     * @brief [en] Number of entries in the `inputs` array; at least 1.
+     * @brief [zh] `inputs` 数组的项数；至少为 1。
+     */
+    uint32_t input_count;
+} infr_concat_params;
+
+/**
+ * @brief [en] Shape of the concatenation of `inputs` along `params->axis`.
+ * @brief [zh] 各输入沿 `params->axis` 拼接后的形状。
+ * @param inputs [en] At least `params->input_count` non-NULL tensors.
+ * @param inputs [zh] 至少 `params->input_count` 个非空张量。
+ * @param params [en] Axis and input count.
+ * @param params [zh] 轴序号与输入数。
+ * @param out_shape [en] Receives the result; untouched on failure.
+ * @param out_shape [zh] 接收结果；失败时不改动。
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, a zero input count,
+ *         an out-of-range axis, or inputs that disagree off the concatenated axis.
+ * @since 0.2.0
+ */
+infr_status infr_concat_output_shape(const infr_tensor *const *inputs, const infr_concat_params *params,
+                                     infr_shape *out_shape);
+
+/**
+ * @brief [en] fp32 concatenation of `params->input_count` tensors along one axis.
+ * @brief [zh] 把 `params->input_count` 个张量沿一条轴做 fp32 拼接。
+ * @param inputs [en] At least `params->input_count` non-NULL fp32 tensors.
+ * @param inputs [zh] 至少 `params->input_count` 个非空 fp32 张量。
+ * @param params [en] Axis and input count.
+ * @param params [zh] 轴序号与输入数。
+ * @param output [en] Rank-4-compatible output whose shape must already equal
+ *               `infr_concat_output_shape`; the data is overwritten.
+ * @param output [zh] 形状必须已等于 `infr_concat_output_shape` 的输出；数据会被覆盖。
+ * @param workspace [en] Required to be non-NULL for uniformity with its siblings; concat
+ *                  allocates nothing and never touches it.
+ * @param workspace [zh] 为与同层算子保持一致而要求非空；拼接不做任何分配，也不会碰它。
+ * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments or inconsistent shapes;
+ *         INFR_ERR_UNSUPPORTED for a non-fp32 input or a single run wider than `uint32_t`;
+ *         INFR_ERR_NOT_IMPLEMENTED when the `copy` primitive is not registered.
+ * @note [en] There is no arithmetic here: each input is a run of `copy` calls into a
+ *            strided window of the output, one run per position of the outer axes.
+ * @note [zh] 这里没有任何算术：每个输入是若干次 `copy` 调用，写进输出里一个带步长的
+ *            窗口，每个外层轴位置一段。
+ * @note [en] `input_count == 1` is legal and is the identity, which is what a graph
+ *            importer produces after folding a single-input concat -- it is not a special
+ *            case in the code, it falls out of the same loop.
+ * @note [zh] `input_count == 1` 合法且就是恒等，正是图导入器折掉单输入拼接后得到的东西
+ *            ——它在代码里不是特例，而是同一个循环自然给出的结果。
+ * @since 0.2.0
+ */
+infr_status infr_concat_f32(const infr_tensor *const *inputs, const infr_concat_params *params, infr_tensor *output,
+                            infr_workspace *workspace);
+
 #ifdef __cplusplus
 }
 #endif
