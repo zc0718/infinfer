@@ -473,13 +473,24 @@ def matrix_onnx_ops(data):
     return ops
 
 
+class SkipVocabulary(Exception):
+    """Raised when the importer vocabulary cannot be read on this host."""
+
+
 def importer_tables():
     """The importer's vocabulary as plain data, so a fixture can stand in for it."""
     prep = ROOT / ".github" / "project" / "qa" / "prep"
     if str(prep) not in sys.path:
         sys.path.insert(0, str(prep))
     import blobfmt  # noqa: E402  (path is set up above, on purpose)
-    import onnx_subset  # noqa: E402
+    try:
+        import onnx_subset  # noqa: E402
+    except ModuleNotFoundError as missing:
+        # The vocabulary check is an enrichment, not one of the rules about this tree: it reads
+        # a helper that needs numpy. On a host without it there is nothing to compare, so say so
+        # and skip -- the same rule the ISA gate follows for a host without SSE2. A traceback
+        # that names an import is not a finding about the repository.
+        raise SkipVocabulary(f"onnx_subset needs {missing.name}, which this host does not have")
 
     return {
         "translated": (set(onnx_subset.NODE_OPS) | set(onnx_subset.PASSTHROUGH)
@@ -512,7 +523,11 @@ def check_importer_vocabulary(problems, data=None, tables=None):
             )
             return
         data = load_yaml(MATRIX)
-        tables = importer_tables()
+        try:
+            tables = importer_tables()
+        except SkipVocabulary as reason:
+            print(f"[census] importer vocabulary: skipped -- {reason}")
+            return []
 
     claims = matrix_onnx_ops(data)
     if not claims:
