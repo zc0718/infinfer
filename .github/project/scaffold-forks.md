@@ -127,15 +127,20 @@ shutil.copy2(v1, coverage_folder + sep + _get_file_name(v1))   # basename only
 ## F6 · `.github/workflows/full-test-automation.yml`：和解器按声明扣除平台专属前缀（2026-11-27）
 
 **改哪儿.** `reconcile` job 里加一步 checkout（只为读 `metadata.json`），比较前把
-`coverage.platform_scopes[<平台>]` 列出的前缀从两腿的 TU 集合里减掉；其余任何差异仍然判红。
+`coverage.platform_scopes` 列出的**全部**前缀从**每一条腿**的 TU 集合里排除；其余任何差异仍然判红。
 
 **为什么它属于模板而不是本项目.** 上游把“两腿 instrument 同一批 TU”当成对所有项目都成立的事实，
 但只要有按架构分 tier 的实现（本项目：`src/kernel/x86/` 只在 Linux 编，`src/kernel/arm_neon/` 只在
-macOS 编），正确构建就一定红。实测两侧各 12 个文件。把“哪些前缀属于哪个平台”变成 metadata 里的
+macOS 编），正确构建就一定红。实测两侧各 12 个文件。把“哪些前缀与平台相关”变成 metadata 里的
 声明，判据就从“两腿必须一样”变成“两腿在共享面上必须一样”——后者才是这条检查真正想守的东西。
 
-**怎么验证.** 本地 `python3 .github/project/ci.sh` 全绿（scaffold gate 校验本文件的上游 sha 与
-patch 一致性）；在线跑一次 Tests 腿，`Reconcile coverage` 绿且摘要里出现
-`subtracted N declared platform scope(s)`。
+**一个必须对称的坑.** 首次实现只把“本腿自己”的声明前缀减掉，结果**制造**了差异：`register.c` 在
+五个 tier 里都是可移植的、两腿都编，减掉 `arm_neon/` 后 mac 少了一个、ubuntu 少的是另一个，
+和解器报 `macos only x86/register.c` / `ubuntu only arm_neon/register.c`。改成对称排除后，用两次真实
+产物验证：共享集各 27 个、完全相等。
 
-**退出条件.** 上游自己按声明扣除平台专属前缀时移除。
+**怎么验证.** 本地 `python3 .github/project/ci.sh` 全绿（scaffold gate 校验本文件的上游 sha 与
+patch 一致性）；用下载的两个 `coverage_summary.json` 跑同一段脚本，打印
+`N platform-scoped path(s) left out of the comparison` 且共享集相等。
+
+**退出条件.** 上游自己按声明对称排除平台相关前缀时移除。
