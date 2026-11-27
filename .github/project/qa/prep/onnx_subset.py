@@ -53,6 +53,27 @@ ACTIVATIONS = {
     "HardSigmoid": "hard_sigmoid",
     "HardSwish": "hard_swish",
 }
+# Ops a kernel in `src/kernel/matrix.yml` claims, which the importer deliberately does not
+# translate yet, with the reason. Silence was the old behaviour and it was indistinguishable
+# from "we serve this": `census_gate` R13a now refuses a matrix claim that is neither
+# translated nor listed here, and R13b refuses an entry that outlives the work.
+#
+# 内核在 `matrix.yml` 里声称、而导入器**故意**还没翻译的 ONNX 算子，连带理由。旧行为是“沉默”，
+# 而沉默与“我们支持它”无法区分：`census_gate` 的 R13a 现在拒绝“既没翻译也没登记”的矩阵声称，
+# R13b 拒绝“工作已经完成却还留着”的条目。
+DEFERRED = {
+    "MatMul": "`fc` serves it at the library level, but the importer only translates `Gemm`, "
+              "which carries the bias and transB handling; a bare MatMul would need those "
+              "rules restated here, and MobileNetV3 has none",
+    "QuantizeLinear": "quantisation is the PTQ step's output (PLAN P5.3), which emits the blob "
+                       "directly; a model that still carries Q/DQ pairs is not translated yet",
+    "DequantizeLinear": "the other half of the same pair; see QuantizeLinear",
+    "ReduceSum": "the blob has `mean_hw` and no general reduce -- a reduction needs an axis "
+                 "and a shape rule the format does not carry",
+    "ReduceMax": "same as ReduceSum; `max` is a kernel, not a graph node in this format",
+    "ReduceMean": "`GlobalAveragePool` is the only reduction translated, because it is the "
+                  "only one whose axes are implied by the layout",
+}
 HARD_SIGMOID_ALPHA = 1.0 / 6.0
 HARD_SIGMOID_BETA = 0.5
 MAX_OPSET = 20

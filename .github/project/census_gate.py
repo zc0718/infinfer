@@ -52,6 +52,12 @@ anything -- which is why PLAN P1.2 makes the two files mutually accountable:
      (otherwise it is indistinguishable from `todo`), `done` needs a `grad_tests`
      list naming tests that exist, and `grad_tests` on a non-`done` row is red
      (a test named for an unfinished claim is decoration).
+  R13 the ONNX importer's vocabulary and the matrix's `onnx:` claims must name
+     each other (gaps G-104): R13a a kernel claims an op the importer neither
+     translates nor defers, R13b a deferral that outlives the work or carries no
+     reason, R13c an importer target that the frozen blob tables do not have.
+     The importer's tables are hand-written, so "what it accepts is what the
+     matrix declares" is an assumption until something checks it.
 
 **What this gate cannot know yet.** It checks that the named test is *written*, not that it is
 *green* or that it really compares the tier against the reference -- that is what running the
@@ -456,10 +462,101 @@ def check_blob_activation_table(problems, header_text=None, act_map=None):
         )
 
 
+def matrix_onnx_ops(data):
+    """Every ONNX op the matrix claims, as `{op: [kernel, ...]}`."""
+    ops = {}
+    for name, entry in sorted((data.get("kernels") or {}).items()):
+        for item in entry.get("onnx") or []:
+            op = item.get("op") if isinstance(item, dict) else None
+            if op:
+                ops.setdefault(op, []).append(name)
+    return ops
+
+
+def importer_tables():
+    """The importer's vocabulary as plain data, so a fixture can stand in for it."""
+    prep = ROOT / ".github" / "project" / "qa" / "prep"
+    if str(prep) not in sys.path:
+        sys.path.insert(0, str(prep))
+    import blobfmt  # noqa: E402  (path is set up above, on purpose)
+    import onnx_subset  # noqa: E402
+
+    return {
+        "translated": (set(onnx_subset.NODE_OPS) | set(onnx_subset.PASSTHROUGH)
+                       | set(onnx_subset.ACTIVATIONS)),
+        "deferred": dict(onnx_subset.DEFERRED),
+        "node_targets": set(onnx_subset.NODE_OPS.values()),
+        "act_targets": set(onnx_subset.ACTIVATIONS.values()),
+        "op_codes": set(blobfmt.OP),
+        "act_codes": set(blobfmt.ACT),
+    }
+
+
+def check_importer_vocabulary(problems, data=None, tables=None):
+    """R13: the importer's vocabulary and the matrix's `onnx:` claims must name each other.
+
+    The importer's tables are hand-written, so "what the importer accepts is what the matrix
+    declares" was an assumption nobody checked (gaps G-104). Three failures are red: a kernel
+    claiming an op the importer neither translates nor defers; a deferral that outlives the
+    work (or carries no reason, which is the same disease as a debt entry without an exit);
+    and an importer target that the frozen blob tables do not contain -- that last one would
+    translate a model into a blob nobody can execute, and it is the only one of the three that
+    would fail at run time instead of at import time.
+    """
+    if data is None or tables is None:
+        prep = ROOT / ".github" / "project" / "qa" / "prep"
+        if not (prep / "onnx_subset.py").is_file() or not MATRIX.is_file():
+            problems.append(
+                "R13: .github/project/qa/prep/onnx_subset.py or src/kernel/matrix.yml is "
+                "missing, so the importer's vocabulary cannot be checked against the matrix"
+            )
+            return
+        data = load_yaml(MATRIX)
+        tables = importer_tables()
+
+    claims = matrix_onnx_ops(data)
+    if not claims:
+        problems.append(
+            "R13: the matrix claims no ONNX op at all, so this rule would pass by scanning "
+            "nothing -- R4 has the same shape of failure and is red for the same reason"
+        )
+        return
+
+    translated = tables["translated"]
+    deferred = tables["deferred"]
+    for op, kernels in sorted(claims.items()):
+        if op not in translated and op not in deferred:
+            problems.append(
+                f"R13a: {', '.join(kernels)} claims ONNX '{op}', which the importer neither "
+                f"translates nor defers -- the matrix says we serve it and the only path from "
+                f"a model into this library cannot; translate it or say why in "
+                f"onnx_subset.DEFERRED"
+            )
+    for op in sorted(deferred):
+        if op in translated:
+            problems.append(
+                f"R13b: onnx_subset.DEFERRED lists '{op}', which the importer translates -- a "
+                f"backlog entry that outlives the work reads as current while it is not"
+            )
+        if not str(deferred[op]).strip():
+            problems.append(
+                f"R13b: onnx_subset.DEFERRED['{op}'] has no reason, which is how a deferral "
+                f"becomes folklore"
+            )
+    for target in sorted(tables["node_targets"] - tables["op_codes"]):
+        problems.append(
+            f"R13c: the importer maps a node to op '{target}', which is not in blobfmt.OP -- "
+            f"the translation would emit a blob no executor can read"
+        )
+    for target in sorted(tables["act_targets"] - tables["act_codes"]):
+        problems.append(
+            f"R13c: the importer maps an activation to '{target}', which is not in blobfmt.ACT"
+        )
+
+
 def cell_key(kernel, dtype, quant, tier):
     """The one spelling of a cell, shared by the matrix and the census."""
     return f"{kernel}/{dtype}/{quant}/{tier}"
-
 
 def collect_tests(root):
     """Map every GTest id in `test_package/test/` to the file that defines it.
@@ -540,6 +637,9 @@ def run_check(matrix_path, census_path, tests=None):
     if problems:
         return problems, []
     check_blob_activation_table(problems)
+    if problems:
+        return problems, []
+    check_importer_vocabulary(problems, data)
     if problems:
         return problems, []
     if tests is None:
@@ -1027,6 +1127,42 @@ def selftest():
         print(f"[census:selftest] FAIL R12 a table that lags the header, got {lagging}")
     else:
         print(f"[census:selftest] PASS R12 a table that lags the header -> {lagging[0]}")
+
+    # R13, four fixtures: "each rule gets a fixture that only it can make red" is the reason
+    # there are four rather than one -- each failure mode needs to be shown on its own.
+    def r13(matrix_ops, **tables):
+        base = {"translated": {"Relu"}, "deferred": {}, "node_targets": {"relu"},
+                "act_targets": {"relu"}, "op_codes": {"relu"}, "act_codes": {"relu"}}
+        base.update(tables)
+        found = []
+        check_importer_vocabulary(
+            found, data={"kernels": {"relu": {"onnx": [{"op": op} for op in matrix_ops]}}},
+            tables=base)
+        return found
+
+    if r13(["Relu"]):
+        failures += 1
+        print(f"[census:selftest] FAIL R13 a vocabulary that names each other: {r13(['Relu'])}")
+    else:
+        print("[census:selftest] PASS R13a a vocabulary that names each other")
+    problems = r13(["MatMul"])
+    if any("R13a" in p and "MatMul" in p for p in problems):
+        print("[census:selftest] PASS R13a a matrix claim the importer cannot serve")
+    else:
+        failures += 1
+        print(f"[census:selftest] FAIL R13a expected the unserved-claim report, got {problems}")
+    problems = r13(["Relu"], deferred={"Relu": "already done"})
+    if any("R13b" in p and "translates" in p for p in problems):
+        print("[census:selftest] PASS R13b a deferral that outlives the work")
+    else:
+        failures += 1
+        print(f"[census:selftest] FAIL R13b expected the stale-deferral report, got {problems}")
+    problems = r13(["Relu"], node_targets={"no_such_op"})
+    if any("R13c" in p and "no_such_op" in p for p in problems):
+        print("[census:selftest] PASS R13c a target the blob format does not have")
+    else:
+        failures += 1
+        print(f"[census:selftest] FAIL R13c expected the missing-target report, got {problems}")
 
     if failures:
         print(f"[census:selftest] FAIL ({failures} fixture(s))", file=sys.stderr)
