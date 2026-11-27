@@ -44,9 +44,9 @@ HEADER_SIZE = 24
 NODE_SIZE = 36
 SLOT_HEADER_SIZE = 44
 
-OP = {"input": 0, "conv2d": 1, "max_pool2d": 2, "mean_hw": 3, "fc": 4}
+OP = {"input": 0, "conv2d": 1, "max_pool2d": 2, "mean_hw": 3, "fc": 4, "mul": 5, "add": 6}
 ACT = {"none": 0, "relu": 1, "relu_n1_to_1": 2, "relu6": 3, "tanh": 4, "sign_bit": 5,
-       "hard_swish": 6}
+       "hard_swish": 6, "hard_sigmoid": 7}
 
 
 def slot(name: str, dims, payload: bytes) -> bytes:

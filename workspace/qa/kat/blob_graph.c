@@ -31,6 +31,8 @@
 #define KAT_BLOB_OP_MAX_POOL2D 2U
 #define KAT_BLOB_OP_MEAN_HW 3U
 #define KAT_BLOB_OP_FC 4U
+#define KAT_BLOB_OP_MUL 5U
+#define KAT_BLOB_OP_ADD 6U
 
 typedef struct kat_blob_slot {
     uint32_t rank;
@@ -321,6 +323,30 @@ int kat_blob_run(const unsigned char *bytes, uint32_t byte_len, const float *inp
                 }
                 out_data[oc] = acc + (b_data == 0 ? 0.0F : b_data[oc]);
             }
+        } else if (node->op == KAT_BLOB_OP_MUL || node->op == KAT_BLOB_OP_ADD) {
+            /* Binary node: `in_slot` and `w_slot` are the two operands (the field a
+             * weightful node uses for its filter), `b_slot` stays empty. */
+            const kat_blob_slot *a_slot = &slots[node->in_slot];
+            const kat_blob_slot *b_slot = &slots[node->w_slot];
+            const infr_kernel_desc *binary;
+            const char *kernel = node->op == KAT_BLOB_OP_MUL ? "mul" : "add";
+            const uint32_t count = slot_floats(out_slot);
+            const void *operands[2];
+            void *product[1];
+            if (slot_floats(a_slot) != count || slot_floats(b_slot) != count) {
+                return KAT_BLOB_ERR_SHAPE;
+            }
+            if (infr_kernel_register_scalar() != INFR_OK) {
+                return INFR_ERR_NOT_IMPLEMENTED;
+            }
+            binary = infr_kernel_find(kernel, INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+            if (binary == 0) {
+                return INFR_ERR_NOT_IMPLEMENTED;
+            }
+            operands[0] = arena + a_slot->arena;
+            operands[1] = arena + b_slot->arena;
+            product[0] = arena + out_slot->arena;
+            status = binary->fn(operands, product, count, 0);
         } else {
             return KAT_BLOB_ERR_OP;
         }

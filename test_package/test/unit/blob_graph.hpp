@@ -59,6 +59,8 @@ constexpr std::uint8_t kOpConv2d = 1;
 constexpr std::uint8_t kOpMaxPool2d = 2;
 constexpr std::uint8_t kOpMeanHw = 3;
 constexpr std::uint8_t kOpFc = 4;
+constexpr std::uint8_t kOpMul = 5;
+constexpr std::uint8_t kOpAdd = 6;
 constexpr std::uint32_t kDtypeF32 = 1;
 
 struct Slot {
@@ -452,6 +454,35 @@ inline bool run(Blob& blob, float* arena, std::size_t arena_len, infr_workspace*
                 }
                 out_data[oc] = acc + (b_data == nullptr ? 0.0F : b_data[oc]);
             }
+        } else if (node.op == kOpMul || node.op == kOpAdd) {
+            /* A binary node reuses the two slot references a weightful node already has:
+             * `in_slot` and `w_slot` are the operands, `b_slot` stays empty. The slot table
+             * keeps working because a runtime slot carries no payload either way. `add` and
+             * `mul` differ only in which registered kernel they call. */
+            infr_tensor a_t{};
+            infr_tensor b_t{};
+            if (!detail::bind(blob, arena, node.in_slot, &a_t, err) ||
+                !detail::bind(blob, arena, node.w_slot, &b_t, err)) {
+                *err = where + ": " + *err;
+                return false;
+            }
+            const std::size_t count = detail::slot_floats(out_slot);
+            if (detail::slot_floats(blob.slots[node.in_slot]) != count ||
+                detail::slot_floats(blob.slots[node.w_slot]) != count) {
+                *err = where + ": binary operands disagree with the output extent";
+                return false;
+            }
+            const char* kernel = node.op == kOpMul ? "mul" : "add";
+            const infr_kernel_desc* binary =
+                infr_kernel_find(kernel, INFR_DTYPE_F32, INFR_QUANT_NONE, INFR_TIER_SCALAR);
+            if (binary == nullptr) {
+                *err = where + ": the " + kernel + " kernel is not registered";
+                return false;
+            }
+            const void* operands[2] = {detail::slot_data(blob, arena, node.in_slot),
+                                      detail::slot_data(blob, arena, node.w_slot)};
+            void* product[1] = {detail::slot_data(blob, arena, node.out_slot)};
+            status = binary->fn(operands, product, static_cast<std::uint32_t>(count), nullptr);
         } else {
             *err = where + ": unknown op " + std::to_string(node.op);
             return false;

@@ -407,6 +407,55 @@ def check_scalar_reference(status_by_key, problems):
             )
 
 
+def check_blob_activation_table(problems, header_text=None, act_map=None):
+    """R12: the blob format's frozen activation table must mirror `kernel.h`.
+
+    `workspace/qa/prep/blobfmt.py` freezes the activation codes on purpose: a blob already
+    in the tree must keep its meaning even if somebody renumbers the enum. The price of
+    freezing is a second copy, and a second copy drifts. It did: `mul` landed with
+    hard-sigmoid in the header while the blob table still stopped at hard-swish, so the
+    first generated MobileNetV3 blob died on `KeyError: 'hard_sigmoid'` (gaps G-96). The
+    check is two-way -- a code the header declares and the table lacks, an extra code the
+    table invents, and a code both have at different numbers are all red.
+    """
+    if header_text is None or act_map is None:
+        prep = ROOT / "workspace" / "qa" / "prep"
+        header = ROOT / "include" / "infinfer" / "kernel" / "kernel.h"
+        if not (prep / "blobfmt.py").is_file() or not header.is_file():
+            problems.append(
+                "R12: workspace/qa/prep/blobfmt.py or include/infinfer/kernel/kernel.h is "
+                "missing, so the blob's activation table cannot be checked against the header"
+            )
+            return
+        if str(prep) not in sys.path:
+            sys.path.insert(0, str(prep))
+        import blobfmt  # noqa: E402  (path is set up above, on purpose)
+
+        header_text = header.read_text(encoding="utf-8")
+        act_map = blobfmt.ACT
+
+    declared = {}
+    for name, code in re.findall(r"INFR_ACT_([A-Z0-9_]+)\s*=\s*(\d+)", header_text):
+        if name == "COUNT":
+            continue
+        declared[name.lower()] = int(code)
+    if not declared:
+        problems.append(
+            "R12: no INFR_ACT_<NAME> = <n> rows found in the header, so this rule would pass "
+            "by scanning nothing"
+        )
+        return
+    if declared != dict(act_map):
+        missing = sorted(set(declared) - set(act_map))
+        extra = sorted(set(act_map) - set(declared))
+        renumbered = sorted(name for name in set(declared) & set(act_map) if declared[name] != act_map[name])
+        problems.append(
+            f"R12: blobfmt.ACT and kernel.h disagree (missing {missing}, extra {extra}, "
+            f"renumbered {renumbered}) -- the blob codes are frozen, but frozen does not mean "
+            f"allowed to lag: a code the format does not know is a blob nobody can emit"
+        )
+
+
 def cell_key(kernel, dtype, quant, tier):
     """The one spelling of a cell, shared by the matrix and the census."""
     return f"{kernel}/{dtype}/{quant}/{tier}"
@@ -488,6 +537,9 @@ def run_check(matrix_path, census_path, tests=None):
     """Full check; returns (problems, pending). Empty problems means green."""
     data = load_yaml(matrix_path)
     problems, cells, status_by_key, _ = check_matrix(data)
+    if problems:
+        return problems, []
+    check_blob_activation_table(problems)
     if problems:
         return problems, []
     if tests is None:
@@ -957,6 +1009,24 @@ def selftest():
             else:
                 failures += 1
                 print(f"[census:selftest] FAIL {label}: expected '{phrase}', got {problems}")
+
+    # R12 is not matrix-shaped: it compares the frozen blob table with the header text, so it
+    # gets its two fixtures here rather than in the tuple list above.
+    header = "INFR_ACT_NONE = 0,\nINFR_ACT_RELU = 1,\nINFR_ACT_COUNT = 2"
+    coherent = []
+    check_blob_activation_table(coherent, header_text=header, act_map={"none": 0, "relu": 1})
+    if coherent:
+        failures += 1
+        print(f"[census:selftest] FAIL R12 a table that matches the header: {coherent}")
+    else:
+        print("[census:selftest] PASS R12 a table that matches the header")
+    lagging = []
+    check_blob_activation_table(lagging, header_text=header, act_map={"none": 0})
+    if not any("R12" in problem and "disagree" in problem for problem in lagging):
+        failures += 1
+        print(f"[census:selftest] FAIL R12 a table that lags the header, got {lagging}")
+    else:
+        print(f"[census:selftest] PASS R12 a table that lags the header -> {lagging[0]}")
 
     if failures:
         print(f"[census:selftest] FAIL ({failures} fixture(s))", file=sys.stderr)
