@@ -177,11 +177,14 @@ infr_status infr_conv2d_f32(const infr_tensor *input, const infr_tensor *filter,
  * @param output [zh] 4 维 NHWC int8 输出，其形状必须已等于 `infr_conv2d_output_shape`；按张量
  *            量化，零点可以任意。
  * @param workspace [en] Scratch source; rewound before returning, on every path. Needs
- *            `kernel_h * kernel_w * in_channels/groups` **bytes**, not floats: the accumulator for
- *            one output element lives in a local, so there is no second buffer to borrow.
+ *            `kernel_h * kernel_w * in_channels/groups` **bytes** for the window plus
+ *            `out_channels * 4` bytes for the pixel's accumulators. The second buffer exists so the
+ *            requantisation can be one call over a whole pixel instead of one call per channel: a
+ *            call costs more than the arithmetic it performs (measured, gaps G-121).
  * @param workspace [zh] 临时空间来源；任何返回路径上都会先回退。需要
- *            `kernel_h * kernel_w * in_channels/groups` 个**字节**而非 float：单个输出元素的
- *            累加器在局部变量里，因此没有第二块缓冲区要借。
+ *            `kernel_h * kernel_w * in_channels/groups` 个**字节**装窗口，另加
+ *            `out_channels * 4` 字节装一个像素的累加器。第二块缓冲区是为了让再量化能按整像素调用一次、
+ *            而不是每通道一次：一次调用的成本高于它执行的算术（实测，gaps G-121）。
  * @return INFR_OK; INFR_ERR_INVALID_ARGUMENT for NULL arguments, mismatched shapes, a
  *         non-positive scale, or a filter larger than the padded input; INFR_ERR_UNSUPPORTED for a
  *         dtype, quantisation scheme or grouping outside the stated subset;
