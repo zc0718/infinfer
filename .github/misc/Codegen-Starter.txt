@@ -531,13 +531,15 @@ END OF PROMPT — paste this into Copilot agent with all [FILL] sections complet
 [DEPENDENCIES: TWO SOURCES]
   remote -- the normal case: a package a Conan remote carries is declared once, by version, in
             conandata.yml.
-  local  -- a package no remote carries keeps its BUILT ARTIFACT under
-            .github/project/local-packages/<name>/<version>/ and is described in
-            .github/project/package-sources.json. `python3 .github/project/package_sources.py`
-            (no arguments) writes the packaging recipe and builds it into the cache. The recipe
-            is generated and has no download step, so no URL or upstream sha256 enters the
-            version library. An absent local package is not an error: the leg that needs it is
-            skipped and says so.
+  local  -- a package no remote carries keeps its CCI-SHAPED RECIPE in the tree, under
+            .github/project/local-packages/<name>/{config.yml, all/conandata.yml, all/conanfile.py,
+            all/test_package/}, and is described in .github/project/package-sources.json.
+            `python3 .github/project/package_sources.py` (no arguments) exports and builds it for
+            the configuration that asks for it.
+            A recipe, not a built artifact: it builds from source per platform, so Linux, macOS,
+            Windows and every cross profile get a package for their own configuration, and no
+            binary is bound to the machine that committed it. conandata.yml does carry the
+            upstream URL and sha256 -- the same thing CCI commits.
 
 [COMPILE OPTIONS]
   A compile-time option is ONE entry in metadata.json:compile_options

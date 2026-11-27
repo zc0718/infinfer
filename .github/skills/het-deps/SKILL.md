@@ -56,30 +56,30 @@ requirements:
 - 头文件搜索路径由 `.github/misc/gates.py tidy` 统一提供：`-Iinclude` + eigen（`EIGEN_INC` 可覆盖）+ `GATES_INCLUDE`（`os.pathsep` 分隔）+ `-isystem $ETL_INC`。装到标准前缀（`/usr/include`）的 apt 包无需额外配置；非标准前缀 → 在 workflow 里导出 `GATES_INCLUDE`。
 - 不补映射 → clang-tidy 门禁报 file-not-found（fail-loud 是有意设计）。
 
-## Two Sources: remote + local（两种来源：远端 + 本地制品）
+## Two Sources: remote + local（两种来源：远端 + 仓内配方）
 
-A package comes from one of two places, and the source is **data**, not a comment:
+A package comes from one of two places, and the source is **data**:
 
-1. **remote** — the normal case. A Conan remote carries it; the version lives in `conandata.yml`
-   and nothing else is needed.
-2. **local** — a remote does not carry it (measure first: `conan search -r conancenter
-   "<name>*"`). Keep the **built artifact** under `.github/project/local-packages/<name>/<version>/`
-   and describe it in `.github/project/package-sources.json`. Run
-   `python3 .github/project/package_sources.py` with no arguments: it writes the packaging recipe
-   next to the payload and builds it into the cache. The recipe is generated and has no download
-   step, so no URL or upstream sha256 enters the version library.
+1. **remote** — the normal case: a Conan remote carries it, the version lives in `conandata.yml`.
+2. **local** — no remote carries it (measure first: `conan search -r conancenter "<name>*"`).
+   Keep its **CCI-shaped recipe** in the tree under `.github/project/local-packages/<name>/`
+   (`config.yml`, `all/conandata.yml`, `all/conanfile.py`, `all/test_package/`) and describe it in
+   `.github/project/package-sources.json`. `python3 .github/project/package_sources.py` with no
+   arguments exports and builds it.
 
-Two rules keep the local source safe:
+**A recipe, not a built artifact.** A recipe builds from source on whatever machine asks, so every
+platform and cross profile gets a package for its own configuration. A committed binary is bound to
+the configuration it was built in — the package id carries os, arch, compiler and build_type — and
+a foreign host would skip it, or worse, link the wrong object format. `conandata.yml` therefore
+carries the upstream URL and sha256, exactly as CCI does.
 
-- **An absent local package is not an error.** The script names the entry, prints its
-  `if_absent` reason and exits zero; the leg that needs the package is the one that reports being
-  skipped. Otherwise every clean clone would be red for a reason unrelated to the tree.
-- **The register is checked, not trusted.** `deps.json` carries the artifact's digests and
-  `deps_gate` rule D8 verifies them, so "the package this machine built is the one this project
-  recorded" is a measurement.
+**The register is checked, not trusted**: `deps.json` records the recipe's own file digests and
+`deps_gate` rule D8 verifies them, so "the recipe on this machine is the one this project ships" is
+a measurement. An absent local recipe is not an error — the leg that needs it reports being
+skipped.
 
-A local package that the build uses also needs a compile option to switch it on; that switch is
-declared in `metadata.json:compile_options` and nowhere else.
+A local package the build uses also needs a compile option to switch it on; that switch is declared
+in `metadata.json:compile_options` and nowhere else.
 
 ## Switch Map（开关对照）
 

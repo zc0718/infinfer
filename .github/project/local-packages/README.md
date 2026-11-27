@@ -1,15 +1,22 @@
 # local-packages
 
-Compiled artifacts for a Conan package **no remote carries**, kept here so that git carries them
-and CI can build them into the cache.
+Recipes for a Conan package **no remote carries**, kept here so that git carries them.
 
-- One directory per package: `<name>/<version>/` containing `include/`, `lib/`, `licenses/`.
-- The `conanfile.py` next to the payload is **generated** by
-  `python3 .github/project/package_sources.py` -- do not edit it by hand, and expect it to be
-  rewritten.
-- The entry that describes the package lives in `.github/project/package-sources.json`.
-- Nothing here downloads anything: the upstream recipe, which carries a URL and an sha256, stays
-  outside this repository. That is the whole point of keeping the built payload instead.
+Each package is a CCI-shaped recipe:
+`.github/project/local-packages/<name>/{config.yml, all/{conandata.yml, conanfile.py, test_package/}}`
 
-Removing a package: delete its directory and its entry in `package-sources.json` together --
-`deps_gate` compares the two.
+Why a recipe and not a built artifact: a recipe builds **from source on whatever machine asks for
+it**, so Linux, macOS, Windows and every cross profile get a package built for their own
+configuration. A committed binary would be bound to the configuration it was built in -- the
+package id carries os, arch, compiler and build_type -- and a foreign host would either skip it or,
+worse, link the wrong object format.
+
+What this costs: `conandata.yml` carries the upstream download URL and sha256, which are now part
+of the version library. CCI itself does exactly this; the alternative (keeping the recipe out of
+tree) is what made every CI platform but one unable to build the leg that needs it.
+
+Getting a package into the cache:
+`python3 .github/project/package_sources.py` (no arguments). `--check` only reports.
+
+Adding one: copy the CCI-shaped folder here and add an entry to
+`.github/project/package-sources.json`.

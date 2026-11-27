@@ -205,7 +205,7 @@ def check(root, data_path=None):
 
     # D8 -- a recipe that lives outside the tree can only be kept honest by its digests.
     for entry in entries:
-        recipe = entry.get("local_package") or entry.get("recipe")
+        recipe = entry.get("local_recipe") or entry.get("local_package") or entry.get("recipe")
         if not recipe:
             continue
         name = entry.get("conan", "?")
